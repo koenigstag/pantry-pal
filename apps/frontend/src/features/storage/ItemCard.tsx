@@ -83,9 +83,10 @@ export const ItemCard = observer(function ItemCard({
         </Link>
       </h3>
 
-      <p className="mt-0.5 truncate text-xs text-ink-muted">{amount}</p>
+      {/* mt-auto: the amount and the stepper sit at the bottom, level across a row however long the names. */}
+      <p className="mt-auto truncate pt-0.5 text-xs text-ink-muted">{amount}</p>
 
-      <QuantityStepper item={item} onRemove={onRemove} className="relative z-10 mt-auto pt-2" />
+      <QuantityStepper item={item} onRemove={onRemove} className="relative z-10 pt-2" />
     </article>
   );
 });
