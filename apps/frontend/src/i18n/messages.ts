@@ -229,9 +229,8 @@ export const messages = {
 
   addItem: {
     title: 'Add item',
-    submit: 'Add item',
-    /** In the header bar on a phone, beside the "Add item" title. */
-    submitShort: 'Add',
+    /** In the header bar, beside the "Add item" title. */
+    submit: 'Add',
     submitting: 'Adding…',
   },
 

@@ -57,6 +57,11 @@ src/i18n/                  message catalog and Intl formatters
 - The edit form (`ItemEditForm`) reuses the details view's layout and sections
   (`detailsLayout.tsx`), so switching modes keeps everything in place. Save is
   enabled only once something changed, and sends only the changed fields.
+- Adding an item uses the same form in the same full-screen dialog
+  (`AddItemDialog`), so both offer every field. It starts from `emptyDraft`,
+  validates `toCreate(draft)` against `CreatePantryItemDto` plus `ruleErrors`,
+  lets the quantity step no lower than 1, and asks before discarding a form
+  with anything typed into it.
   If another member saves the item while the form is open, `rebaseDraft` moves
   every untouched field onto their values and names any field both changed.
   Switching modes moves focus to the first field (fine pointer) or the dialog

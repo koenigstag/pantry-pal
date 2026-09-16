@@ -1,4 +1,5 @@
 import {
+  COUNT_UNIT,
   QUANTITY_UNIT_KIND,
   type PantryCategory,
   type PantryItem,
@@ -9,7 +10,7 @@ import {
 
 import { messages } from '../../i18n/messages';
 
-/** The edit form's state: every field as its input holds it, numbers included. */
+/** The item form's state, adding or editing: every field as its input holds it, numbers included. */
 export interface ItemDraft {
   name: string;
   locationId: string;
@@ -37,6 +38,23 @@ export interface ItemPatch {
   openedAt?: string | null;
   periodAfterOpeningDays?: number | null;
   notes?: string | null;
+}
+
+/** A new item: one of plain pieces, in `locationId`, with nothing else filled in. */
+export function emptyDraft(locationId: string): ItemDraft {
+  return {
+    name: '',
+    locationId,
+    category: 'other',
+    quantity: '1',
+    unit: COUNT_UNIT,
+    sizeValue: '',
+    sizeUnit: '',
+    expiresAt: '',
+    openedAt: '',
+    periodAfterOpeningDays: '',
+    notes: '',
+  };
 }
 
 /** `quantity` is the one on screen, which may include a step not yet saved. */
@@ -74,8 +92,8 @@ export function toPatch(base: ItemDraft, draft: ItemDraft): ItemPatch {
   if (draft.unit !== base.unit) patch.unit = draft.unit;
 
   // The server takes a size only as a pair, so both halves travel together.
-  const size = sizeOfDraft(draft);
-  const baseSize = sizeOfDraft(base);
+  const size = parseSize(draft.sizeValue, draft.sizeUnit);
+  const baseSize = parseSize(base.sizeValue, base.sizeUnit);
   if (!Object.is(size.value, baseSize.value) || size.unit !== baseSize.unit) {
     patch.sizeValue = size.value;
     patch.sizeUnit = size.unit;
@@ -95,7 +113,29 @@ export function toPatch(base: ItemDraft, draft: ItemDraft): ItemPatch {
 }
 
 /**
- * Rules `UpdatePantryItemDto` cannot state, checked here so each message sits
+ * A new item in the shapes `CreatePantryItemDto` accepts: blanks are `null`,
+ * and invalid numbers `NaN`, which it rejects.
+ */
+export function toCreate(draft: ItemDraft): Required<ItemPatch> {
+  const size = parseSize(draft.sizeValue, draft.sizeUnit);
+  return {
+    name: draft.name,
+    locationId: draft.locationId,
+    category: draft.category,
+    quantity: toNumber(draft.quantity),
+    unit: draft.unit,
+    sizeValue: size.value,
+    sizeUnit: size.unit,
+    expiresAt: blankToNull(draft.expiresAt),
+    openedAt: blankToNull(draft.openedAt),
+    periodAfterOpeningDays:
+      draft.periodAfterOpeningDays.trim() === '' ? null : toNumber(draft.periodAfterOpeningDays),
+    notes: draft.notes.trim() === '' ? null : draft.notes,
+  };
+}
+
+/**
+ * Rules the item DTOs cannot state, checked here so each message sits
  * beside its field: a size's value and unit come together (the server checks
  * that separately), and nothing is opened in the future.
  */
@@ -103,14 +143,7 @@ export function ruleErrors(
   draft: ItemDraft,
   today: string = todayIsoDate(),
 ): Record<string, string> {
-  const errors: Record<string, string> = {};
-
-  const size = sizeOfDraft(draft);
-  if (size.value !== null && size.unit === null) {
-    errors['sizeUnit'] = messages.fieldErrors.sizeUnitRequired;
-  } else if (size.value === null && size.unit !== null) {
-    errors['sizeValue'] = messages.fieldErrors.sizeValueRequired;
-  }
+  const errors = sizeErrors(draft.sizeValue, draft.sizeUnit);
 
   // `YYYY-MM-DD` compares chronologically as a string.
   if (draft.openedAt !== '' && draft.openedAt > today) {
@@ -230,11 +263,27 @@ function padTwo(value: number): string {
   return String(value).padStart(2, '0');
 }
 
-function sizeOfDraft(draft: ItemDraft): { value: number | null; unit: string | null } {
-  return {
-    value: draft.sizeValue.trim() === '' ? null : toNumber(draft.sizeValue),
-    unit: blankToNull(draft.sizeUnit),
-  };
+/**
+ * A size as its two inputs hold it, in the shapes the DTOs take: blank is
+ * `null`, and a value that is not a number is `NaN`, which they reject.
+ */
+function parseSize(value: string, unit: string): { value: number | null; unit: string | null } {
+  return { value: value.trim() === '' ? null : toNumber(value), unit: blankToNull(unit) };
+}
+
+/**
+ * A size's value and unit come as a pair: the server refuses one without the
+ * other, and this says which half is missing, beside that half.
+ */
+function sizeErrors(value: string, unit: string): Record<string, string> {
+  const size = parseSize(value, unit);
+  if (size.value !== null && size.unit === null) {
+    return { sizeUnit: messages.fieldErrors.sizeUnitRequired };
+  }
+  if (size.value === null && size.unit !== null) {
+    return { sizeValue: messages.fieldErrors.sizeValueRequired };
+  }
+  return {};
 }
 
 function toNumber(value: string): number {

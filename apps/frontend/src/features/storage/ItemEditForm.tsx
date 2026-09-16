@@ -19,7 +19,6 @@ import { IconButton } from '../../ui/IconButton';
 import { DETAILS_GRID, DetailsSection, ItemPhoto } from './detailsLayout';
 import {
   draftFieldLabel,
-  groupByKind,
   isQuantityUnit,
   nounCount,
   pickerUnits,
@@ -27,15 +26,18 @@ import {
   type DraftField,
   type ItemDraft,
 } from './itemDraft';
+import { SizeInput } from './SizeInput';
 
 interface ItemEditFormProps {
-  /** Lets the Save button in the dialog header submit this form. */
+  /** Lets the Save or Add button in the dialog header submit this form. */
   id: string;
   draft: ItemDraft;
   errors: Readonly<Record<string, string>>;
   /** Fields another member changed differently while this form was open. */
   conflicts: readonly DraftField[];
   disabled: boolean;
+  /** The least the quantity steps down to: 0 for an item being used up, 1 for a new one. */
+  minQuantity?: number;
   onChange: (draft: ItemDraft) => void;
   onSubmit: () => void;
 }
@@ -44,10 +46,11 @@ interface ItemEditFormProps {
 const SIDE_BUTTON = 'border border-line text-ink-muted hover:bg-sunken hover:text-ink';
 
 /**
- * Every field `UpdatePantryItemDto` accepts, in the same layout and sections as
- * the details view, so switching modes keeps everything in place. Controlled:
- * the dialog owns the draft, because it also decides what is dirty, follows
- * other members' saves and guards leaving with changes.
+ * Every field of an item, for editing one (`ItemDetailsDialog`) or adding one
+ * (`AddItemDialog`), in the same layout and sections as the details view, so
+ * switching modes keeps everything in place. Controlled: the dialog owns the
+ * draft, because it also decides what is dirty, which DTO validates it, and
+ * whether leaving needs a confirmation.
  */
 export const ItemEditForm = observer(function ItemEditForm({
   id,
@@ -55,14 +58,14 @@ export const ItemEditForm = observer(function ItemEditForm({
   errors,
   conflicts,
   disabled,
+  minQuantity = 0,
   onChange,
   onSubmit,
 }: ItemEditFormProps): ReactElement {
   const pantry = usePantryStore();
   const unitSystem = pantry.user?.unitSystem;
-  // Counted in a count unit; a size may be of any kind: `2 cans × 400 g`.
+  // Counted in a count unit; the size (`SizeInput`) may be of any kind: `2 cans × 400 g`.
   const quantityUnits = pickerUnits(pantry.units, unitSystem, draft.unit).filter(isQuantityUnit);
-  const sizeUnits = pickerUnits(pantry.units, unitSystem, draft.sizeUnit);
 
   function update(changes: Partial<ItemDraft>): void {
     onChange({ ...draft, ...changes });
@@ -158,6 +161,7 @@ export const ItemEditForm = observer(function ItemEditForm({
               {(props) => (
                 <QuantityInput
                   controlProps={props}
+                  min={minQuantity}
                   value={draft.quantity}
                   onChange={(quantity) => update({ quantity })}
                 />
@@ -192,39 +196,15 @@ export const ItemEditForm = observer(function ItemEditForm({
               className="col-span-2"
             >
               {(props) => (
-                <div className="flex gap-2">
-                  <input
-                    {...props}
-                    aria-invalid={errors['sizeValue'] !== undefined}
-                    type="number"
-                    min="0"
-                    step="any"
-                    inputMode="decimal"
-                    value={draft.sizeValue}
-                    onChange={(event) => update({ sizeValue: event.target.value })}
-                    className={cn(FIELD_CONTROL, 'min-w-0 flex-1')}
-                  />
-                  <select
-                    aria-label={messages.itemForm.sizeUnit}
-                    aria-invalid={errors['sizeUnit'] !== undefined}
-                    aria-describedby={props['aria-describedby']}
-                    value={draft.sizeUnit}
-                    onChange={(event) => update({ sizeUnit: event.target.value })}
-                    // `max-w-*`, not `w-*`: FIELD_CONTROL already sets `w-full`.
-                    className={cn(FIELD_CONTROL, 'max-w-32 shrink-0')}
-                  >
-                    <option value="">{messages.itemForm.noSizeUnit}</option>
-                    {groupByKind(sizeUnits).map((group) => (
-                      <optgroup key={group.kind} label={messages.units.kinds[group.kind]}>
-                        {group.units.map((unit) => (
-                          <option key={unit.code} value={unit.code}>
-                            {pantry.unitName(unit.code, nounCount(draft.sizeValue))}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
+                <SizeInput
+                  controlProps={props}
+                  value={draft.sizeValue}
+                  unit={draft.sizeUnit}
+                  valueInvalid={errors['sizeValue'] !== undefined}
+                  unitInvalid={errors['sizeUnit'] !== undefined}
+                  onValueChange={(sizeValue) => update({ sizeValue })}
+                  onUnitChange={(sizeUnit) => update({ sizeUnit })}
+                />
               )}
             </Field>
           </div>
@@ -307,12 +287,13 @@ export const ItemEditForm = observer(function ItemEditForm({
 
 interface QuantityInputProps {
   controlProps: FieldControlProps;
+  min: number;
   value: string;
   onChange: (value: string) => void;
 }
 
 /** A whole number with − and + beside it, like the stepper on the cards. */
-function QuantityInput({ controlProps, value, onChange }: QuantityInputProps): ReactElement {
+function QuantityInput({ controlProps, min, value, onChange }: QuantityInputProps): ReactElement {
   const quantity = Number(value);
   const isWhole = value.trim() !== '' && Number.isInteger(quantity);
 
@@ -321,14 +302,14 @@ function QuantityInput({ controlProps, value, onChange }: QuantityInputProps): R
       <IconButton
         icon={Minus}
         label={messages.itemForm.decreaseQuantity}
-        disabled={!isWhole || quantity <= 0}
+        disabled={!isWhole || quantity <= min}
         onClick={() => onChange(String(quantity - 1))}
         className={SIDE_BUTTON}
       />
       <input
         {...controlProps}
         type="number"
-        min="0"
+        min={min}
         max={MAX_ITEM_QUANTITY}
         step="1"
         inputMode="numeric"
