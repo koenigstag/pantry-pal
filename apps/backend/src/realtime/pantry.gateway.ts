@@ -253,6 +253,13 @@ export class PantryGateway
         });
         break;
 
+      case 'locations.upserted':
+        server.to(householdRoom(change.householdId)).emit(PANTRY_EVENT.LocationsUpserted, {
+          householdId: change.householdId,
+          locations: change.locations,
+        });
+        break;
+
       case 'household.updated':
         server
           .to(householdRoom(change.household.id))

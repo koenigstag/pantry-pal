@@ -10,6 +10,7 @@ import type {
   PantryLocationDeletedPayload,
   PantryLocationPayload,
   PantryLocationsReorderedPayload,
+  PantryLocationsUpsertedPayload,
   PantrySnapshotPayload,
 } from './types';
 
@@ -33,6 +34,7 @@ export interface ServerToClientEvents {
   [PANTRY_EVENT.LocationUpdated]: (payload: PantryLocationPayload) => void;
   [PANTRY_EVENT.LocationDeleted]: (payload: PantryLocationDeletedPayload) => void;
   [PANTRY_EVENT.LocationsReordered]: (payload: PantryLocationsReorderedPayload) => void;
+  [PANTRY_EVENT.LocationsUpserted]: (payload: PantryLocationsUpsertedPayload) => void;
   [PANTRY_EVENT.HouseholdUpdated]: (payload: HouseholdPayload) => void;
   [PANTRY_EVENT.HouseholdDeleted]: (payload: HouseholdDeletedPayload) => void;
   [PANTRY_EVENT.MemberAdded]: (payload: HouseholdMemberPayload) => void;

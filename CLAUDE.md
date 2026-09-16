@@ -31,7 +31,7 @@ Four packages; `packages/shared` is the hub everything else depends on.
 
 ```
 apps/backend     NestJS 12 · REST + Socket.IO · CommonJS via tsc
-apps/frontend    React 19 + MobX 7 · Vite 8 · ESM
+apps/frontend    React 19 + MobX 7 · React Router 8 · Tailwind 4 · Vite 8 · ESM
 packages/shared  constants · DTOs · utils · typed WebSocket contract
 packages/db      Drizzle + pg · ESM · schema, repositories, transactions
 ```
@@ -76,11 +76,14 @@ behind a seam real authentication will replace. Global reference data (units,
 default locations) is managed through `/admin`, authenticated by an API key.
 Details in `apps/backend/CLAUDE.md`.
 
-### The frontend applies no optimistic updates
+### The frontend applies one optimistic update, and only one
 
-`PantryStore` only mutates its state from server broadcasts. A write sends the
-request and waits for the resulting event. This is deliberate — it keeps every
-connected client in agreement. Preserve it unless you intend to change it.
+`PantryStore` holds server state only: a write waits for the server's response,
+and the matching broadcast re-applies the same data. This is deliberate — it
+keeps every connected client in agreement. The single exception is stepping an
+item's quantity, which renders at once from a separate overlay
+(`QuantityUpdates`) and saves after a short pause; see `apps/frontend/CLAUDE.md`.
+Keep any new optimism out of `PantryStore` itself.
 
 ## Gotchas that will bite
 

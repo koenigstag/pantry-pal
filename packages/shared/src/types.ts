@@ -95,7 +95,7 @@ export interface PantryItem {
   productId: string | null;
   name: string;
   category: PantryCategory;
-  /** Up to three decimal places: `0.5` kg is a valid quantity. */
+  /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
   quantity: number;
   /** A `Unit.code`. */
   unit: string;
@@ -152,6 +152,17 @@ export interface PantryLocationDeletedPayload {
 export interface PantryLocationsReorderedPayload {
   householdId: string;
   /** Every active location, in the new order. */
+  locations: PantryLocation[];
+}
+
+/**
+ * The locations editor saved: renames, additions, deletions and the new order
+ * arrive as one list, so no client renders a half-applied edit. Items moved out
+ * of a deleted location are announced separately, as item updates.
+ */
+export interface PantryLocationsUpsertedPayload {
+  householdId: string;
+  /** Every active location, in the new order. Replaces the client's list. */
   locations: PantryLocation[];
 }
 

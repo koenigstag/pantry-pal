@@ -349,12 +349,14 @@ const ITEMS: readonly ItemFixture[] = [
     expiresIn: 600,
     addedDaysAgo: 40,
   },
+  // Quantities are whole: a 1.5 kg bag is one piece with a size.
   {
     name: 'Flour',
     location: 'Pantry',
     category: 'grains',
-    quantity: 1.5,
-    unit: 'kg',
+    quantity: 1,
+    unit: 'pcs',
+    size: [1.5, 'kg'],
     expiresIn: 150,
     addedDaysAgo: 15,
   },

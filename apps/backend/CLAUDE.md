@@ -62,7 +62,7 @@ GET    POST            /households
 GET    PATCH  DELETE   /households/:householdId                       PATCH/DELETE: owner
 GET    POST            /households/:householdId/members               POST: owner
 GET    PATCH  DELETE   /households/:householdId/members/:userId       PATCH: owner; DELETE: owner or self
-GET    POST            /households/:householdId/locations
+GET    POST   PUT      /households/:householdId/locations             PUT: the editor's whole list
 PUT                    /households/:householdId/locations/order       full ordered id list
 GET    PATCH  DELETE   /households/:householdId/locations/:locationId DELETE takes ?moveItemsTo=
 GET    POST            /households/:householdId/items                 GET takes ?status=&locationId=
@@ -132,7 +132,14 @@ Row locks, not isolation levels, keep multi-row invariants:
 - Membership changes lock the household row (`FOR NO KEY UPDATE`, which does
   not block inserts referencing the household), then re-check the caller's
   role and the owner count under the lock. A household always keeps an owner.
-- Location create, reorder and delete take the same household lock.
+- Location create, reorder, upsert and delete take the same household lock.
+- The upsert (`PUT .../locations`, the frontend's locations editor) applies
+  renames, additions, deletions and order in one transaction and broadcasts one
+  `LocationsUpserted` list. `locations` plus `removed` must name every active
+  location: a missing one is a 409, meaning the client edited a stale list.
+  Renames go through a placeholder first (`LocationsRepository.updateMany`),
+  because the unique name index cannot be deferred and swapped names would
+  collide mid-statement.
 - Filing an item under a location share-locks it; deleting a location locks it
   exclusively. The delete therefore waits for in-flight item writes, and an item
   can never be filed under a location deleted a moment earlier.

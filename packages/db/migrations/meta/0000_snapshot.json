@@ -764,7 +764,7 @@
         },
         "quantity": {
           "name": "quantity",
-          "type": "numeric(10, 3)",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -1068,7 +1068,7 @@
         },
         "quantity_delta": {
           "name": "quantity_delta",
-          "type": "numeric(10, 3)",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },

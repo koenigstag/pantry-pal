@@ -19,6 +19,7 @@ import {
   DeleteLocationQueryDto,
   ReorderLocationsDto,
   UpdateLocationDto,
+  UpsertLocationsDto,
 } from '@pantry-pal/shared/dto';
 
 import { CurrentMembership, type Membership } from '../common/request-context';
@@ -43,6 +44,19 @@ export class LocationsController {
     @Body() dto: CreateLocationDto,
   ): Promise<PantryLocation> {
     return this.locations.create(membership, dto);
+  }
+
+  /**
+   * Saves the locations editor in one transaction: renames, additions, deletions
+   * and order. Returns every location in the new order; 409 when the list the
+   * client edited is out of date.
+   */
+  @Put()
+  upsert(
+    @CurrentMembership() membership: Membership,
+    @Body() dto: UpsertLocationsDto,
+  ): Promise<PantryLocation[]> {
+    return this.locations.upsert(membership, dto);
   }
 
   /**

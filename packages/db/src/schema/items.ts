@@ -47,10 +47,11 @@ export const items = pgTable(
      * how many (`quantity` + `unit`), and what is inside one of them
      * (`size_value` + `size_unit`).
      *
-     * `mode: 'number'` matters — numeric otherwise arrives as the string
-     * "1.000", which would not match `PantryItem.quantity: number`.
+     * `quantity` counts whole things, so it is an integer: a fractional amount
+     * is a size, `1 × 1.5 kg`. `size_value` stays numeric, and its
+     * `mode: 'number'` matters — numeric otherwise arrives as the string "1.500".
      */
-    quantity: numeric('quantity', { precision: 10, scale: 3, mode: 'number' }).notNull(),
+    quantity: integer('quantity').notNull(),
     unit: text('unit')
       .notNull()
       .references(() => units.code, { onDelete: 'restrict' }),

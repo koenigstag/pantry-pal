@@ -47,6 +47,7 @@ export const PANTRY_EVENT = {
   LocationUpdated: 'pantry:location-updated',
   LocationDeleted: 'pantry:location-deleted',
   LocationsReordered: 'pantry:locations-reordered',
+  LocationsUpserted: 'pantry:locations-upserted',
   HouseholdUpdated: 'pantry:household-updated',
   HouseholdDeleted: 'pantry:household-deleted',
   MemberAdded: 'pantry:member-added',
@@ -146,9 +147,13 @@ export const DEFAULT_LOCATIONS = [
 export const EXPIRY_WARNING_DAYS = 3;
 
 export const MAX_ITEM_NAME_LENGTH = 80;
+/** Quantities are whole numbers — how many — so this bounds an integer. */
 export const MAX_ITEM_QUANTITY = 10_000;
-/** `numeric(10, 3)`: anything finer would be silently rounded by Postgres. */
-export const QUANTITY_DECIMAL_PLACES = 3;
+/**
+ * A size is `numeric(10, 3)` (`1.5` kg): anything finer would be silently
+ * rounded by Postgres. Quantities are integers and have no decimals.
+ */
+export const SIZE_DECIMAL_PLACES = 3;
 export const MAX_ITEM_NOTES_LENGTH = 2000;
 export const MAX_PERIOD_AFTER_OPENING_DAYS = 3650;
 

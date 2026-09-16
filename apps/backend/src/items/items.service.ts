@@ -13,7 +13,6 @@ import {
   COUNT_UNIT,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
-  QUANTITY_DECIMAL_PLACES,
   type ItemEventType,
   type PantryItem,
 } from '@pantry-pal/shared';
@@ -30,12 +29,6 @@ import { toPantryItem } from './item.mapper';
 
 type ItemField = keyof UpdateItemInput;
 type Changes = Partial<Record<ItemField, { from: unknown; to: unknown }>>;
-
-const QUANTITY_SCALE = 10 ** QUANTITY_DECIMAL_PLACES;
-
-/** Float subtraction of `numeric(10, 3)` values drifts (0.3 - 0.1); round back to the column's scale. */
-const roundQuantity = (value: number): number =>
-  Math.round(value * QUANTITY_SCALE) / QUANTITY_SCALE;
 
 /**
  * Any member may manage items. Every write records an `item_events` row in the
@@ -240,7 +233,8 @@ function eventFor(
   changes: Changes,
 ): RecordEventInput {
   let type: ItemEventType = ITEM_EVENT_TYPE.Updated;
-  let quantityDelta: number | null = roundQuantity(after.quantity - before.quantity);
+  // Quantities are integers, so the difference is exact.
+  let quantityDelta: number | null = after.quantity - before.quantity;
 
   const wasActive = before.status === ITEM_STATUS.Active;
   const isActive = after.status === ITEM_STATUS.Active;

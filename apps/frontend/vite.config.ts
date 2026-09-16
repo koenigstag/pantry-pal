@@ -4,6 +4,7 @@ import {
   DEFAULT_FRONTEND_PORT,
   SOCKET_IO_PATH,
 } from '@pantry-pal/shared';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -21,7 +22,7 @@ export default defineConfig(({ mode }) => {
     env.VITE_BACKEND_URL ?? `http://localhost:${env.BACKEND_PORT ?? String(DEFAULT_BACKEND_PORT)}`;
 
   return {
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     server: {
       port: Number(env.PORT ?? DEFAULT_FRONTEND_PORT),
       strictPort: true,

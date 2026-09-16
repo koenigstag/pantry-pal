@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   BadRequestException,
   ConflictException,
@@ -10,6 +12,7 @@ import {
   ItemsRepository,
   LocationsRepository,
   Transactional,
+  type LocationChange,
   type LocationRow,
 } from '@pantry-pal/db';
 import {
@@ -21,6 +24,7 @@ import type {
   CreateLocationDto,
   ReorderLocationsDto,
   UpdateLocationDto,
+  UpsertLocationsDto,
 } from '@pantry-pal/shared/dto';
 
 import type { Membership } from '../common/request-context';
@@ -32,8 +36,9 @@ import { toPantryLocation } from './location.mapper';
  * Any member may manage locations.
  *
  * Writes that depend on the set of locations as a whole — create (count and
- * next position), reorder, delete — lock the household row first, so they run
- * one at a time per household and never see each other's half-finished work.
+ * next position), reorder, upsert, delete — lock the household row first, so
+ * they run one at a time per household and never see each other's
+ * half-finished work.
  */
 @Injectable()
 export class LocationsService {
@@ -124,6 +129,85 @@ export class LocationsService {
   }
 
   /**
+   * Saves the locations editor: renames, new locations, deletions and the new
+   * order, all or nothing, announced as one list. Returns every active
+   * location in the new order.
+   *
+   * `locations` and `removed` together must name every active location exactly
+   * once. An unknown or repeated id is a 400; a missing one is a 409, because
+   * the client edited a list that has changed since it loaded it.
+   */
+  @Transactional()
+  async upsert(membership: Membership, dto: UpsertLocationsDto): Promise<PantryLocation[]> {
+    const { householdId } = membership;
+    await this.lockHousehold(householdId);
+
+    const current = new Map((await this.locations.list(householdId)).map((row) => [row.id, row]));
+    const removals = dto.removed ?? [];
+    const keptIds = dto.locations.flatMap((entry) => (entry.id === undefined ? [] : [entry.id]));
+    const listed = new Set<string>();
+
+    for (const id of [...keptIds, ...removals.map((removal) => removal.id)]) {
+      if (listed.has(id)) throw new BadRequestException(`Location ${id} is listed more than once`);
+      if (!current.has(id)) {
+        throw new BadRequestException(`${id} does not name a location in this household`);
+      }
+      listed.add(id);
+    }
+
+    if (listed.size !== current.size) {
+      throw new ConflictException(
+        "The household's locations changed after this list was loaded. Reload them and try again.",
+      );
+    }
+
+    // Deletions first: they free their names for the renames and additions below.
+    for (const removal of removals) {
+      if (removal.moveItemsTo !== undefined && !keptIds.includes(removal.moveItemsTo)) {
+        throw new BadRequestException('moveItemsTo must name a location that is kept');
+      }
+
+      // One at a time on purpose: each waits out item writes into its location,
+      // and every statement shares the transaction's connection anyway.
+      // oxlint-disable-next-line no-await-in-loop
+      await this.deleteLocation(membership, removal.id, removal.moveItemsTo);
+    }
+
+    const changes = dto.locations.flatMap((entry): LocationChange[] => {
+      const row = entry.id === undefined ? undefined : current.get(entry.id);
+      if (row === undefined) return [];
+
+      const name = entry.name === row.name ? undefined : entry.name;
+      const icon = entry.icon === undefined || entry.icon === row.icon ? undefined : entry.icon;
+      return name === undefined && icon === undefined ? [] : [{ id: row.id, name, icon }];
+    });
+    await this.locations.updateMany(householdId, changes);
+
+    // New locations get their ids here, so the whole order is known before the insert.
+    const ordered = dto.locations.map((entry) => ({
+      ...entry,
+      isNew: entry.id === undefined,
+      id: entry.id ?? randomUUID(),
+    }));
+    await this.locations.createAll(
+      householdId,
+      ordered.flatMap((entry, index) =>
+        entry.isNew
+          ? [{ id: entry.id, name: entry.name, icon: entry.icon ?? null, sortOrder: index }]
+          : [],
+      ),
+    );
+    await this.locations.setSortOrders(
+      householdId,
+      ordered.map((entry) => entry.id),
+    );
+
+    const locations = (await this.locations.list(householdId)).map(toPantryLocation);
+    this.changes.publish({ type: 'locations.upserted', householdId, locations });
+    return locations;
+  }
+
+  /**
    * Soft-deletes a location.
    *
    * Active items have to go somewhere first: with `moveItemsTo` they are moved
@@ -135,6 +219,21 @@ export class LocationsService {
   async remove(membership: Membership, id: string, moveItemsTo: string | undefined): Promise<void> {
     const { householdId } = membership;
     await this.lockHousehold(householdId);
+
+    await this.deleteLocation(membership, id, moveItemsTo);
+    this.changes.publish({ type: 'location.deleted', householdId, id });
+  }
+
+  /**
+   * Moves a location's active items to `moveItemsTo`, then soft-deletes it.
+   * The caller holds the household lock and announces the deletion itself.
+   */
+  private async deleteLocation(
+    membership: Membership,
+    id: string,
+    moveItemsTo: string | undefined,
+  ): Promise<void> {
+    const { householdId } = membership;
 
     // Exclusive: waits out any item write that has this location share-locked,
     // and makes new ones wait until the delete commits.
@@ -179,7 +278,6 @@ export class LocationsService {
     }
 
     await this.locations.softDelete(householdId, id);
-    this.changes.publish({ type: 'location.deleted', householdId, id });
   }
 
   private async lockHousehold(householdId: string): Promise<void> {

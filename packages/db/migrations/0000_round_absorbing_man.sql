@@ -85,7 +85,7 @@ CREATE TABLE "items" (
 	"name" varchar(80) NOT NULL,
 	"location_id" uuid NOT NULL,
 	"category" text NOT NULL,
-	"quantity" numeric(10, 3) NOT NULL,
+	"quantity" integer NOT NULL,
 	"unit" text NOT NULL,
 	"size_value" numeric(10, 3),
 	"size_unit" text,
@@ -111,7 +111,7 @@ CREATE TABLE "item_events" (
 	"item_id" uuid NOT NULL,
 	"user_id" uuid,
 	"type" text NOT NULL,
-	"quantity_delta" numeric(10, 3),
+	"quantity_delta" integer,
 	"payload" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "item_events_type_check" CHECK (type in ('added', 'updated', 'opened', 'consumed', 'discarded', 'restored'))

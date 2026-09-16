@@ -21,7 +21,7 @@ import {
   MAX_PERIOD_AFTER_OPENING_DAYS,
   MAX_UNIT_CODE_LENGTH,
   PANTRY_CATEGORIES,
-  QUANTITY_DECIMAL_PLACES,
+  SIZE_DECIMAL_PLACES,
 } from '../constants';
 import type { ItemStatus, PantryCategory } from '../types';
 import { IsIsoDate, IsOmittable, Trim } from './decorators';
@@ -52,8 +52,9 @@ export class CreatePantryItemDto {
   @IsIn([...PANTRY_CATEGORIES])
   category!: PantryCategory;
 
+  /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: QUANTITY_DECIMAL_PLACES })
+  @IsInt()
   @IsPositive()
   @Max(MAX_ITEM_QUANTITY)
   quantity!: number;
@@ -66,7 +67,7 @@ export class CreatePantryItemDto {
   /** What is inside one `pcs`: `300` for a 300 ml can. */
   @IsOptional()
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: QUANTITY_DECIMAL_PLACES })
+  @IsNumber({ maxDecimalPlaces: SIZE_DECIMAL_PLACES })
   @IsPositive()
   @Max(MAX_ITEM_QUANTITY)
   sizeValue?: number | null;
@@ -122,7 +123,7 @@ export class UpdatePantryItemDto {
   /** Zero is allowed here, unlike on create: a used-up item that has not been cleared yet. */
   @IsOmittable()
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: QUANTITY_DECIMAL_PLACES })
+  @IsInt()
   @Min(0)
   @Max(MAX_ITEM_QUANTITY)
   quantity?: number;
@@ -134,7 +135,7 @@ export class UpdatePantryItemDto {
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: QUANTITY_DECIMAL_PLACES })
+  @IsNumber({ maxDecimalPlaces: SIZE_DECIMAL_PLACES })
   @IsPositive()
   @Max(MAX_ITEM_QUANTITY)
   sizeValue?: number | null;

@@ -116,6 +116,10 @@ These are deliberate. Changing any of them affects the whole workspace.
 - **Quantity is three parts** so `1 can 300 ml` can be represented: `quantity` +
   `unit` + `size_value` + `size_unit`. `pcs` is the only count unit; container
   nouns like "can" or "jar" are display-only via `products.package_label`.
+- **`quantity` is an integer** — how many whole things — and so is
+  `item_events.quantity_delta`. A fractional amount is a size: a 1.5 kg bag of
+  flour is `1 pcs` with `size_value 1.5` in `kg`. `size_value` stays
+  `numeric(10, 3)`. The shared DTOs enforce the same rule with `@IsInt()`.
 - **`units` is a lookup TABLE**, not an enum, with FKs from `items.unit` and
   `items.size_unit` (code/label/kind/system/factor). Adding `fl_oz_us` is an
   INSERT, not a migration. `factor` exists but nothing reads it yet —
@@ -199,6 +203,13 @@ the composite foreign key before the `UNIQUE (household_id, id)` it points at,
 which Postgres rejects; the file is hand-ordered and says so. Read a generated
 migration before applying it, especially when it adds a key and its target
 together.
+
+**`0000` was edited in place** (2026-09-16) to make `items.quantity` and
+`item_events.quantity_delta` integers, with both snapshots updated to match, at
+the user's request rather than adding a migration. The migrator never re-runs an
+applied migration, so a database created before that edit still has `numeric`
+columns: drop and re-create it (`db:migrate`, then `db:seed`) instead of
+expecting a migration to fix it.
 
 ## Resolved: the category blocker
 

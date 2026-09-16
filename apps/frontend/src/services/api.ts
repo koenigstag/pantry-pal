@@ -11,6 +11,7 @@ import type {
   CreateHouseholdDto,
   CreatePantryItemDto,
   UpdatePantryItemDto,
+  UpsertLocationsDto,
 } from '@pantry-pal/shared/dto';
 
 import { devUserEmail } from './identity';
@@ -70,6 +71,13 @@ export const pantryApi = {
 
   listLocations: (householdId: string): Promise<PantryLocation[]> =>
     request<PantryLocation[]>(`${household(householdId)}/locations`),
+
+  /** The locations editor's save: every location in its new order. 409 when the list was stale. */
+  upsertLocations: (householdId: string, dto: UpsertLocationsDto): Promise<PantryLocation[]> =>
+    request<PantryLocation[]>(`${household(householdId)}/locations`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    }),
 
   listItems: (householdId: string): Promise<PantryItem[]> =>
     request<PantryItem[]>(`${household(householdId)}/items`),

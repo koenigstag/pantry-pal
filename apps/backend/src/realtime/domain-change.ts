@@ -16,6 +16,11 @@ export type DomainChange =
       readonly householdId: string;
       readonly locations: PantryLocation[];
     }
+  | {
+      readonly type: 'locations.upserted';
+      readonly householdId: string;
+      readonly locations: PantryLocation[];
+    }
   | { readonly type: 'household.updated'; readonly household: Household }
   | { readonly type: 'household.deleted'; readonly householdId: string }
   | { readonly type: 'member.added'; readonly member: HouseholdMember }

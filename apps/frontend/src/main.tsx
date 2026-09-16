@@ -1,8 +1,9 @@
 import { configure } from 'mobx';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { RouterProvider } from 'react-router/dom';
 
-import { App } from './App';
+import { router } from './router';
 import { StoreProvider } from './stores/StoreContext';
 
 import './index.css';
@@ -24,7 +25,7 @@ if (container === null) {
 createRoot(container).render(
   <StrictMode>
     <StoreProvider>
-      <App />
+      <RouterProvider router={router} />
     </StoreProvider>
   </StrictMode>,
 );
