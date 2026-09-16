@@ -2,6 +2,10 @@ import type { SupportedLocale, UnitKind } from '@pantry-pal/shared';
 
 import { formatNumber, plural, type PluralForms } from './format';
 import { LOCALE } from './locale';
+import { de } from './locales/de';
+import { es } from './locales/es';
+import { fr } from './locales/fr';
+import { frCA } from './locales/fr-CA';
 import { ru } from './locales/ru';
 import { uk } from './locales/uk';
 
@@ -388,6 +392,10 @@ const CATALOGS: Readonly<Record<SupportedLocale, Messages>> = {
   'en-GB': en,
   'uk-UA': uk,
   'ru-RU': ru,
+  'de-DE': de,
+  'fr-FR': fr,
+  'fr-CA': frCA,
+  'es-ES': es,
 };
 
 /** The catalog of the page's language, chosen once per page load (`LOCALE`). */

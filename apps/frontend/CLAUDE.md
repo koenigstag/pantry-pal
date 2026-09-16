@@ -242,20 +242,28 @@ would refuse a contradicting value.
 
 ## Localization
 
-The UI speaks English, Ukrainian and Russian (`SUPPORTED_LOCALES` in shared:
-`en-GB`, `uk-UA`, `ru-RU`), through typed catalogs and no library.
+The UI speaks English, Ukrainian, Russian, German, French (France and Canada)
+and Spanish (`SUPPORTED_LOCALES` in shared: `en-GB`, `uk-UA`, `ru-RU`, `de-DE`,
+`fr-FR`, `fr-CA`, `es-ES`), through typed catalogs and no library. A tag is
+language, then region: `fr-CA` is French as written in Canada.
 
 - All copy lives in the catalogs. `i18n/messages.ts` holds English, the source,
-  and exports `Messages`, its type. `i18n/locales/uk.ts` and `ru.ts` translate it
-  with `satisfies Messages`, so a key missing from either is a type error:
-  **add every new string to all three.** Components import `messages`, the
-  catalog of the page's language, and never a locale file.
+  and exports `Messages`, its type. Each `i18n/locales/*.ts` translates it with
+  `satisfies Messages`, so a key missing from any of them is a type error:
+  **add every new string to every catalog.** Components import `messages`, the
+  catalog of the page's language, and never a locale file. A new language is a
+  tag in `SUPPORTED_LOCALES`, a catalog, an entry in `CATALOGS` and its own name
+  in `LANGUAGE_NAMES`. A regional variant spreads its language's catalog and
+  overrides only what differs, as `fr-CA.ts` does over `fr.ts`.
 - Strings that carry values are functions built with `plural()` and
   `formatNumber()` from `i18n/format.ts` — no literals or concatenated
   sentences in JSX. Ukrainian and Russian plurals need `one`, `few`, `many` and
-  `other` forms. `plural()` substitutes `#` in the form it picks, so interpolate
-  user data (item or location names) outside plural forms; the Slavic catalogs
-  quote it «like this» so a sentence never declines a name it did not write.
+  `other` forms; German, French and Spanish `one` and `other` (French
+  counts 0 and 1.5 as `one`). `plural()` substitutes `#` in the form it picks, so
+  interpolate user data (item or location names) outside plural forms, and quote
+  it in each language's style («…», „…“, « … ») so a sentence never inflects a
+  name it did not write. Write no-break spaces as `\u00A0` escapes: a raw one is
+  invisible in an editor.
 - **The language is fixed per page load.** `i18n/locale.ts` reads `LOCALE` once,
   from a localStorage copy of the account's `users.locale`, and the catalog and
   every `Intl` formatter use it. `switchLocale(tag)` stores a different language

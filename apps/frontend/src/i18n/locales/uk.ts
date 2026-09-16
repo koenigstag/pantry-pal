@@ -169,13 +169,13 @@ export const uk = {
 
   item: {
     select: (name: string) => `Вибрати «${name}»`,
-    expiryBadge: (days: number) => `${formatNumber(days)} д`,
+    expiryBadge: (days: number) => `${formatNumber(days)}\u00A0д`,
     expiryDescription,
-    amount: (quantity: number, unit: string) => `${formatNumber(quantity)} ${unit}`,
+    amount: (quantity: number, unit: string) => `${formatNumber(quantity)}\u00A0${unit}`,
     amountWithSize: (quantity: number, unit: string, size: number, sizeUnit: string) =>
-      `${formatNumber(quantity)} ${unit} × ${formatNumber(size)} ${sizeUnit}`,
+      `${formatNumber(quantity)}\u00A0${unit} ×\u00A0${formatNumber(size)}\u00A0${sizeUnit}`,
     sizeWithCount: (quantity: number, size: number, sizeUnit: string) =>
-      `${formatNumber(quantity)} × ${formatNumber(size)} ${sizeUnit}`,
+      `${formatNumber(quantity)} ×\u00A0${formatNumber(size)}\u00A0${sizeUnit}`,
     quantity: (name: string) => `Кількість: «${name}»`,
     increase: (name: string) => `Збільшити кількість: «${name}»`,
     decrease: (name: string) => `Зменшити кількість: «${name}»`,

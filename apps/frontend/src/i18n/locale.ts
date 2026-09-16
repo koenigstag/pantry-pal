@@ -12,6 +12,10 @@ export const LANGUAGE_NAMES: Readonly<Record<SupportedLocale, string>> = {
   'en-GB': 'English',
   'uk-UA': 'Українська',
   'ru-RU': 'Русский',
+  'de-DE': 'Deutsch',
+  'fr-FR': 'Français (France)',
+  'fr-CA': 'Français (Canada)',
+  'es-ES': 'Español',
 };
 
 /**
