@@ -1,5 +1,5 @@
 import { daysUntil, getExpiryStatus, type PantryItem } from '@pantry-pal/shared';
-import { Clock, Package } from 'lucide-react';
+import { Clock, Package, TriangleAlert } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useId, type ReactElement } from 'react';
 import { Link, type To } from 'react-router';
@@ -100,6 +100,8 @@ function ExpiryBadge({ item }: { item: PantryItem }): ReactElement | null {
   if (Number.isNaN(days)) return null;
 
   const description = messages.item.expiryDescription(days);
+  // Past its date: a warning, not a countdown. The colour says so too, but not to everyone.
+  const Icon = days < 0 ? TriangleAlert : Clock;
 
   return (
     <span
@@ -109,7 +111,7 @@ function ExpiryBadge({ item }: { item: PantryItem }): ReactElement | null {
         EXPIRY_TONES[getExpiryStatus(item)],
       )}
     >
-      <Clock aria-hidden="true" className="size-3.5 shrink-0" />
+      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
       <span aria-hidden="true">{messages.item.expiryBadge(days)}</span>
       <span className="sr-only">{description}</span>
     </span>
