@@ -1,6 +1,9 @@
-import type { UnitKind } from '@pantry-pal/shared';
+import type { SupportedLocale, UnitKind } from '@pantry-pal/shared';
 
 import { formatNumber, plural, type PluralForms } from './format';
+import { LOCALE } from './locale';
+import { ru } from './locales/ru';
+import { uk } from './locales/uk';
 
 function expiryDescription(days: number): string {
   if (days < 0) return plural(-days, { one: 'Expired # day ago', other: 'Expired # days ago' });
@@ -47,19 +50,19 @@ const CATEGORY_NAMES = new Map<string, string>([
 ]);
 
 /**
- * Every user-facing string, in one place.
+ * Every user-facing string, in English: the source catalog. `locales/*`
+ * translate it, and `Messages` — this object's type — makes a string missing
+ * from any of them a type error.
  *
- * The app is English-only for now but will be localized, so copy never lives in
- * components. Anything that carries a value is a function here, built with
- * `plural` and `formatNumber` instead of concatenation at the call site, so
- * adopting an i18n library means reimplementing this module rather than
- * hunting through JSX.
+ * Copy never lives in components. Anything that carries a value is a function,
+ * built with `plural` and `formatNumber` instead of concatenation at the call
+ * site, so every language can order and inflect its own sentence.
  *
  * `plural` substitutes `#` in the form it picks, so user data (a location or
  * item name) is interpolated only outside plural forms: a name containing `#`
  * would otherwise be rewritten.
  */
-export const messages = {
+const en = {
   app: {
     name: 'Pantry Pal',
   },
@@ -133,6 +136,8 @@ export const messages = {
     emptyLocation: (location: string) => `Nothing in ${location} yet.`,
     noMatches: (query: string, location: string) => `Nothing in ${location} matches “${query}”.`,
     noLocations: 'This household has no storage spaces yet.',
+    /** The fallback storage space: nobody can rename it, so its name is translated. */
+    fallbackLocation: 'Other',
   },
 
   sort: {
@@ -261,6 +266,8 @@ export const messages = {
       const forms = COUNT_NOUNS.get(code);
       return forms === undefined ? label : plural(count, forms);
     },
+    /** A mass or volume unit's symbol. English shows the API's label, `fl oz` for `fl_oz_us`. */
+    symbol: (_code: string, label: string): string => label,
     /** Group labels in the size unit picker. */
     kinds: {
       mass: 'Weight',
@@ -357,6 +364,9 @@ export const messages = {
     name: 'Name',
     email: 'Email',
     household: 'Household',
+    language: 'Language',
+    languageHint: 'The page reloads in the language you pick.',
+    languageFailed: 'Couldn’t change the language.',
     devIdentity: 'Development sign-in: the identity comes from VITE_DEV_USER_EMAIL.',
   },
 
@@ -370,3 +380,15 @@ export const messages = {
     description: 'Meal planning is coming soon.',
   },
 };
+
+/** The shape every catalog has: the English one's. */
+export type Messages = typeof en;
+
+const CATALOGS: Readonly<Record<SupportedLocale, Messages>> = {
+  'en-GB': en,
+  'uk-UA': uk,
+  'ru-RU': ru,
+};
+
+/** The catalog of the page's language, chosen once per page load (`LOCALE`). */
+export const messages: Messages = CATALOGS[LOCALE];

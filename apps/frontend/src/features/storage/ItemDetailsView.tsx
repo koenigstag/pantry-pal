@@ -9,6 +9,7 @@ import { usePantryStore, useQuantities } from '../../stores/StoreContext';
 import { cn } from '../../ui/cn';
 import { DETAILS_GRID, DetailsSection, ItemPhoto } from './detailsLayout';
 import { amountText, EXPIRY_TONES } from './itemDisplay';
+import { locationName } from './locationName';
 import { QuantityStepper } from './QuantityStepper';
 
 interface ItemDetailsViewProps {
@@ -36,7 +37,7 @@ export const ItemDetailsView = observer(function ItemDetailsView({
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap gap-2">
-          {location !== undefined && <Chip icon={MapPin}>{location.name}</Chip>}
+          {location !== undefined && <Chip icon={MapPin}>{locationName(location)}</Chip>}
           <Chip icon={Tag}>{pantry.categoryName(item.category)}</Chip>
         </div>
 

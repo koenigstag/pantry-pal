@@ -42,7 +42,7 @@ must stay `false` for constructor parameter properties to behave.
 src/
   database/     DatabaseModule (@Global): pool, transactional proxy, repositories;
                 Postgres error -> HTTP translation
-  auth/         AccessGuard (global), IdentityService, @Public/@AdminOnly, GET /me
+  auth/         AccessGuard (global), IdentityService, @Public/@AdminOnly, GET/PATCH /me
   common/       request context: @CurrentUser, @CurrentMembership, Membership
   households/   households + members, MembershipService, HouseholdAccessGuard
   locations/    per-household locations: CRUD, reorder, soft delete
@@ -57,7 +57,7 @@ src/
 ### Routes
 
 ```
-GET    /me
+GET    PATCH           /me                                            PATCH: the caller's locale
 GET    /units
 GET    /categories
 GET    POST            /households

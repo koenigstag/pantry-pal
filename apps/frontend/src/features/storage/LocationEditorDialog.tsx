@@ -59,7 +59,9 @@ const ERROR_MESSAGES: Record<Exclude<DraftError, 'nowhereToMove'>, string> = {
   duplicate: messages.locationEditor.nameTaken,
 };
 
+/** The fallback's name is the catalog's, as everywhere (`locationName`); the rest are as typed. */
 function displayName(row: DraftLocation): string {
+  if (row.isFallback) return messages.storage.fallbackLocation;
   if (row.removed && row.savedName !== null) return row.savedName;
   return row.name.trim() || row.savedName || messages.locationEditor.unnamed;
 }
@@ -112,7 +114,7 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
   const rows = draft === null ? toDraft(pantry.locations) : rebase(draft, pantry.locations);
 
   const holdsItems = (locationId: string): boolean => pantry.itemsIn(locationId).length > 0;
-  const errors = draftErrors(rows, holdsItems);
+  const errors = draftErrors(rows, holdsItems, messages.storage.fallbackLocation);
   const changed = isChanged(rows, pantry.locations);
   const canAdd = rows.filter((row) => !row.removed).length < MAX_LOCATIONS_PER_HOUSEHOLD;
 
@@ -427,7 +429,7 @@ function LocationRow({
         ) : row.isFallback ? (
           // Read-only rather than plain text: a screen reader says so, and why.
           <input
-            value={row.name}
+            value={name}
             readOnly
             aria-label={messages.locationEditor.name}
             aria-describedby={fallbackHintId}

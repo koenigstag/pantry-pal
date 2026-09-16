@@ -17,6 +17,7 @@ import {
   type PantryLocationsReorderedPayload,
   type PantryLocationsUpsertedPayload,
   type PantrySnapshotPayload,
+  type SupportedLocale,
   type Unit,
   type UserHousehold,
 } from '@pantry-pal/shared';
@@ -28,6 +29,7 @@ import type {
 import { makeAutoObservable, observableRef } from 'mobx';
 
 import { nameCollator } from '../i18n/format';
+import { switchLocale } from '../i18n/locale';
 import { messages } from '../i18n/messages';
 import { ApiError, type PantryApi } from '../services/api';
 import type { PantrySocket } from '../services/socket';
@@ -149,14 +151,14 @@ export class PantryStore {
 
   /**
    * A unit as it reads after `count`. A count unit is a noun that agrees with it,
-   * `2 cans`; any other unit is its label, `12 fl oz`.
+   * `2 cans`; any other unit is its symbol in the page's language, `12 fl oz`.
    */
   unitName(code: string, count: number): string {
     const unit = this.unitsByCode.get(code);
     if (unit === undefined) return code;
     return unit.kind === QUANTITY_UNIT_KIND
       ? messages.units.countNoun(code, count, unit.label)
-      : unit.label;
+      : messages.units.symbol(code, unit.label);
   }
 
   get categoriesByCode(): ReadonlyMap<string, Category> {
@@ -256,6 +258,9 @@ export class PantryStore {
       ]);
 
       this.applyLoaded({ user, household, units, locations, items });
+      // The account's language outranks this browser's copy of it — on a new
+      // device, say. When they differ, the page reloads in the account's.
+      switchLocale(user.locale);
       // A socket that connected before the household was known could not ask
       // for a snapshot yet; ask now.
       this.requestSync();
@@ -391,6 +396,22 @@ export class PantryStore {
    * latest data is fetched before this returns, the editor's draft rebases onto
    * it, and the user saves again.
    */
+  /**
+   * Saves the account's language, then reloads the page in it: the catalog is
+   * fixed per page load. Returns the error message, or `null` — and then the
+   * page is already on its way out.
+   */
+  async changeLocale(locale: SupportedLocale): Promise<string | null> {
+    try {
+      const user = await this.api.updateMe({ locale });
+      this.applyUser(user);
+      switchLocale(user.locale);
+      return null;
+    } catch (error) {
+      return toMessage(error);
+    }
+  }
+
   async saveLocations(dto: UpsertLocationsDto): Promise<string | null> {
     const householdId = this.householdId;
     if (householdId === null) return messages.errors.loadFailed;
@@ -455,6 +476,10 @@ export class PantryStore {
     this.locations = loaded.locations.toSorted(bySortOrder);
     this.items = reconcileById(this.items, loaded.items.filter(isActive));
     this.loadState = 'ready';
+  }
+
+  private applyUser(user: CurrentUser): void {
+    this.user = user;
   }
 
   private applyCategories(categories: readonly Category[]): void {

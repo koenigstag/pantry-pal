@@ -7,6 +7,7 @@ import { formatNumber } from '../../i18n/format';
 import { messages } from '../../i18n/messages';
 import { cn } from '../../ui/cn';
 import { IconButton } from '../../ui/IconButton';
+import { locationName } from './locationName';
 
 interface LocationTabsProps {
   locations: readonly PantryLocation[];
@@ -63,7 +64,7 @@ export function LocationTabs({
                   )
                 }
               >
-                {location.name}
+                {locationName(location)}
                 {matchCounts !== null && (
                   <>
                     <span

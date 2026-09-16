@@ -102,6 +102,15 @@ export const COUNT_UNIT = 'pcs';
 /** Which units the create/edit picker offers. A display preference, nothing more. */
 export const UNIT_SYSTEM_PREFERENCES = ['metric', 'imperial'] as const;
 
+/**
+ * The languages the frontend is translated into, as BCP 47 tags: what a user's
+ * `locale` may be set to. The frontend picks its message catalog by the
+ * language and formats numbers and dates with the whole tag.
+ */
+export const SUPPORTED_LOCALES = ['en-GB', 'uk-UA', 'ru-RU'] as const;
+/** A new user's language, and the one shown until the account's is known. */
+export const DEFAULT_LOCALE = 'en-GB' satisfies (typeof SUPPORTED_LOCALES)[number];
+
 export const HOUSEHOLD_ROLE = {
   Owner: 'owner',
   Member: 'member',

@@ -1,11 +1,10 @@
-/**
- * The locale every formatter uses until the app is localized.
- *
- * One constant, so switching to the user's locale later is a single change —
- * and so that, meanwhile, numbers are formatted to match the English copy in
- * `messages.ts` rather than the browser's language.
+import { LOCALE } from './locale';
+
+/*
+ * Every formatter uses the page's language (`LOCALE`), not the browser's, so
+ * numbers and dates match the catalog they appear in. It is fixed per page load,
+ * which is why these can be built once.
  */
-export const LOCALE = 'en';
 
 const numberFormat = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 3 });
 const pluralRules = new Intl.PluralRules(LOCALE);

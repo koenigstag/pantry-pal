@@ -25,6 +25,7 @@ import {
   type DraftField,
   type ItemDraft,
 } from './itemDraft';
+import { locationName } from './locationName';
 import { SizeInput } from './SizeInput';
 
 interface ItemEditFormProps {
@@ -136,7 +137,7 @@ export const ItemEditForm = observer(function ItemEditForm({
                 >
                   {pantry.locations.map((location) => (
                     <option key={location.id} value={location.id}>
-                      {location.name}
+                      {locationName(location)}
                     </option>
                   ))}
                 </select>

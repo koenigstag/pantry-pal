@@ -7,6 +7,7 @@ import { messages } from '../../i18n/messages';
 import { usePantryStore, useQuantities } from '../../stores/StoreContext';
 import { Dialog } from '../../ui/Dialog';
 import { SheetButton } from '../../ui/SheetButton';
+import { locationName } from './locationName';
 
 function CancelButton({ onClick }: { onClick: () => void }): ReactElement {
   return (
@@ -155,7 +156,7 @@ export const MoveItemsSheet = observer(function MoveItemsSheet({
             <li key={location.id}>
               <SheetButton
                 icon={FolderInput}
-                label={location.name}
+                label={locationName(location)}
                 onClick={() => move(location.id)}
               />
             </li>

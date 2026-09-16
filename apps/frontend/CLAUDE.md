@@ -57,16 +57,16 @@ src/i18n/                  message catalog and Intl formatters
 - The edit form (`ItemEditForm`) reuses the details view's layout and sections
   (`detailsLayout.tsx`), so switching modes keeps everything in place. Save is
   enabled only once something changed, and sends only the changed fields.
-- Adding an item uses the same form in the same full-screen dialog
-  (`AddItemDialog`), so both offer every field. It starts from `emptyDraft`,
-  validates `toCreate(draft)` against `CreatePantryItemDto` plus `ruleErrors`,
-  lets the quantity step no lower than 1, and asks before discarding a form
-  with anything typed into it.
   If another member saves the item while the form is open, `rebaseDraft` moves
   every untouched field onto their values and names any field both changed.
   Switching modes moves focus to the first field (fine pointer) or the dialog
   title (touch, where a focused field would pop the keyboard up); a failed save
   focuses the first invalid field.
+- Adding an item uses the same form in the same full-screen dialog
+  (`AddItemDialog`), so both offer every field. It starts from `emptyDraft`,
+  validates `toCreate(draft)` against `CreatePantryItemDto` plus `ruleErrors`,
+  lets the quantity step no lower than 1, and asks before discarding a form
+  with anything typed into it.
 - Field errors come from the catalog (`itemFieldErrors`), one message per field
   saying what it accepts, rather than class-validator's English. Rules a DTO
   cannot state (size value and unit together, no future opened date) live in
@@ -240,16 +240,33 @@ would refuse a contradicting value.
     scrolling the list. During a keyboard drag, the sensor cancels Escape's
     `keydown`, so Escape cancels the drag and the dialog stays open.
 
-## Localization readiness
+## Localization
 
-The frontend will be localized; no i18n library has been chosen.
+The UI speaks English, Ukrainian and Russian (`SUPPORTED_LOCALES` in shared:
+`en-GB`, `uk-UA`, `ru-RU`), through typed catalogs and no library.
 
-- All copy lives in `i18n/messages.ts`. Strings that carry values are functions
-  built with `plural()` and `formatNumber()` from `i18n/format.ts` — no literals
-  or concatenated sentences in JSX.
-- `LOCALE` is fixed to `'en'` until then, so numbers agree with the English copy.
-- `plural()` substitutes `#` in the form it picks, so interpolate user data
-  (item or location names) outside plural forms.
+- All copy lives in the catalogs. `i18n/messages.ts` holds English, the source,
+  and exports `Messages`, its type. `i18n/locales/uk.ts` and `ru.ts` translate it
+  with `satisfies Messages`, so a key missing from either is a type error:
+  **add every new string to all three.** Components import `messages`, the
+  catalog of the page's language, and never a locale file.
+- Strings that carry values are functions built with `plural()` and
+  `formatNumber()` from `i18n/format.ts` — no literals or concatenated
+  sentences in JSX. Ukrainian and Russian plurals need `one`, `few`, `many` and
+  `other` forms. `plural()` substitutes `#` in the form it picks, so interpolate
+  user data (item or location names) outside plural forms; the Slavic catalogs
+  quote it «like this» so a sentence never declines a name it did not write.
+- **The language is fixed per page load.** `i18n/locale.ts` reads `LOCALE` once,
+  from a localStorage copy of the account's `users.locale`, and the catalog and
+  every `Intl` formatter use it. `switchLocale(tag)` stores a different language
+  and reloads: the Profile page calls it after `PATCH /me` saves the choice, and
+  the store calls it when `GET /me` reports one that differs from the copy, as on
+  a new device. With storage blocked it cannot remember, so it does not reload.
+- **User data keeps its language.** Item names and the storage spaces a
+  household named stay as typed. What the UI names is translated: seeded
+  categories (`messages.categories.name`), count-unit nouns, metric unit
+  symbols, and the fallback storage space, which nobody can rename
+  (`locationName`). Codes the catalogs lack show the API's label.
 
 ## Waiting on backend endpoints
 

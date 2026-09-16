@@ -11,6 +11,7 @@ import {
 import type {
   CreateHouseholdDto,
   CreatePantryItemDto,
+  UpdateMeDto,
   UpdatePantryItemDto,
   UpsertLocationsDto,
 } from '@pantry-pal/shared/dto';
@@ -62,6 +63,9 @@ const household = (householdId: string): string => `/households/${encodeURICompo
 
 export const pantryApi = {
   me: (): Promise<CurrentUser> => request<CurrentUser>('/me'),
+
+  updateMe: (dto: UpdateMeDto): Promise<CurrentUser> =>
+    request<CurrentUser>('/me', { method: 'PATCH', body: JSON.stringify(dto) }),
 
   listHouseholds: (): Promise<UserHousehold[]> => request<UserHousehold[]>('/households'),
 

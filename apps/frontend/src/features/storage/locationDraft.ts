@@ -140,10 +140,15 @@ export function moveTarget(draft: readonly DraftLocation[], row: DraftLocation):
  * Names are compared the way `UpsertLocationsDto` compares them — trimmed, and
  * lowercased with `toLowerCase` — so the editor and the server agree on what a
  * duplicate is.
+ *
+ * The fallback location answers to two names: the stored one, which the server
+ * compares, and `fallbackName`, the one on screen. A new name matching either is
+ * a duplicate; the fallback itself, being read-only, is never the row marked.
  */
 export function draftErrors(
   draft: readonly DraftLocation[],
   holdsItems: (locationId: string) => boolean,
+  fallbackName: string,
 ): ReadonlyMap<string, DraftError> {
   const errors = new Map<string, DraftError>();
   const keysByName = new Map<string, string[]>();
@@ -162,12 +167,16 @@ export function draftErrors(
       continue;
     }
 
-    const normalized = name.toLowerCase();
-    keysByName.set(normalized, [...(keysByName.get(normalized) ?? []), row.key]);
+    const names = row.isFallback ? [name, fallbackName] : [name];
+    for (const normalized of new Set(names.map((candidate) => candidate.toLowerCase()))) {
+      keysByName.set(normalized, [...(keysByName.get(normalized) ?? []), row.key]);
+    }
   }
 
+  const fallbackKeys = new Set(draft.filter((row) => row.isFallback).map((row) => row.key));
   for (const keys of keysByName.values()) {
-    if (keys.length > 1) for (const key of keys) errors.set(key, 'duplicate');
+    if (keys.length < 2) continue;
+    for (const key of keys) if (!fallbackKeys.has(key)) errors.set(key, 'duplicate');
   }
   return errors;
 }

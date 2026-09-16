@@ -2,6 +2,7 @@ import type {
   HOUSEHOLD_ROLE,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
+  SUPPORTED_LOCALES,
   UNIT_KINDS,
   UNIT_SYSTEM_PREFERENCES,
   UNIT_SYSTEMS,
@@ -10,6 +11,7 @@ import type {
 export type UnitKind = (typeof UNIT_KINDS)[number];
 export type UnitSystem = (typeof UNIT_SYSTEMS)[number];
 export type UnitSystemPreference = (typeof UNIT_SYSTEM_PREFERENCES)[number];
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export type HouseholdRole = (typeof HOUSEHOLD_ROLE)[keyof typeof HOUSEHOLD_ROLE];
 export type ItemStatus = (typeof ITEM_STATUS)[keyof typeof ITEM_STATUS];
 export type ItemEventType = (typeof ITEM_EVENT_TYPE)[keyof typeof ITEM_EVENT_TYPE];
@@ -30,6 +32,7 @@ export interface CurrentUser {
   displayName: string;
   unitSystem: UnitSystemPreference;
   timezone: string;
+  /** A BCP 47 tag, such as `en-GB`: the UI language when it is one of `SUPPORTED_LOCALES`. */
   locale: string;
 }
 

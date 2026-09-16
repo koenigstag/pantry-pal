@@ -14,6 +14,7 @@ import { ItemGrid } from './ItemGrid';
 import { filterItems, sortItems } from './itemOrder';
 import { DeleteItemsSheet, MoveItemsSheet, RemoveItemSheet } from './ItemSheets';
 import { LocationEditorDialog } from './LocationEditorDialog';
+import { locationName } from './locationName';
 import { LocationTabs } from './LocationTabs';
 import { StorageHeader } from './StorageHeader';
 import { SelectionBar, SortControl } from './StorageToolbar';
@@ -171,7 +172,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
       </StorageHeader>
 
       <section className="mx-auto w-full max-w-7xl flex-1 px-4 pt-3 pb-6 md:px-8">
-        <h2 className="sr-only">{location.name}</h2>
+        <h2 className="sr-only">{locationName(location)}</h2>
 
         <div className="mb-3 flex min-h-11 items-center gap-2">
           {selectedIds.size > 0 ? (
@@ -203,8 +204,8 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         {visibleItems.length === 0 ? (
           <p className="py-16 text-center text-ink-muted">
             {isSearching
-              ? messages.storage.noMatches(query.trim(), location.name)
-              : messages.storage.emptyLocation(location.name)}
+              ? messages.storage.noMatches(query.trim(), locationName(location))
+              : messages.storage.emptyLocation(locationName(location))}
           </p>
         ) : (
           <ItemGrid
