@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { UnitsRepository } from '@pantry-pal/db';
-import { COUNT_UNIT, type Unit } from '@pantry-pal/shared';
+import { COUNT_UNIT, QUANTITY_UNIT_KIND, type Unit } from '@pantry-pal/shared';
 import type { CreateUnitDto, UpdateUnitDto } from '@pantry-pal/shared/dto';
 
 import { toUnit } from './unit.mapper';
@@ -40,12 +40,24 @@ export class UnitsService {
     return toUnit(row);
   }
 
-  /** `code` is immutable: items reference it. */
+  /**
+   * `code` is immutable: items reference it. So is the kind of a unit in use: a
+   * count unit's is held by `items_unit_count_fk`, and a size of 500 must not
+   * turn from grams into millilitres under the items that hold it.
+   */
   async update(code: string, dto: UpdateUnitDto): Promise<Unit> {
-    if (code === COUNT_UNIT && dto.kind !== undefined && dto.kind !== 'count') {
-      throw new ConflictException(
-        `"${COUNT_UNIT}" must stay a count unit: the items_size_only_count constraint names it`,
-      );
+    if (code === COUNT_UNIT && dto.kind !== undefined && dto.kind !== QUANTITY_UNIT_KIND) {
+      throw new ConflictException(`"${COUNT_UNIT}" must stay a count unit: new items start in it`);
+    }
+
+    if (dto.kind !== undefined) {
+      const current = await this.units.findByCode(code);
+      if (current === undefined) throw new NotFoundException(`Unit "${code}" not found`);
+      if (current.kind !== dto.kind && (await this.units.isInUse(code))) {
+        throw new ConflictException(
+          `Unit "${code}" is still used by items or products, so its kind cannot change`,
+        );
+      }
     }
 
     const row = await this.units.update(code, {
@@ -65,9 +77,7 @@ export class UnitsService {
    */
   async remove(code: string): Promise<void> {
     if (code === COUNT_UNIT) {
-      throw new ConflictException(
-        `"${COUNT_UNIT}" cannot be deleted: the items_size_only_count constraint names it`,
-      );
+      throw new ConflictException(`"${COUNT_UNIT}" cannot be deleted: new items start in it`);
     }
     if ((await this.units.findByCode(code)) === undefined) {
       throw new NotFoundException(`Unit "${code}" not found`);

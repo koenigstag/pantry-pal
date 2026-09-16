@@ -1,6 +1,6 @@
 import { ITEM_EVENT_TYPES, type ItemEventType } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
-import { check, index, jsonb, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { inList } from './_sql';
 import { households } from './households';
@@ -21,8 +21,11 @@ export const itemEvents = pgTable(
     /** Null survives a member leaving the household; the history stays intact. */
     userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     type: text('type').$type<ItemEventType>().notNull(),
-    /** Negative when consumed or discarded, so waste reports are a plain SUM. */
-    quantityDelta: numeric('quantity_delta', { precision: 10, scale: 3, mode: 'number' }),
+    /**
+     * Negative when consumed or discarded, so waste reports are a plain SUM.
+     * An integer, like the `items.quantity` it is the change of.
+     */
+    quantityDelta: integer('quantity_delta'),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

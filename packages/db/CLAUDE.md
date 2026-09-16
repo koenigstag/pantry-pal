@@ -7,8 +7,9 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Ten tables, the transaction layer, seed data, and repositories for users,
-households, members, locations, items, item events, units and app settings.
+Eleven tables, the transaction layer, seed data, and repositories for users,
+households, members, locations, items, item events, units, categories and app
+settings.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -17,7 +18,8 @@ execute as written, and a rollback correctly unwinds writes made through two
 separate repositories.
 
 Migration `0001_household_services` adds `app_settings`, soft-deleted locations,
-the composite tenancy foreign key on `items`, and the `deleted` event type.
+each household's fallback location flag, the composite tenancy foreign key on
+`items`, and the `deleted` event type.
 
 Not yet written: the `pg_notify` LISTEN subscriber, and a products repository.
 
@@ -104,22 +106,52 @@ These are deliberate. Changing any of them affects the whole workspace.
   `default-locations` setting (code default: Kitchen / Fridge / Freezer /
   Pantry / Spices / Bathroom / Medicines / Other). Location (_where_) and
   category (_what_) are separate axes — do not collapse them.
+- **`categories` is a lookup table**, like `units`: `items.category` and
+  `products.default_category` reference `categories(code)` (`RESTRICT`), so
+  adding a category is an INSERT through the admin API. `CATEGORY_SEED` is the
+  default list; `other` is the fixed catch-all a new item starts in.
+- **`is_edible`**: a category's says whether its items are food or drink, and
+  `items.is_edible` copies it — except in `other`, where each item sets its own
+  and the category's flag is only the starting value. No constraint can state
+  that exception, so the items and categories services keep it.
 - **Locations are soft-deleted.** The items foreign key is `RESTRICT` and counts
   consumed, discarded and soft-deleted rows too, so a hard delete would be
   impossible for any location that ever held an item. The case-insensitive name
   index is partial (`WHERE deleted_at IS NULL`), so a deleted name can be reused.
   `sort_order` is display order, rewritten densely by a reorder.
+- **Every household has one fallback location**, "Other" (`is_fallback`): where
+  a deleted location's active items go unless the caller names another. It can
+  be reordered, never renamed or deleted, so things always have somewhere to go.
+  The database allows one per household (`locations_household_fallback_idx`)
+  and refuses soft-deleting it (`locations_fallback_not_deleted`); renaming is
+  refused by the backend, because a CHECK cannot see the old name. Households
+  get it on creation through `withFallbackLocation` in `@pantry-pal/shared`,
+  which marks a default named "Other" or appends one.
 - **`app_settings`** is key → jsonb for global, admin-managed values. Untyped
   here on purpose: keys, value types and defaults live in `@pantry-pal/shared`
   (`APP_SETTING`), and the backend validates every read and write. A missing row
   means "use the default", so it needs no seed.
-- **Quantity is three parts** so `1 can 300 ml` can be represented: `quantity` +
-  `unit` + `size_value` + `size_unit`. `pcs` is the only count unit; container
-  nouns like "can" or "jar" are display-only via `products.package_label`.
-- **`units` is a lookup TABLE**, not an enum, with FKs from `items.unit` and
-  `items.size_unit` (code/label/kind/system/factor). Adding `fl_oz_us` is an
-  INSERT, not a migration. `factor` exists but nothing reads it yet —
-  conversions are deferred.
+- **Quantity is how many, then what is inside one**, so `2 cans × 400 g` can be
+  represented: `quantity` + `unit`, then `size_value` + `size_unit`.
+- **Things are counted, never weighed.** `items.unit` must be a count unit:
+  `pcs`, `pill`, or a container such as `bottle`, `can`, `jar`, `pack`, `box`,
+  `bag`, `tube` or `blister`. A mass or volume goes in the size, whose unit may
+  be of any kind, so rice is `1 bag × 2 kg`. The database enforces it:
+  `items_unit_count_fk` references `units(code, kind)` from `(unit, unit_kind)`,
+  and `unit_kind` is a column pinned to `'count'` by a DEFAULT and a CHECK,
+  because a foreign key can only compare columns. The target needs the otherwise
+  redundant `UNIQUE (code, kind)` on `units`, and the same key refuses changing
+  the kind of a count unit in use. `products.default_unit` follows the same rule
+  (`products_default_unit_count_fk`).
+- **`quantity` is an integer** — how many whole things — and so is
+  `item_events.quantity_delta`. A fractional amount is a size: a 1.5 kg bag of
+  flour is `1 bag` with `size_value 1.5` in `kg`. `size_value` stays
+  `numeric(10, 3)`. The shared DTOs enforce the same rule with `@IsInt()`.
+- **`units` is a lookup TABLE**, not an enum, with FKs from `items.unit`,
+  `items.size_unit` and `products.default_unit` (code/label/kind/system/factor).
+  Adding `fl_oz_us` or a `carton` is an INSERT, not a migration. A count unit's
+  label is its singular noun; the frontend's message catalog pluralises the ones
+  it knows. `factor` exists but nothing reads it yet — conversions are deferred.
 - **`effective_expires_at`** is
   `GENERATED ALWAYS AS (LEAST(expires_at, opened_at + period_after_opening_days)) STORED`.
   **Expiry status must read this column, not `expires_at`** — otherwise an
@@ -200,16 +232,46 @@ which Postgres rejects; the file is hand-ordered and says so. Read a generated
 migration before applying it, especially when it adds a key and its target
 together.
 
-## Resolved: the category blocker
+**`0000` was edited in place** twice on 2026-09-16, with both snapshots updated
+to match, at the user's request rather than adding migrations:
 
-`PANTRY_CATEGORIES` in `@pantry-pal/shared` gained `medicine`,
-`personal-care` and `cleaning`, so Bathroom and Medicines items now satisfy
-`items_category_check`.
+1. `items.quantity` and `item_events.quantity_delta` became integers.
+2. Count units: `units_code_kind_unique`, `items.unit_kind` with
+   `items_unit_count_fk` and `items_unit_kind_count`, the same pair on
+   `products.default_unit`, and `products.package_label` removed. The
+   `items_size_only_count` CHECK is gone, since a size no longer depends on the
+   unit.
 
-Note the asymmetry this leaves behind: that CHECK is **generated from the shared
-constant into the DDL**, so adding another category needs a new migration.
-Adding a _unit_ does not — `units` is a lookup table, so it is an INSERT. If
-categories start churning, promote them to a table for the same reason.
+**`0001` was edited in place** the same day, following that choice, for the
+fallback location: `locations.is_fallback`, `locations_household_fallback_idx`
+and `locations_fallback_not_deleted`. Its statements are drizzle-kit's own —
+generated as a temporary `0002`, moved into `0001` beside the other location
+changes, with `0002`'s snapshot becoming `0001`'s.
+
+The migrator never re-runs an applied migration, so a database created before
+any of these edits keeps the old columns and constraints: drop and re-create it
+(`db:migrate`, then `db:seed`) instead of expecting a migration to fix it.
+`drizzle-kit generate` reporting no changes confirms the latest snapshot; the
+edited `CREATE TABLE` statements were also compared against a from-scratch
+generation.
+
+`0002_categories` and `0003_edible` are new migrations, not in-place edits, so
+an existing database upgrades with `db:migrate`. Both are hand-edited, and say so:
+
+- `0002` inserts the default categories between the `CREATE TABLE` and the
+  foreign keys that replace the old CHECKs, or existing items would violate them.
+- `0003` flags the inedible categories, then adds `items.is_edible` in three
+  steps — nullable, backfilled from each item's category, then `NOT NULL` —
+  because drizzle-kit's one-statement `ADD COLUMN ... NOT NULL` fails on a table
+  with rows.
+
+Both were verified on a database migrated to `0001` and seeded before them.
+
+## Resolved: categories are a table
+
+Categories used to be a CHECK generated from a shared constant, so adding one
+needed a migration while adding a unit did not. `0002_categories` promoted them to
+a lookup table like `units`, and the asymmetry is gone.
 
 ## Deferred
 

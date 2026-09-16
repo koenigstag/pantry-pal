@@ -1,6 +1,7 @@
 import {
   createId,
   daysUntil,
+  DEFAULT_CATEGORY,
   DEFAULT_LOCATIONS,
   EXPIRY_WARNING_DAYS,
   HOUSEHOLD_ROLE,
@@ -8,7 +9,6 @@ import {
   ITEM_STATUS,
   type HouseholdRole,
   type ItemStatus,
-  type PantryCategory,
   type UnitSystemPreference,
 } from '@pantry-pal/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -24,7 +24,7 @@ import {
   type NewItemEventRow,
   type NewItemRow,
 } from '../schema';
-import { seedDefaultLocations, seedUnits } from '../seed';
+import { CATEGORY_SEED, seedCategories, seedDefaultLocations, seedUnits } from '../seed';
 
 /**
  * A realistic household for local development: every default location in use,
@@ -68,8 +68,10 @@ type Actor = keyof typeof TEST_USERS;
 interface ProductFixture {
   name: string;
   brand: string;
-  packageLabel: string;
-  defaultCategory: PantryCategory;
+  /** A count unit: what one batch of this product is counted in. */
+  defaultUnit: string;
+  /** A category code from `CATEGORY_SEED`. */
+  defaultCategory: string;
   defaultShelfLifeDays: number;
 }
 
@@ -77,42 +79,42 @@ const PRODUCTS = {
   tomatoes: {
     name: 'Chopped tomatoes',
     brand: 'Casa Verde',
-    packageLabel: 'can',
+    defaultUnit: 'can',
     defaultCategory: 'canned',
     defaultShelfLifeDays: 730,
   },
   milk: {
     name: 'Whole milk',
     brand: 'Northfield Dairy',
-    packageLabel: 'bottle',
+    defaultUnit: 'bottle',
     defaultCategory: 'dairy',
     defaultShelfLifeDays: 10,
   },
   spaghetti: {
     name: 'Spaghetti',
     brand: 'Pasta Nonna',
-    packageLabel: 'pack',
+    defaultUnit: 'pack',
     defaultCategory: 'grains',
     defaultShelfLifeDays: 1095,
   },
   cola: {
     name: 'Cola',
     brand: 'Fizz Co',
-    packageLabel: 'can',
+    defaultUnit: 'can',
     defaultCategory: 'beverages',
     defaultShelfLifeDays: 270,
   },
   sunscreen: {
     name: 'Sunscreen SPF 50',
     brand: 'SunCare',
-    packageLabel: 'tube',
+    defaultUnit: 'tube',
     defaultCategory: 'personal-care',
     defaultShelfLifeDays: 730,
   },
   ibuprofen: {
     name: 'Ibuprofen 200 mg',
     brand: 'MediCo',
-    packageLabel: 'blister',
+    defaultUnit: 'blister',
     defaultCategory: 'medicine',
     defaultShelfLifeDays: 1095,
   },
@@ -121,7 +123,10 @@ const PRODUCTS = {
 interface ItemFixture {
   name: string;
   location: (typeof DEFAULT_LOCATIONS)[number];
-  category: PantryCategory;
+  /** A category code from `CATEGORY_SEED`. */
+  category: string;
+  /** Only for the default category, where each item decides; others copy their category's. */
+  isEdible?: boolean;
   quantity: number;
   unit: string;
   /** What is inside one of them: `[300, 'ml']` is the `300 ml` in `1 can 300 ml`. */
@@ -161,7 +166,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Kitchen',
     category: 'other',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [750, 'ml'],
     expiresIn: 540,
     openedDaysAgo: 30,
@@ -173,7 +178,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Kitchen',
     category: 'cleaning',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [500, 'ml'],
     addedDaysAgo: 20,
   },
@@ -198,7 +203,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Fridge',
     category: 'dairy',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [1, 'l'],
     expiresIn: 5,
     openedDaysAgo: 2,
@@ -211,7 +216,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Fridge',
     category: 'dairy',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [1, 'l'],
     expiresIn: 6,
     addedDaysAgo: 3,
@@ -231,7 +236,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Fridge',
     category: 'dairy',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'pack',
     size: [200, 'g'],
     expiresIn: 45,
     openedDaysAgo: 5,
@@ -263,7 +268,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Fridge',
     category: 'meat',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'pack',
     size: [1, 'lb'],
     expiresIn: 0,
     addedDaysAgo: 2,
@@ -274,7 +279,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Fridge',
     category: 'beverages',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [1, 'l'],
     expiresIn: 3,
     openedDaysAgo: 6,
@@ -289,7 +294,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Freezer',
     category: 'frozen',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bag',
     size: [1, 'kg'],
     expiresIn: 240,
     addedDaysAgo: 30,
@@ -299,7 +304,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Freezer',
     category: 'frozen',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'box',
     size: [500, 'ml'],
     expiresIn: 90,
     openedDaysAgo: 20,
@@ -313,7 +318,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Pantry',
     category: 'canned',
     quantity: 2,
-    unit: 'pcs',
+    unit: 'can',
     size: [400, 'g'],
     expiresIn: 20,
     addedDaysAgo: 60,
@@ -324,7 +329,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Pantry',
     category: 'canned',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'can',
     size: [400, 'g'],
     expiresIn: 400,
     addedDaysAgo: 10,
@@ -335,7 +340,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Pantry',
     category: 'grains',
     quantity: 2,
-    unit: 'pcs',
+    unit: 'pack',
     size: [500, 'g'],
     expiresIn: 300,
     addedDaysAgo: 25,
@@ -344,17 +349,20 @@ const ITEMS: readonly ItemFixture[] = [
     name: 'Rice',
     location: 'Pantry',
     category: 'grains',
-    quantity: 2,
-    unit: 'kg',
+    quantity: 1,
+    unit: 'bag',
+    size: [2, 'kg'],
     expiresIn: 600,
     addedDaysAgo: 40,
   },
+  // Quantities are whole and counted: 1.5 kg of flour is one bag with a size.
   {
     name: 'Flour',
     location: 'Pantry',
     category: 'grains',
-    quantity: 1.5,
-    unit: 'kg',
+    quantity: 1,
+    unit: 'bag',
+    size: [1.5, 'kg'],
     expiresIn: 150,
     addedDaysAgo: 15,
   },
@@ -363,7 +371,8 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Pantry',
     category: 'other',
     quantity: 1,
-    unit: 'kg',
+    unit: 'pack',
+    size: [1, 'kg'],
     addedDaysAgo: 100,
   },
   {
@@ -371,7 +380,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Pantry',
     category: 'other',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'jar',
     size: [12, 'oz'],
     addedDaysAgo: 50,
     addedBy: 'member',
@@ -382,7 +391,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Pantry',
     category: 'beverages',
     quantity: 6,
-    unit: 'pcs',
+    unit: 'can',
     size: [12, 'fl_oz_us'],
     expiresIn: 150,
     addedDaysAgo: 12,
@@ -395,7 +404,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Spices',
     category: 'spices',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'jar',
     size: [75, 'g'],
     expiresIn: 700,
     openedDaysAgo: 200,
@@ -407,7 +416,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Spices',
     category: 'spices',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'jar',
     size: [40, 'g'],
     expiresIn: -30,
     addedDaysAgo: 400,
@@ -417,7 +426,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Spices',
     category: 'spices',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'jar',
     size: [100, 'g'],
     addedDaysAgo: 90,
   },
@@ -430,7 +439,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Bathroom',
     category: 'personal-care',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'tube',
     size: [8, 'ml'],
     expiresIn: 500,
     openedDaysAgo: 190,
@@ -442,7 +451,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Bathroom',
     category: 'personal-care',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'tube',
     size: [75, 'ml'],
     expiresIn: 300,
     openedDaysAgo: 40,
@@ -454,7 +463,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Bathroom',
     category: 'personal-care',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [400, 'ml'],
     expiresIn: 700,
     openedDaysAgo: 60,
@@ -467,7 +476,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Bathroom',
     category: 'personal-care',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'tube',
     size: [200, 'ml'],
     expiresIn: 500,
     openedDaysAgo: 100,
@@ -482,22 +491,22 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Medicines',
     category: 'medicine',
     quantity: 2,
-    unit: 'pcs',
-    size: [10, 'pcs'],
+    unit: 'blister',
+    size: [10, 'pill'],
     expiresIn: 400,
     addedDaysAgo: 30,
-    notes: '200 mg per tablet',
+    notes: '200 mg per pill',
   },
   {
     name: 'Paracetamol 500 mg',
     location: 'Medicines',
     category: 'medicine',
     quantity: 1,
-    unit: 'pcs',
-    size: [16, 'pcs'],
+    unit: 'box',
+    size: [16, 'pill'],
     expiresIn: -5,
     addedDaysAgo: 300,
-    notes: '500 mg per tablet',
+    notes: '500 mg per pill',
   },
   // Printed date a year out; opened 28 days ago with a 30-day limit, so expiring soon.
   {
@@ -505,7 +514,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Medicines',
     category: 'medicine',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [100, 'ml'],
     expiresIn: 400,
     openedDaysAgo: 28,
@@ -528,7 +537,7 @@ const ITEMS: readonly ItemFixture[] = [
     location: 'Other',
     category: 'cleaning',
     quantity: 1,
-    unit: 'pcs',
+    unit: 'bottle',
     size: [2, 'l'],
     addedDaysAgo: 14,
   },
@@ -536,6 +545,7 @@ const ITEMS: readonly ItemFixture[] = [
     name: 'AA batteries',
     location: 'Other',
     category: 'other',
+    isEdible: false,
     quantity: 4,
     unit: 'pcs',
     expiresIn: 1500,
@@ -594,6 +604,19 @@ const required = <T>(value: T | undefined, what: string): T => {
   return value;
 };
 
+const SEEDED_CATEGORIES = new Map(CATEGORY_SEED.map((category) => [category.code, category]));
+
+/** The rule the items service applies: the category's value, or the item's own in `other`. */
+const edibleFor = (fixture: ItemFixture): boolean => {
+  const category = required(
+    SEEDED_CATEGORIES.get(fixture.category),
+    `category ${fixture.category}`,
+  );
+  return category.code === DEFAULT_CATEGORY
+    ? (fixture.isEdible ?? category.isEdible)
+    : category.isEdible;
+};
+
 /**
  * Resets and re-creates the test household in a single transaction.
  *
@@ -607,7 +630,9 @@ export function seedTestHousehold(
   { now = new Date() }: SeedTestHouseholdOptions = {},
 ): Promise<TestHouseholdSummary> {
   return db.transaction(async (tx) => {
+    // Restores any default unit or category an admin deleted that the items below use.
     await seedUnits(tx);
+    await seedCategories(tx);
 
     const userRows = await tx
       .insert(users)
@@ -654,11 +679,10 @@ export function seedTestHousehold(
         Object.values(PRODUCTS).map((product, index) => ({
           name: product.name,
           brand: product.brand,
-          packageLabel: product.packageLabel,
           defaultCategory: product.defaultCategory,
           defaultShelfLifeDays: product.defaultShelfLifeDays,
           householdId: TEST_HOUSEHOLD_ID,
-          defaultUnit: 'pcs',
+          defaultUnit: product.defaultUnit,
           barcode: fixtureBarcode(index + 1),
         })),
       )
@@ -699,6 +723,7 @@ export function seedTestHousehold(
         name: fixture.name,
         locationId: required(locationIdByName.get(fixture.location), fixture.location),
         category: fixture.category,
+        isEdible: edibleFor(fixture),
         quantity: fixture.quantity,
         unit: fixture.unit,
         sizeValue: fixture.size?.[0] ?? null,

@@ -4,6 +4,7 @@ import {
   DEFAULT_FRONTEND_PORT,
   SOCKET_IO_PATH,
 } from '@pantry-pal/shared';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -21,7 +22,11 @@ export default defineConfig(({ mode }) => {
     env.VITE_BACKEND_URL ?? `http://localhost:${env.BACKEND_PORT ?? String(DEFAULT_BACKEND_PORT)}`;
 
   return {
-    plugins: [react()],
+    // The path the app is served under: `/` by default, `/<repo>/` on GitHub
+    // Pages. Vite needs the trailing slash, so it is added whether or not
+    // BASE_PATH has one; the router reads the result as `import.meta.env.BASE_URL`.
+    base: `${(env.BASE_PATH ?? '').replace(/\/+$/, '')}/`,
+    plugins: [react(), tailwindcss()],
     server: {
       port: Number(env.PORT ?? DEFAULT_FRONTEND_PORT),
       strictPort: true,

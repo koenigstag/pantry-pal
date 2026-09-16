@@ -1,6 +1,7 @@
 import {
   API_BASE_PATH,
   DEV_USER_HEADER,
+  type Category,
   type CurrentUser,
   type PantryItem,
   type PantryLocation,
@@ -10,7 +11,9 @@ import {
 import type {
   CreateHouseholdDto,
   CreatePantryItemDto,
+  UpdateMeDto,
   UpdatePantryItemDto,
+  UpsertLocationsDto,
 } from '@pantry-pal/shared/dto';
 
 import { devUserEmail } from './identity';
@@ -61,6 +64,9 @@ const household = (householdId: string): string => `/households/${encodeURICompo
 export const pantryApi = {
   me: (): Promise<CurrentUser> => request<CurrentUser>('/me'),
 
+  updateMe: (dto: UpdateMeDto): Promise<CurrentUser> =>
+    request<CurrentUser>('/me', { method: 'PATCH', body: JSON.stringify(dto) }),
+
   listHouseholds: (): Promise<UserHousehold[]> => request<UserHousehold[]>('/households'),
 
   createHousehold: (dto: CreateHouseholdDto): Promise<UserHousehold> =>
@@ -68,8 +74,17 @@ export const pantryApi = {
 
   listUnits: (): Promise<Unit[]> => request<Unit[]>('/units'),
 
+  listCategories: (): Promise<Category[]> => request<Category[]>('/categories'),
+
   listLocations: (householdId: string): Promise<PantryLocation[]> =>
     request<PantryLocation[]>(`${household(householdId)}/locations`),
+
+  /** The locations editor's save: every location in its new order. 409 when the list was stale. */
+  upsertLocations: (householdId: string, dto: UpsertLocationsDto): Promise<PantryLocation[]> =>
+    request<PantryLocation[]>(`${household(householdId)}/locations`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    }),
 
   listItems: (householdId: string): Promise<PantryItem[]> =>
     request<PantryItem[]>(`${household(householdId)}/items`),

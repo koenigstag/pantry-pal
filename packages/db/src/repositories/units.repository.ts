@@ -1,3 +1,4 @@
+import { COUNT_UNIT, type UnitKind } from '@pantry-pal/shared';
 import { asc, count, eq, inArray, or, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
@@ -11,12 +12,20 @@ const KIND_ORDER = sql`case ${units.kind} when 'count' then 0 when 'mass' then 1
 export class UnitsRepository {
   constructor(private readonly db: Database) {}
 
-  /** Grouped by kind, smallest unit first within each. */
+  /**
+   * Grouped by kind, smallest unit first within each. Count units are all the
+   * same size, so `pcs` leads them and the containers follow by code.
+   */
   list(): Promise<UnitRow[]> {
     return this.db
       .select()
       .from(units)
-      .orderBy(asc(KIND_ORDER), asc(units.factor), asc(units.code));
+      .orderBy(
+        asc(KIND_ORDER),
+        asc(units.factor),
+        asc(sql`${units.code} <> ${COUNT_UNIT}`),
+        asc(units.code),
+      );
   }
 
   async findByCode(code: string): Promise<UnitRow | undefined> {
@@ -24,16 +33,19 @@ export class UnitsRepository {
     return row;
   }
 
-  /** Which of `codes` exist — one round trip to check an item's `unit` and `size_unit` together. */
-  async findExistingCodes(codes: readonly string[]): Promise<Set<string>> {
-    if (codes.length === 0) return new Set();
+  /**
+   * The kind of each of `codes` that exists — one round trip to check an item's
+   * `unit` and `size_unit` together. A code missing from the map is unknown.
+   */
+  async findKinds(codes: readonly string[]): Promise<Map<string, UnitKind>> {
+    if (codes.length === 0) return new Map();
 
     const rows = await this.db
-      .select({ code: units.code })
+      .select({ code: units.code, kind: units.kind })
       .from(units)
       .where(inArray(units.code, [...codes]));
 
-    return new Set(rows.map((row) => row.code));
+    return new Map(rows.map((row) => [row.code, row.kind]));
   }
 
   async count(): Promise<number> {

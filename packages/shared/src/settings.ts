@@ -1,4 +1,4 @@
-import { DEFAULT_LOCATIONS } from './constants';
+import { DEFAULT_LOCATIONS, FALLBACK_LOCATION_NAME } from './constants';
 
 /**
  * Global, admin-managed settings.
@@ -26,6 +26,31 @@ export interface DefaultLocationEntry {
 /** Copied into every new household, in this order. Existing households are unaffected. */
 export interface DefaultLocationsSetting {
   locations: DefaultLocationEntry[];
+}
+
+/** A location a new household starts with. */
+export interface NewHouseholdLocation extends DefaultLocationEntry {
+  isFallback: boolean;
+}
+
+/**
+ * The locations a new household starts with: the defaults, in order, one of
+ * them the fallback. A default named `FALLBACK_LOCATION_NAME`, ignoring case,
+ * becomes it; without one, the fallback is appended — which is why the setting
+ * holds one location fewer than a household may.
+ */
+export function withFallbackLocation(
+  defaults: readonly DefaultLocationEntry[],
+): NewHouseholdLocation[] {
+  const fallbackName = FALLBACK_LOCATION_NAME.toLowerCase();
+  const locations = defaults.map((entry) => ({
+    ...entry,
+    isFallback: entry.name.toLowerCase() === fallbackName,
+  }));
+
+  return locations.some((location) => location.isFallback)
+    ? locations
+    : [...locations, { name: FALLBACK_LOCATION_NAME, icon: null, isFallback: true }];
 }
 
 export interface AppSettingValues {

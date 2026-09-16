@@ -1,0 +1,243 @@
+import type { PantryItem } from '@pantry-pal/shared';
+import { CheckCheck, PackagePlus, RefreshCw, SquarePen } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
+import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import { Navigate, Outlet } from 'react-router';
+
+import { messages } from '../../i18n/messages';
+import { useNotices, usePantryStore } from '../../stores/StoreContext';
+import type { MenuItem } from '../../ui/Menu';
+import { PageStatus } from '../shell/PageStatus';
+import { AddItemDialog } from './AddItemDialog';
+import type { StorageOutletContext } from './itemDetailsNavigation';
+import { ItemGrid } from './ItemGrid';
+import { filterItems, sortItems } from './itemOrder';
+import { DeleteItemsSheet, MoveItemsSheet, RemoveItemSheet } from './ItemSheets';
+import { LocationEditorDialog } from './LocationEditorDialog';
+import { locationName } from './locationName';
+import { LocationTabs } from './LocationTabs';
+import { StorageHeader } from './StorageHeader';
+import { SelectionBar, SortControl } from './StorageToolbar';
+import { useStorageParams } from './useStorageParams';
+
+type OpenSheet =
+  | { kind: 'none' }
+  | { kind: 'remove'; item: PantryItem }
+  | { kind: 'delete'; itemIds: readonly string[] }
+  | { kind: 'move'; itemIds: readonly string[] }
+  | { kind: 'add' }
+  | { kind: 'locations' };
+
+/** A selection belongs to the location it was made in; switching tabs leaves it behind. */
+interface Selection {
+  locationId: string;
+  ids: ReadonlySet<string>;
+}
+
+const NO_SHEET: OpenSheet = { kind: 'none' };
+const NOTHING_SELECTED: ReadonlySet<string> = new Set();
+
+/**
+ * `/storage/:locationId` — one location's items. The item-details route renders
+ * into its `<Outlet>`, over the list, and reaches the page's sheets through the
+ * outlet context.
+ */
+export const StoragePage = observer(function StoragePage(): ReactElement {
+  const pantry = usePantryStore();
+  const notices = useNotices();
+  const params = useStorageParams();
+
+  const [query, setQuery] = useState('');
+  const [isSearchOpen, setSearchOpen] = useState(false);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [sheet, setSheet] = useState<OpenSheet>(NO_SHEET);
+
+  // Stable callbacks: every card is memoised on its props.
+  const locationId = params.locationId;
+  const toggleSelected = useCallback(
+    (itemId: string) => {
+      if (locationId === undefined) return;
+
+      setSelection((current) => {
+        const ids = new Set(current?.locationId === locationId ? current.ids : []);
+        if (ids.has(itemId)) ids.delete(itemId);
+        else ids.add(itemId);
+        return { locationId, ids };
+      });
+    },
+    [locationId],
+  );
+  const openRemoveSheet = useCallback((item: PantryItem) => setSheet({ kind: 'remove', item }), []);
+  const closeSheet = useCallback(() => setSheet(NO_SHEET), []);
+  const clearSelection = useCallback(() => setSelection(null), []);
+  const outletContext = useMemo<StorageOutletContext>(
+    () => ({ openRemoveSheet }),
+    [openRemoveSheet],
+  );
+
+  if (pantry.household === null) {
+    return pantry.loadState === 'failed' ? (
+      <PageStatus
+        tone="error"
+        title={messages.errors.loadFailed}
+        detail={pantry.error}
+        action={{ label: messages.common.retry, onClick: () => void pantry.load() }}
+      />
+    ) : (
+      <PageStatus title={messages.common.loading} />
+    );
+  }
+
+  const location = pantry.locations.find((candidate) => candidate.id === locationId);
+  if (location === undefined) {
+    // No location in the URL, or one deleted meanwhile: show the first.
+    const first = pantry.locations[0];
+    return first === undefined ? (
+      <PageStatus title={messages.storage.noLocations} />
+    ) : (
+      <Navigate replace to={params.locationLink(first.id)} />
+    );
+  }
+
+  const isSearching = query.trim() !== '';
+  const visibleItems = sortItems(
+    filterItems(pantry.itemsIn(location.id), query),
+    params.sort,
+    params.direction,
+    pantry.unitLabel,
+  );
+
+  // Only what is on screen counts as selected: never act on items a search hides.
+  const selectedIds =
+    selection?.locationId === location.id
+      ? new Set(visibleItems.filter((item) => selection.ids.has(item.id)).map((item) => item.id))
+      : NOTHING_SELECTED;
+
+  const matchCounts = isSearching
+    ? new Map(
+        pantry.locations.map((candidate) => [
+          candidate.id,
+          filterItems(pantry.itemsIn(candidate.id), query).length,
+        ]),
+      )
+    : null;
+
+  const menuItems: MenuItem[] = [
+    {
+      key: 'add',
+      label: messages.storage.addItem,
+      icon: PackagePlus,
+      onSelect: () => setSheet({ kind: 'add' }),
+    },
+    {
+      key: 'select-all',
+      label: messages.storage.selectAll,
+      icon: CheckCheck,
+      onSelect: () =>
+        setSelection({
+          locationId: location.id,
+          ids: new Set(visibleItems.map((item) => item.id)),
+        }),
+    },
+    {
+      key: 'edit-locations',
+      label: messages.storage.editLocations,
+      icon: SquarePen,
+      onSelect: () => setSheet({ kind: 'locations' }),
+    },
+    {
+      key: 'refresh',
+      label: messages.storage.refresh,
+      icon: RefreshCw,
+      onSelect: () => void pantry.refresh(),
+    },
+  ];
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <StorageHeader
+        query={query}
+        onQueryChange={setQuery}
+        isSearchOpen={isSearchOpen}
+        onSearchOpenChange={setSearchOpen}
+        menuItems={menuItems}
+      >
+        <LocationTabs
+          locations={pantry.locations}
+          activeLocationId={location.id}
+          link={params.locationLink}
+          matchCounts={matchCounts}
+          onEditLocations={() => setSheet({ kind: 'locations' })}
+        />
+      </StorageHeader>
+
+      <section className="mx-auto w-full max-w-7xl flex-1 px-4 pt-3 pb-6 md:px-8">
+        <h2 className="sr-only">{locationName(location)}</h2>
+
+        <div className="mb-3 flex min-h-11 items-center gap-2">
+          {selectedIds.size > 0 ? (
+            <SelectionBar
+              count={selectedIds.size}
+              canMove={pantry.locations.length > 1}
+              onClear={clearSelection}
+              onDelete={() => setSheet({ kind: 'delete', itemIds: [...selectedIds] })}
+              onAddToShoppingList={() => notices.info(messages.pending.shoppingLists)}
+              onMove={() => setSheet({ kind: 'move', itemIds: [...selectedIds] })}
+            />
+          ) : (
+            <>
+              <p aria-live="polite" className="text-sm text-ink-muted">
+                {isSearching
+                  ? messages.storage.matchCount(visibleItems.length)
+                  : messages.storage.itemCount(visibleItems.length)}
+              </p>
+              <SortControl
+                sort={params.sort}
+                direction={params.direction}
+                onSortChange={params.setSort}
+                onToggleDirection={params.toggleDirection}
+              />
+            </>
+          )}
+        </div>
+
+        {visibleItems.length === 0 ? (
+          <p className="py-16 text-center text-ink-muted">
+            {isSearching
+              ? messages.storage.noMatches(query.trim(), locationName(location))
+              : messages.storage.emptyLocation(locationName(location))}
+          </p>
+        ) : (
+          <ItemGrid
+            items={visibleItems}
+            selectedIds={selectedIds}
+            detailsLink={params.itemLink}
+            onToggleSelected={toggleSelected}
+            onRemove={openRemoveSheet}
+          />
+        )}
+      </section>
+
+      <Outlet context={outletContext} />
+
+      <RemoveItemSheet item={sheet.kind === 'remove' ? sheet.item : null} onClose={closeSheet} />
+      <DeleteItemsSheet
+        itemIds={sheet.kind === 'delete' ? sheet.itemIds : null}
+        onClose={closeSheet}
+        onDone={clearSelection}
+      />
+      <MoveItemsSheet
+        itemIds={sheet.kind === 'move' ? sheet.itemIds : null}
+        fromLocationId={location.id}
+        onClose={closeSheet}
+        onDone={clearSelection}
+      />
+      <AddItemDialog
+        open={sheet.kind === 'add'}
+        onClose={closeSheet}
+        defaultLocationId={location.id}
+      />
+      <LocationEditorDialog open={sheet.kind === 'locations'} onClose={closeSheet} />
+    </div>
+  );
+});

@@ -31,7 +31,7 @@ Four packages; `packages/shared` is the hub everything else depends on.
 
 ```
 apps/backend     NestJS 12 · REST + Socket.IO · CommonJS via tsc
-apps/frontend    React 19 + MobX 7 · Vite 8 · ESM
+apps/frontend    React 19 + MobX 7 · React Router 8 · Tailwind 4 · Vite 8 · ESM
 packages/shared  constants · DTOs · utils · typed WebSocket contract
 packages/db      Drizzle + pg · ESM · schema, repositories, transactions
 ```
@@ -73,14 +73,18 @@ Every domain row belongs to a household, and every household route checks the
 caller's membership before a service runs. Identity is currently a development
 stand-in — the `x-dev-user-email` header, honoured only with `DEV_AUTH=true` —
 behind a seam real authentication will replace. Global reference data (units,
-default locations) is managed through `/admin`, authenticated by an API key.
+categories, default locations) is managed through `/admin`, authenticated by an
+API key.
 Details in `apps/backend/CLAUDE.md`.
 
-### The frontend applies no optimistic updates
+### The frontend applies one optimistic update, and only one
 
-`PantryStore` only mutates its state from server broadcasts. A write sends the
-request and waits for the resulting event. This is deliberate — it keeps every
-connected client in agreement. Preserve it unless you intend to change it.
+`PantryStore` holds server state only: a write waits for the server's response,
+and the matching broadcast re-applies the same data. This is deliberate — it
+keeps every connected client in agreement. The single exception is stepping an
+item's quantity, which renders at once from a separate overlay
+(`QuantityUpdates`) and saves after a short pause; see `apps/frontend/CLAUDE.md`.
+Keep any new optimism out of `PantryStore` itself.
 
 ## Gotchas that will bite
 
@@ -123,6 +127,16 @@ Nest 12 runs on Express 5, whose `query parser` defaults to `simple`, silently
 breaking `?tags[]=a&tags[]=b` and `?filter[name]=x`. `main.ts` restores it with
 `app.set('query parser', 'extended')`. Leave that in place.
 
+### Turborepo hides undeclared environment variables
+
+Turborepo 2 runs tasks in strict env mode: a task's process sees only the
+variables declared under `env` or `globalEnv` in `turbo.json`, plus `VITE_*`,
+which it infers for Vite. Anything else set in the shell or CI is dropped
+without a warning. Undeclared, `BASE_PATH=/x pnpm build` would build for `/`.
+`.env*` files are unaffected, because the apps read them from disk. Declare any
+variable a task reads from its environment in `turbo.json`; that also puts it
+in the cache key.
+
 ## Tooling
 
 - **oxlint and oxfmt — not ESLint or Prettier.** Configs are `.oxlintrc.json`
@@ -143,13 +157,32 @@ git-ignored and takes precedence over `.env`. The backend loads them via
 `ConfigModule`; the frontend via Vite's `loadEnv`, where only `VITE_`-prefixed
 variables reach browser code.
 
+## Deployment
+
+`.github/workflows/deploy-pages.yml` publishes the frontend to GitHub Pages on
+every push to `main`, or when run by hand from the Actions tab. Pages serves
+static files only, so the site has **no backend**: the shell renders, and pages
+that need the API show their load error. The repository's Pages source must be
+set to _GitHub Actions_ once, in its settings.
+
+- A project site is served under `/<repo>/`. The workflow passes that path as
+  `BASE_PATH`, which sets Vite's `base`, and the router takes its `basename`
+  from `import.meta.env.BASE_URL`. Link through the router: a hard-coded
+  `href="/…"` escapes the base path.
+- Pages has no SPA rewrites. The workflow copies `index.html` to `404.html`, so a
+  deep link boots the app (with a 404 status) and the router takes over.
+- Actions are pinned to commit SHAs, with the version in a comment; update both
+  together. No dependency cache is restored, so nothing another run wrote can
+  reach the published site.
+
 ## Conventions
 
-- Values shared between the apps (ports, paths, event names, categories, roles,
-  statuses, unit kinds) belong in `packages/shared/src/constants.ts`. A literal
+- Values shared between the apps (ports, paths, event names, roles, statuses,
+  unit kinds) belong in `packages/shared/src/constants.ts`. A literal
   duplicated across both apps will drift. `packages/db` generates its CHECK
   constraints from these same lists rather than defining its own.
-- Units themselves are rows, not a constant: read them from `GET /units`.
+- Units and categories are rows, not constants: read them from `GET /units` and
+  `GET /categories`.
 - Dates cross the wire as ISO-8601 **strings**, never `Date` — JSON has no date
   type, so a `Date` in a wire type is a lie after `JSON.parse`.
 - The frontend imports DTOs as values only where it needs runtime validation;

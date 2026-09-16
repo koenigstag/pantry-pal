@@ -4,7 +4,21 @@ import type { Database } from '../client';
 import { locations, type LocationRow, type NewLocationRow } from '../schema';
 
 export type CreateLocationInput = Pick<NewLocationRow, 'name' | 'icon' | 'sortOrder'>;
+
+/** A location of a household being created, which is where the fallback comes from. */
+export type CreateInitialLocationInput = CreateLocationInput & Pick<NewLocationRow, 'isFallback'>;
 export type UpdateLocationInput = Partial<Pick<NewLocationRow, 'name' | 'icon'>>;
+
+/** A location whose id the caller generated, so the caller knows the whole order before inserting. */
+export type CreateLocationWithIdInput = CreateLocationInput & Pick<LocationRow, 'id'>;
+
+/** One location's part of `updateMany`. An omitted field keeps its current value. */
+export interface LocationChange {
+  id: string;
+  name?: string;
+  /** `null` removes the icon. */
+  icon?: string | null;
+}
 
 /**
  * Every read here excludes soft-deleted locations: a deleted location only
@@ -84,10 +98,33 @@ export class LocationsRepository {
   }
 
   /**
+   * Reads the household's fallback location and share-locks it until the
+   * transaction ends, so it stays put while items are moved into it.
+   */
+  async lockFallback(householdId: string): Promise<LocationRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(locations)
+      .where(
+        and(
+          eq(locations.householdId, householdId),
+          eq(locations.isFallback, true),
+          isNull(locations.deletedAt),
+        ),
+      )
+      .for('share');
+
+    return row;
+  }
+
+  /**
    * Bulk insert for seeding a household. A name that already exists (ignoring
    * case) is skipped rather than failing the batch.
    */
-  createMany(householdId: string, inputs: readonly CreateLocationInput[]): Promise<LocationRow[]> {
+  createMany(
+    householdId: string,
+    inputs: readonly CreateInitialLocationInput[],
+  ): Promise<LocationRow[]> {
     if (inputs.length === 0) return Promise.resolve([]);
 
     return this.db
@@ -95,6 +132,79 @@ export class LocationsRepository {
       .values(inputs.map((input) => ({ ...input, householdId })))
       .onConflictDoNothing()
       .returning();
+  }
+
+  /**
+   * Bulk insert for a caller that has already checked the names, such as the
+   * locations editor. Unlike `createMany`, a name that exists fails the whole
+   * statement instead of being skipped.
+   */
+  createAll(
+    householdId: string,
+    inputs: readonly CreateLocationWithIdInput[],
+  ): Promise<LocationRow[]> {
+    if (inputs.length === 0) return Promise.resolve([]);
+
+    return this.db
+      .insert(locations)
+      .values(inputs.map((input) => ({ ...input, householdId })))
+      .returning();
+  }
+
+  /**
+   * Renames and re-icons several locations at once, in two statements.
+   *
+   * The name index is unique and cannot be deferred, so Postgres checks it row
+   * by row, and names that swap or rotate ("Fridge" ↔ "Freezer") would collide
+   * halfway through a single UPDATE. Every renamed row therefore first takes a
+   * placeholder — its id behind a leading space, which no trimmed name can
+   * equal — and only then its new name.
+   *
+   * Between the two statements the renamed rows carry placeholders, so call
+   * this inside a transaction. The new names must not collide with each other
+   * or with the household's other active locations; the index rejects the
+   * statement if they do.
+   */
+  async updateMany(householdId: string, changes: readonly LocationChange[]): Promise<void> {
+    const renamed = changes.flatMap(({ id, name }) => (name === undefined ? [] : [{ id, name }]));
+    const reiconed = changes.flatMap(({ id, icon }) => (icon === undefined ? [] : [{ id, icon }]));
+    if (renamed.length === 0 && reiconed.length === 0) return;
+
+    if (renamed.length > 0) {
+      await this.db
+        .update(locations)
+        .set({ name: sql`' ' || ${locations.id}::text` })
+        .where(
+          this.activeIn(
+            householdId,
+            renamed.map(({ id }) => id),
+          ),
+        );
+    }
+
+    // Casts as in `setSortOrders`: bare parameters would leave the CASE untyped.
+    const names = sql.join(
+      renamed.map(({ id, name }) => sql`when ${id}::uuid then ${name}::text`),
+      sql` `,
+    );
+    const icons = sql.join(
+      reiconed.map(({ id, icon }) => sql`when ${id}::uuid then ${icon}::text`),
+      sql` `,
+    );
+
+    await this.db
+      .update(locations)
+      .set({
+        ...(renamed.length > 0 && {
+          name: sql`case ${locations.id} ${names} else ${locations.name} end`,
+        }),
+        ...(reiconed.length > 0 && {
+          icon: sql`case ${locations.id} ${icons} else ${locations.icon} end`,
+        }),
+      })
+      .where(
+        this.activeIn(householdId, [...new Set([...renamed, ...reiconed].map(({ id }) => id))]),
+      );
   }
 
   async update(
@@ -136,13 +246,7 @@ export class LocationsRepository {
     return this.db
       .update(locations)
       .set({ sortOrder: sql`case ${locations.id} ${positions} end` })
-      .where(
-        and(
-          eq(locations.householdId, householdId),
-          inArray(locations.id, [...orderedIds]),
-          isNull(locations.deletedAt),
-        ),
-      )
+      .where(this.activeIn(householdId, orderedIds))
       .returning();
   }
 
@@ -160,6 +264,14 @@ export class LocationsRepository {
     return and(
       eq(locations.householdId, householdId),
       eq(locations.id, id),
+      isNull(locations.deletedAt),
+    );
+  }
+
+  private activeIn(householdId: string, ids: readonly string[]) {
+    return and(
+      eq(locations.householdId, householdId),
+      inArray(locations.id, [...ids]),
       isNull(locations.deletedAt),
     );
   }

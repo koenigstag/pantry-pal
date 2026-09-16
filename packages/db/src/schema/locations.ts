@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -32,6 +34,14 @@ export const locations = pgTable(
     icon: text('icon'),
     /** Display order, ascending. Rewritten densely (0..n-1) by a reorder. */
     sortOrder: integer('sort_order').notNull().default(0),
+    /**
+     * The household's catch-all ("Other"): where a deleted location's active
+     * items go unless the caller names another. It can be reordered but neither
+     * renamed nor deleted, so every household keeps somewhere to put things.
+     * Deleting is refused here too (`locations_fallback_not_deleted`); renaming
+     * only by `LocationsService`, since a CHECK cannot see the old name.
+     */
+    isFallback: boolean('is_fallback').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -52,6 +62,11 @@ export const locations = pgTable(
       .on(t.householdId, sql`lower(name)`)
       .where(sql`deleted_at is null`),
     index('locations_household_sort_idx').on(t.householdId, t.sortOrder),
+    /** One fallback per household. Creating the household gives it that one. */
+    uniqueIndex('locations_household_fallback_idx')
+      .on(t.householdId)
+      .where(sql`is_fallback`),
+    check('locations_fallback_not_deleted', sql`not is_fallback or deleted_at is null`),
     /**
      * Redundant as a uniqueness rule (`id` is already unique), but a composite
      * foreign key needs a unique target: it is what lets `items` require that

@@ -6,7 +6,7 @@
       "idx": 0,
       "version": "7",
       "when": 1789570887143,
-      "tag": "0000_round_absorbing_man",
+      "tag": "0000_initial_schema",
       "breakpoints": true
     },
     {
@@ -14,6 +14,20 @@
       "version": "7",
       "when": 1789578194874,
       "tag": "0001_household_services",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789592338232,
+      "tag": "0002_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789592989136,
+      "tag": "0003_edible",
       "breakpoints": true
     }
   ]

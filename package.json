@@ -2,6 +2,10 @@
   "name": "pantry-pal",
   "version": "0.0.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/koenigstag/pantry-pal.git"
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",

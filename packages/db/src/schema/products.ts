@@ -1,7 +1,8 @@
-import { MAX_ITEM_NAME_LENGTH, PANTRY_CATEGORIES, type PantryCategory } from '@pantry-pal/shared';
+import { MAX_ITEM_NAME_LENGTH, QUANTITY_UNIT_KIND } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import {
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -12,7 +13,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { inList } from './_sql';
+import { literal } from './_sql';
+import { categories } from './categories';
 import { households } from './households';
 import { units } from './units';
 
@@ -29,14 +31,19 @@ export const products = pgTable(
     name: varchar('name', { length: MAX_ITEM_NAME_LENGTH }).notNull(),
     brand: text('brand'),
     barcode: text('barcode'),
+    /** A `categories.code`: see `products_default_category_fk`. */
+    defaultCategory: text('default_category'),
     /**
-     * Display-only noun: 'can', 'jar', 'blister'. Carries no arithmetic, which
-     * is why it is free text here rather than a unit — `pcs` is the only count
-     * unit, so this is what keeps "3 cans of beans" from reading "3 pcs".
+     * The count unit a new batch is counted in: 'can', 'jar', 'blister'. A count
+     * unit for the same reason `items.unit` is one — see
+     * `products_default_unit_count_fk`.
      */
-    packageLabel: text('package_label'),
-    defaultCategory: text('default_category').$type<PantryCategory>(),
-    defaultUnit: text('default_unit').references(() => units.code, { onDelete: 'restrict' }),
+    defaultUnit: text('default_unit'),
+    /** Always `count`: the half of `products_default_unit_count_fk` that pins the kind. */
+    defaultUnitKind: text('default_unit_kind')
+      .$type<typeof QUANTITY_UNIT_KIND>()
+      .notNull()
+      .default(QUANTITY_UNIT_KIND),
     defaultShelfLifeDays: integer('default_shelf_life_days'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -53,9 +60,21 @@ export const products = pgTable(
       .on(t.barcode)
       .where(sql`barcode is not null`),
     index('products_household_name_idx').on(t.householdId, sql`lower(name)`),
+    /** Not checked while `default_unit` is null: a product need not have a default. */
+    foreignKey({
+      name: 'products_default_unit_count_fk',
+      columns: [t.defaultUnit, t.defaultUnitKind],
+      foreignColumns: [units.code, units.kind],
+    }).onDelete('restrict'),
+    /** Not checked while `default_category` is null, like the default unit. */
+    foreignKey({
+      name: 'products_default_category_fk',
+      columns: [t.defaultCategory],
+      foreignColumns: [categories.code],
+    }).onDelete('restrict'),
     check(
-      'products_category_check',
-      sql`default_category is null or default_category in (${inList(PANTRY_CATEGORIES)})`,
+      'products_default_unit_kind_count',
+      sql`default_unit_kind = ${literal(QUANTITY_UNIT_KIND)}`,
     ),
   ],
 );

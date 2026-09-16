@@ -9,6 +9,7 @@ export function toPantryItem(row: ItemRow): PantryItem {
     productId: row.productId,
     name: row.name,
     category: row.category,
+    isEdible: row.isEdible,
     quantity: row.quantity,
     unit: row.unit,
     sizeValue: row.sizeValue,

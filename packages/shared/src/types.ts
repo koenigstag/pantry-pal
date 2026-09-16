@@ -2,16 +2,16 @@ import type {
   HOUSEHOLD_ROLE,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
-  PANTRY_CATEGORIES,
+  SUPPORTED_LOCALES,
   UNIT_KINDS,
   UNIT_SYSTEM_PREFERENCES,
   UNIT_SYSTEMS,
 } from './constants';
 
-export type PantryCategory = (typeof PANTRY_CATEGORIES)[number];
 export type UnitKind = (typeof UNIT_KINDS)[number];
 export type UnitSystem = (typeof UNIT_SYSTEMS)[number];
 export type UnitSystemPreference = (typeof UNIT_SYSTEM_PREFERENCES)[number];
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export type HouseholdRole = (typeof HOUSEHOLD_ROLE)[keyof typeof HOUSEHOLD_ROLE];
 export type ItemStatus = (typeof ITEM_STATUS)[keyof typeof ITEM_STATUS];
 export type ItemEventType = (typeof ITEM_EVENT_TYPE)[keyof typeof ITEM_EVENT_TYPE];
@@ -32,6 +32,7 @@ export interface CurrentUser {
   displayName: string;
   unitSystem: UnitSystemPreference;
   timezone: string;
+  /** A BCP 47 tag, such as `en-GB`: the UI language when it is one of `SUPPORTED_LOCALES`. */
   locale: string;
 }
 
@@ -45,6 +46,21 @@ export interface Unit {
   system: UnitSystem;
   /** To the base unit of its kind (g, ml, pcs). Nothing converts with it yet. */
   factor: number;
+}
+
+/** A row of the `categories` lookup table: _what_ a thing is, as a location is where. */
+export interface Category {
+  /** Stable, since items reference it. Lowercase words joined by hyphens: `personal-care`. */
+  code: string;
+  /** English. The frontend shows its catalog's name for a code it knows, and this otherwise. */
+  label: string;
+  /** Ascending: the order pickers list categories in. */
+  sortOrder: number;
+  /**
+   * Food or drink. Items in the category are the same, except in the default
+   * category (`other`), where this is only where a new item starts.
+   */
+  isEdible: boolean;
 }
 
 export interface Household {
@@ -82,6 +98,11 @@ export interface PantryLocation {
   icon: string | null;
   /** Ascending. Dense (0..n-1) after a reorder; new locations append. */
   sortOrder: number;
+  /**
+   * The household's one fallback location ("Other"): it cannot be renamed or
+   * deleted, and a deleted location's items move to it unless told otherwise.
+   */
+  isFallback: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -94,12 +115,18 @@ export interface PantryItem {
   /** The catalog product this batch is an instance of, if any. */
   productId: string | null;
   name: string;
-  category: PantryCategory;
-  /** Up to three decimal places: `0.5` kg is a valid quantity. */
+  /** A `Category.code`. */
+  category: string;
+  /**
+   * Food or drink: the category's `isEdible`, except in the default category
+   * (`other`), where each item is set on its own.
+   */
+  isEdible: boolean;
+  /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
   quantity: number;
-  /** A `Unit.code`. */
+  /** The `Unit.code` of a count unit: what is counted, such as `pcs`, `bottle` or `can`. */
   unit: string;
-  /** What is inside one `pcs`, e.g. `300` for a 300 ml can. Only with `unit: 'pcs'`. */
+  /** What is inside one, e.g. `300` for a 300 ml can. A unit of any kind. */
   sizeValue: number | null;
   sizeUnit: string | null;
   /** The printed date, `YYYY-MM-DD`. */
@@ -152,6 +179,17 @@ export interface PantryLocationDeletedPayload {
 export interface PantryLocationsReorderedPayload {
   householdId: string;
   /** Every active location, in the new order. */
+  locations: PantryLocation[];
+}
+
+/**
+ * The locations editor saved: renames, additions, deletions and the new order
+ * arrive as one list, so no client renders a half-applied edit. Items moved out
+ * of a deleted location are announced separately, as item updates.
+ */
+export interface PantryLocationsUpsertedPayload {
+  householdId: string;
+  /** Every active location, in the new order. Replaces the client's list. */
   locations: PantryLocation[];
 }
 

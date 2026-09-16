@@ -41,10 +41,13 @@ export class DefaultLocationsSettingDto implements DefaultLocationsSetting {
    * At least one, because an item cannot exist without a location. Names are
    * unique ignoring case, as they are within a household — a duplicate would
    * otherwise be dropped silently when a household is created.
+   *
+   * One fewer than a household may hold: a list without the fallback location
+   * gets it appended (`withFallbackLocation`).
    */
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(MAX_LOCATIONS_PER_HOUSEHOLD)
+  @ArrayMaxSize(MAX_LOCATIONS_PER_HOUSEHOLD - 1)
   @ArrayUnique((entry: { name?: unknown }) =>
     typeof entry.name === 'string' ? entry.name.toLowerCase() : entry.name,
   )

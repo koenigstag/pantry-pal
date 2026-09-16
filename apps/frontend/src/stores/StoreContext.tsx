@@ -12,7 +12,7 @@ import { RootStore } from './RootStore';
 const StoreContext = createContext<RootStore | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }): ReactElement {
-  // Lazy initialiser: `new RootStore()` opens a socket, so it must run once and
+  // Lazy initialiser: `new RootStore()` creates a socket, so it must run once and
   // not on every render.
   const [store] = useState(() => new RootStore());
 
@@ -37,4 +37,12 @@ export function useRootStore(): RootStore {
 
 export function usePantryStore(): RootStore['pantry'] {
   return useRootStore().pantry;
+}
+
+export function useQuantities(): RootStore['quantities'] {
+  return useRootStore().quantities;
+}
+
+export function useNotices(): RootStore['notices'] {
+  return useRootStore().notices;
 }

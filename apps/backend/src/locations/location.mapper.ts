@@ -8,6 +8,7 @@ export function toPantryLocation(row: LocationRow): PantryLocation {
     name: row.name,
     icon: row.icon,
     sortOrder: row.sortOrder,
+    isFallback: row.isFallback,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

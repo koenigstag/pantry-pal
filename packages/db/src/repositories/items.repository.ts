@@ -1,13 +1,16 @@
 import { ITEM_STATUS, type ItemStatus } from '@pantry-pal/shared';
-import { and, asc, count, eq, gt, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, gt, isNull, ne, sql, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../client';
 import { items, type ItemRow, type NewItemRow } from '../schema';
 
-/** Everything the caller supplies; tenancy and identity are applied by the repository. */
+/**
+ * Everything the caller supplies; tenancy and identity are applied by the
+ * repository, and `unitKind` by the database.
+ */
 export type CreateItemInput = Omit<
   NewItemRow,
-  'id' | 'householdId' | 'createdAt' | 'updatedAt' | 'deletedAt'
+  'id' | 'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
 >;
 
 export type UpdateItemInput = Partial<CreateItemInput>;
@@ -117,6 +120,23 @@ export class ItemsRepository {
       .returning();
 
     return row;
+  }
+
+  /**
+   * Sets `is_edible` on every item in a category, in every household — the one
+   * write here that crosses tenants, because categories are global. Soft-deleted
+   * and past items change too, so the rule holds for every row. Only rows that
+   * differ are written, and their `updated_at` moves, so a delta sync picks them
+   * up. Returns how many changed.
+   */
+  async setEdibleInCategory(category: string, isEdible: boolean): Promise<number> {
+    const rows = await this.db
+      .update(items)
+      .set({ isEdible })
+      .where(and(eq(items.category, category), ne(items.isEdible, isEdible)))
+      .returning({ id: items.id });
+
+    return rows.length;
   }
 
   /** Soft delete: the row survives so the change still shows up in a delta sync. */
