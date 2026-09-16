@@ -1,10 +1,9 @@
 import {
+  DEFAULT_CATEGORY,
   MAX_ITEM_NAME_LENGTH,
   MAX_ITEM_NOTES_LENGTH,
   MAX_ITEM_QUANTITY,
   MAX_PERIOD_AFTER_OPENING_DAYS,
-  PANTRY_CATEGORIES,
-  type PantryCategory,
 } from '@pantry-pal/shared';
 import { Minus, Plus, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
@@ -66,9 +65,25 @@ export const ItemEditForm = observer(function ItemEditForm({
   const unitSystem = pantry.user?.unitSystem;
   // Counted in a count unit; the size (`SizeInput`) may be of any kind: `2 cans × 400 g`.
   const quantityUnits = pickerUnits(pantry.units, unitSystem, draft.unit).filter(isQuantityUnit);
+  // The draft's own category stays listed even when it is not among those loaded:
+  // added by an admin since, or the list failed to load.
+  const categoryCodes = pantry.categories.map((category) => category.code);
+  if (!categoryCodes.includes(draft.category)) categoryCodes.push(draft.category);
 
   function update(changes: Partial<ItemDraft>): void {
     onChange({ ...draft, ...changes });
+  }
+
+  // Only the default category lets an item choose; any other decides for it.
+  const canSetEdible = draft.category === DEFAULT_CATEGORY;
+
+  /** Into the default category the item keeps its value; into any other it takes that one's. */
+  function changeCategory(code: string): void {
+    update(
+      code === DEFAULT_CATEGORY
+        ? { category: code }
+        : { category: code, isEdible: pantry.categoryEdible(code) },
+    );
   }
 
   return (
@@ -137,17 +152,30 @@ export const ItemEditForm = observer(function ItemEditForm({
                 <select
                   {...props}
                   value={draft.category}
-                  onChange={(event) => update({ category: event.target.value as PantryCategory })}
+                  onChange={(event) => changeCategory(event.target.value)}
                   className={FIELD_CONTROL}
                 >
-                  {PANTRY_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {messages.categories[category]}
+                  {categoryCodes.map((code) => (
+                    <option key={code} value={code}>
+                      {pantry.categoryName(code)}
                     </option>
                   ))}
                 </select>
               )}
             </Field>
+
+            {/* Only where the item decides: any other category states the value itself. */}
+            {canSetEdible && (
+              <label className="col-span-2 flex w-fit cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.isEdible}
+                  onChange={(event) => update({ isEdible: event.target.checked })}
+                  className="focus-ring size-4.5 cursor-pointer accent-accent"
+                />
+                {messages.itemForm.edible}
+              </label>
+            )}
           </div>
         </DetailsSection>
 

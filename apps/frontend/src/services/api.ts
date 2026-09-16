@@ -1,6 +1,7 @@
 import {
   API_BASE_PATH,
   DEV_USER_HEADER,
+  type Category,
   type CurrentUser,
   type PantryItem,
   type PantryLocation,
@@ -68,6 +69,8 @@ export const pantryApi = {
     request<UserHousehold>('/households', { method: 'POST', body: JSON.stringify(dto) }),
 
   listUnits: (): Promise<Unit[]> => request<Unit[]>('/units'),
+
+  listCategories: (): Promise<Category[]> => request<Category[]>('/categories'),
 
   listLocations: (householdId: string): Promise<PantryLocation[]> =>
     request<PantryLocation[]>(`${household(householdId)}/locations`),

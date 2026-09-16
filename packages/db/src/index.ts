@@ -2,6 +2,7 @@ export { createDatabase, type Database, type DatabaseHandle } from './client';
 export * as schema from './schema';
 export type {
   AppSettingRow,
+  CategoryRow,
   HouseholdMemberRow,
   HouseholdRow,
   ItemEventRow,
@@ -26,7 +27,7 @@ export {
   type TransactionalOptions,
 } from './transaction';
 export { findPostgresError, PG_ERROR, type PgErrorCode, type PostgresErrorInfo } from './errors';
-export { seedUnits, seedDefaultLocations, UNIT_SEED } from './seed';
+export { CATEGORY_SEED, seedCategories, seedDefaultLocations, seedUnits, UNIT_SEED } from './seed';
 export {
   buildConnectionString,
   CONNECTION_ENV_KEYS,

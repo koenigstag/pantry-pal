@@ -3,6 +3,7 @@ import {
   PANTRY_COMMAND,
   PANTRY_EVENT,
   QUANTITY_UNIT_KIND,
+  type Category,
   type CurrentUser,
   type HouseholdDeletedPayload,
   type HouseholdMemberRemovedPayload,
@@ -56,7 +57,7 @@ const bySortOrder = (a: PantryLocation, b: PantryLocation): number =>
  * written here — so this store never disagrees with the server for longer than
  * a response takes to arrive.
  *
- * `items`, `locations` and `units` are replaced rather than mutated, and hold
+ * `items`, `locations`, `units` and `categories` are replaced rather than mutated, and hold
  * plain objects (`observableRef`). An entity that did not change keeps its
  * object identity across refetches and snapshots (`reconcileById`), so a
  * memoised card skips re-rendering.
@@ -74,6 +75,7 @@ export class PantryStore {
   items: readonly PantryItem[] = NO_ITEMS;
   locations: readonly PantryLocation[] = [];
   units: readonly Unit[] = [];
+  categories: readonly Category[] = [];
   connection: ConnectionState = 'idle';
   loadState: LoadState = 'idle';
   error: string | null = null;
@@ -120,6 +122,7 @@ export class PantryStore {
         items: observableRef,
         locations: observableRef,
         units: observableRef,
+        categories: observableRef,
       },
       { autoBind: true },
     );
@@ -154,6 +157,20 @@ export class PantryStore {
     return unit.kind === QUANTITY_UNIT_KIND
       ? messages.units.countNoun(code, count, unit.label)
       : unit.label;
+  }
+
+  get categoriesByCode(): ReadonlyMap<string, Category> {
+    return new Map(this.categories.map((category) => [category.code, category]));
+  }
+
+  /** The catalog's name for a seeded code, else the API's label, else the code itself. */
+  categoryName(code: string): string {
+    return messages.categories.name(code, this.categoriesByCode.get(code)?.label ?? code);
+  }
+
+  /** Whether the category's items are food or drink; assumed so until categories load. */
+  categoryEdible(code: string): boolean {
+    return this.categoriesByCode.get(code)?.isEdible ?? true;
   }
 
   get itemsByLocation(): ReadonlyMap<string, readonly PantryItem[]> {
@@ -223,6 +240,7 @@ export class PantryStore {
   async load(): Promise<void> {
     this.loadState = 'loading';
     this.error = null;
+    void this.refreshCategories();
 
     try {
       const [user, households, units] = await Promise.all([
@@ -243,6 +261,20 @@ export class PantryStore {
       this.requestSync();
     } catch (error) {
       this.failLoad(error);
+    }
+  }
+
+  /**
+   * Categories load beside the bootstrap rather than inside it. Names and the
+   * picker degrade without them — to the catalog's names and the item's own
+   * category — so a failure, such as a backend that predates `GET /categories`,
+   * leaves the page working.
+   */
+  async refreshCategories(): Promise<void> {
+    try {
+      this.applyCategories(await this.api.listCategories());
+    } catch {
+      // Keep whatever loaded before; see above.
     }
   }
 
@@ -423,6 +455,10 @@ export class PantryStore {
     this.locations = loaded.locations.toSorted(bySortOrder);
     this.items = reconcileById(this.items, loaded.items.filter(isActive));
     this.loadState = 'ready';
+  }
+
+  private applyCategories(categories: readonly Category[]): void {
+    this.categories = categories;
   }
 
   private failLoad(error: unknown): void {

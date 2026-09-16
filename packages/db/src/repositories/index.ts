@@ -1,4 +1,5 @@
 export * from './app-settings.repository';
+export * from './categories.repository';
 export * from './household-members.repository';
 export * from './households.repository';
 export * from './item-events.repository';

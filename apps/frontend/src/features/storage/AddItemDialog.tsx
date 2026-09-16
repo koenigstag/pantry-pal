@@ -1,3 +1,4 @@
+import { DEFAULT_CATEGORY } from '@pantry-pal/shared';
 import { CreatePantryItemDto, validateDto } from '@pantry-pal/shared/dto';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react';
@@ -48,7 +49,7 @@ export const AddItemDialog = observer(function AddItemDialog({
   const [isSubmitting, setSubmitting] = useState(false);
   const [isConfirmingDiscard, setConfirmingDiscard] = useState(false);
 
-  const blank = emptyDraft(defaultLocationId);
+  const blank = emptyDraft(defaultLocationId, pantry.categoryEdible(DEFAULT_CATEGORY));
   const draft = edited ?? blank;
   const isDirty = Object.keys(toPatch(blank, draft)).length > 0;
 

@@ -1,9 +1,4 @@
-import {
-  MAX_ITEM_NAME_LENGTH,
-  PANTRY_CATEGORIES,
-  QUANTITY_UNIT_KIND,
-  type PantryCategory,
-} from '@pantry-pal/shared';
+import { MAX_ITEM_NAME_LENGTH, QUANTITY_UNIT_KIND } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -18,7 +13,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { inList, literal } from './_sql';
+import { literal } from './_sql';
+import { categories } from './categories';
 import { households } from './households';
 import { units } from './units';
 
@@ -35,7 +31,8 @@ export const products = pgTable(
     name: varchar('name', { length: MAX_ITEM_NAME_LENGTH }).notNull(),
     brand: text('brand'),
     barcode: text('barcode'),
-    defaultCategory: text('default_category').$type<PantryCategory>(),
+    /** A `categories.code`: see `products_default_category_fk`. */
+    defaultCategory: text('default_category'),
     /**
      * The count unit a new batch is counted in: 'can', 'jar', 'blister'. A count
      * unit for the same reason `items.unit` is one — see
@@ -69,10 +66,12 @@ export const products = pgTable(
       columns: [t.defaultUnit, t.defaultUnitKind],
       foreignColumns: [units.code, units.kind],
     }).onDelete('restrict'),
-    check(
-      'products_category_check',
-      sql`default_category is null or default_category in (${inList(PANTRY_CATEGORIES)})`,
-    ),
+    /** Not checked while `default_category` is null, like the default unit. */
+    foreignKey({
+      name: 'products_default_category_fk',
+      columns: [t.defaultCategory],
+      foreignColumns: [categories.code],
+    }).onDelete('restrict'),
     check(
       'products_default_unit_kind_count',
       sql`default_unit_kind = ${literal(QUANTITY_UNIT_KIND)}`,

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  CategoriesRepository,
   ItemEventsRepository,
   ItemsRepository,
   LocationsRepository,
@@ -11,6 +12,7 @@ import {
 } from '@pantry-pal/db';
 import {
   COUNT_UNIT,
+  DEFAULT_CATEGORY,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
   QUANTITY_UNIT_KIND,
@@ -42,6 +44,7 @@ export class ItemsService {
     private readonly events: ItemEventsRepository,
     private readonly locations: LocationsRepository,
     private readonly units: UnitsRepository,
+    private readonly categories: CategoriesRepository,
     private readonly changes: ChangeFeed,
   ) {}
 
@@ -71,12 +74,14 @@ export class ItemsService {
 
     assertSizePair(sizeValue, sizeUnit);
     await this.assertUnits(dto.unit, sizeUnit);
+    const isEdible = await this.resolveEdible(dto.category, dto.isEdible);
     await this.lockLocation(householdId, dto.locationId);
 
     const row = await this.items.create(householdId, {
       name: dto.name,
       locationId: dto.locationId,
       category: dto.category,
+      isEdible,
       quantity: dto.quantity,
       unit: dto.unit,
       sizeValue,
@@ -117,6 +122,15 @@ export class ItemsService {
       name: dto.name,
       locationId: dto.locationId,
       category: dto.category,
+      // Resolved whenever it could change: a category or a value was sent.
+      isEdible:
+        dto.category === undefined && dto.isEdible === undefined
+          ? undefined
+          : await this.resolveEdible(
+              dto.category ?? before.category,
+              dto.isEdible,
+              before.isEdible,
+            ),
       quantity: dto.quantity,
       unit: dto.unit,
       sizeValue: dto.sizeValue,
@@ -181,6 +195,36 @@ export class ItemsService {
     if (location === undefined) {
       throw new BadRequestException('locationId does not name a location in this household');
     }
+  }
+
+  /**
+   * The `isEdible` an item in `categoryCode` gets: the category's, except in the
+   * default category, where the item decides — `requested`, else what it had
+   * (`current`), else the category's starting value. A different value for any
+   * other category is refused rather than silently replaced.
+   *
+   * Share-locks the category, so an admin changing its `isEdible` waits for this
+   * write and then updates the item with the rest. Also names an unknown
+   * category, where `items_category_fk` would only name itself.
+   */
+  private async resolveEdible(
+    categoryCode: string,
+    requested: boolean | undefined,
+    current?: boolean,
+  ): Promise<boolean> {
+    const category = await this.categories.lock(categoryCode, 'share');
+    if (category === undefined) {
+      throw new BadRequestException(`Unknown category code: ${categoryCode}`);
+    }
+
+    if (category.code === DEFAULT_CATEGORY) return requested ?? current ?? category.isEdible;
+
+    if (requested !== undefined && requested !== category.isEdible) {
+      throw new BadRequestException(
+        `isEdible follows the category "${category.code}": only items in "${DEFAULT_CATEGORY}" set their own`,
+      );
+    }
+    return category.isEdible;
   }
 
   /**

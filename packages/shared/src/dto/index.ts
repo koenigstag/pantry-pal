@@ -10,6 +10,7 @@
  */
 import 'reflect-metadata';
 
+export * from './category.dto';
 export * from './decorators';
 export * from './household.dto';
 export * from './location.dto';

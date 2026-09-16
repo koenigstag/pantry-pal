@@ -1,6 +1,13 @@
-import { DEFAULT_LOCATIONS, withFallbackLocation } from '@pantry-pal/shared';
+import { DEFAULT_CATEGORY, DEFAULT_LOCATIONS, withFallbackLocation } from '@pantry-pal/shared';
 
-import { locations, units, type LocationRow, type UnitRow } from './schema';
+import {
+  categories,
+  locations,
+  units,
+  type CategoryRow,
+  type LocationRow,
+  type UnitRow,
+} from './schema';
 import type { Executor } from './transaction';
 
 /**
@@ -71,6 +78,47 @@ export async function seedUnits(db: Executor): Promise<void> {
     .insert(units)
     .values([...UNIT_SEED])
     .onConflictDoNothing({ target: units.code });
+}
+
+/**
+ * The category reference data, in picker order. Positions are 10 apart, so an
+ * admin can slot a category between two without renumbering; `other`, the
+ * catch-all a new item starts in, comes last.
+ *
+ * `isEdible` is what items in the category are. Medicine is swallowed but is
+ * not food. For `other` it is only where a new item starts: each item in it
+ * decides for itself.
+ *
+ * Labels are English. The frontend's message catalog names these same codes and
+ * shows a label only for a code it lacks. Migrations `0002_categories` and
+ * `0003_edible` insert and flag this list as it stood then; update them too
+ * while they are unreleased, and add a migration once they are.
+ */
+export const CATEGORY_SEED: readonly CategoryRow[] = [
+  { code: 'produce', label: 'Produce', sortOrder: 10, isEdible: true },
+  { code: 'dairy', label: 'Dairy', sortOrder: 20, isEdible: true },
+  { code: 'meat', label: 'Meat', sortOrder: 30, isEdible: true },
+  { code: 'fish', label: 'Fish', sortOrder: 40, isEdible: true },
+  { code: 'grains', label: 'Grains', sortOrder: 50, isEdible: true },
+  { code: 'canned', label: 'Canned', sortOrder: 60, isEdible: true },
+  { code: 'frozen', label: 'Frozen', sortOrder: 70, isEdible: true },
+  { code: 'spices', label: 'Spices', sortOrder: 80, isEdible: true },
+  { code: 'beverages', label: 'Beverages', sortOrder: 90, isEdible: true },
+  { code: 'medicine', label: 'Medicine', sortOrder: 100, isEdible: false },
+  { code: 'personal-care', label: 'Personal care', sortOrder: 110, isEdible: false },
+  { code: 'cleaning', label: 'Cleaning', sortOrder: 120, isEdible: false },
+  { code: DEFAULT_CATEGORY, label: 'Other', sortOrder: 130, isEdible: true },
+];
+
+/**
+ * Idempotent, like `seedUnits`: existing codes are left alone, including their
+ * labels and positions, so re-running it only restores missing defaults.
+ */
+export async function seedCategories(db: Executor): Promise<void> {
+  await db
+    .insert(categories)
+    .values([...CATEGORY_SEED])
+    .onConflictDoNothing({ target: categories.code });
 }
 
 /**

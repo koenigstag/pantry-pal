@@ -97,12 +97,14 @@ the registry's mapped type makes forgetting that a compile error.
   a separate entry point.
 - Wire types use ISO-8601 **strings** for instants, never `Date`, and plain
   `YYYY-MM-DD` strings for calendar dates (expiry, opened).
-- Value sets (`PANTRY_CATEGORIES`, `HOUSEHOLD_ROLE`, `ITEM_STATUS`, `UNIT_KINDS`,
-  ...) are `as const` arrays or objects with types derived from them, so the
-  runtime list used by `@IsIn([...X])` and the compile-time union can never
-  disagree. `@pantry-pal/db` generates its CHECK constraints from the same
-  lists, so they live here rather than there.
-- There is no unit list here. Units are rows in the database (`GET /units`), so
-  a unit code is validated as a string and checked for existence by the server.
+- Value sets (`HOUSEHOLD_ROLE`, `ITEM_STATUS`, `UNIT_KINDS`, ...) are `as const`
+  arrays or objects with types derived from them, so the runtime list used by
+  `@IsIn([...X])` and the compile-time union can never disagree.
+  `@pantry-pal/db` generates its CHECK constraints from the same lists, so they
+  live here rather than there.
+- There is no unit or category list here. Both are rows in the database
+  (`GET /units`, `GET /categories`), so their codes are validated as strings and
+  checked for existence by the server. Only `COUNT_UNIT` and `DEFAULT_CATEGORY`
+  are fixed, as the codes that can never be deleted.
 - Expiry maths reads `effectiveExpiresAt`, never `expiresAt` — the database
   folds opened + period-after-opening into it.

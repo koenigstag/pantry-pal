@@ -48,8 +48,9 @@ src/
   locations/    per-household locations: CRUD, reorder, soft delete
   items/        per-household items and their event history
   units/        GET /units (public reference data)
+  categories/   GET /categories (public reference data)
   settings/     typed access to app_settings, with code defaults
-  admin/        /admin/units, /admin/settings
+  admin/        /admin/units, /admin/categories, /admin/settings
   realtime/     ChangeFeed, PantryGateway, Socket.IO adapter, WS exception filter
 ```
 
@@ -58,6 +59,7 @@ src/
 ```
 GET    /me
 GET    /units
+GET    /categories
 GET    POST            /households
 GET    PATCH  DELETE   /households/:householdId                       PATCH/DELETE: owner
 GET    POST            /households/:householdId/members               POST: owner
@@ -68,6 +70,7 @@ GET    PATCH  DELETE   /households/:householdId/locations/:locationId DELETE tak
 GET    POST            /households/:householdId/items                 GET takes ?status=&locationId=
 GET    PATCH  DELETE   /households/:householdId/items/:itemId
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
+GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET                    /admin/settings           GET PUT   DELETE /admin/settings/:key
 ```
 
@@ -169,12 +172,31 @@ foreign-key violations become 409, check/not-null/invalid-input become 400,
 anything else stays a 500. `DatabaseExceptionFilter` applies it to HTTP as an
 `APP_FILTER`. **Global filters do not run for gateways in Nest 12**, so
 `WsExceptionFilter` calls the same function itself. Services still check the
-common cases up front (unknown unit, a quantity unit that is not a count unit, a
-unit's kind changing while in use, foreign location, size pair) for precise
-messages; the translation is the safety net for races.
+common cases up front (unknown unit or category, a quantity unit that is not a
+count unit, a unit's kind changing while in use, an `isEdible` its category
+contradicts, foreign location, size pair) for precise messages; the translation
+is the safety net for races.
 
 DTOs come from `@pantry-pal/shared/dto` and must be imported **as values** in
 controllers and gateways — Nest reads the runtime class from parameter metadata.
+
+## Categories and `isEdible`
+
+Categories are global reference data like units: public `GET /categories`,
+written through `/admin/categories`. `code` is immutable; `other`
+(`DEFAULT_CATEGORY`) cannot be deleted, and nor can a category any item or
+product references, deleted and past items included.
+
+An item's `isEdible` is its category's, resolved by `ItemsService` on every
+create and on any update that sends a category or a value — except in `other`,
+where the item sets its own and omitting it keeps what it had (a new item starts
+from `other`'s flag). A value that contradicts any other category is a 400, not
+silently replaced. Item writes share-lock the category row.
+
+Changing a category's `isEdible` rewrites its items in every household in the
+same transaction (the share lock makes it wait for in-flight item writes), except
+for `other`, whose items keep theirs. Like other reference-data changes it is
+not broadcast; `updated_at` moves, so clients see it on their next refetch.
 
 ## Admin settings
 
@@ -213,6 +235,7 @@ else goes through `ConfigService`. It throws at boot on dangerous or invalid
 settings rather than failing later. `ConfigModule` loads `.env.local` ahead of
 `.env`. See `.env.example` for the supported variables.
 
-On boot, `DatabaseModule` seeds `units` **only into an empty table** — seeding
-every time would resurrect units an admin deleted. That first query doubles as
-the connectivity check.
+On boot, `DatabaseModule` seeds `units` and `categories` **only into an empty
+table** — seeding every time would resurrect rows an admin deleted. Migration
+`0002_categories` inserts the categories itself; the boot seed covers `db:push`.
+That first query doubles as the connectivity check.

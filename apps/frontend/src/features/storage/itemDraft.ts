@@ -1,7 +1,7 @@
 import {
   COUNT_UNIT,
+  DEFAULT_CATEGORY,
   QUANTITY_UNIT_KIND,
-  type PantryCategory,
   type PantryItem,
   type Unit,
   type UnitKind,
@@ -14,7 +14,10 @@ import { messages } from '../../i18n/messages';
 export interface ItemDraft {
   name: string;
   locationId: string;
-  category: PantryCategory;
+  /** A category code. */
+  category: string;
+  /** The user's to set only in the default category; elsewhere it mirrors the category's. */
+  isEdible: boolean;
   quantity: string;
   unit: string;
   sizeValue: string;
@@ -29,7 +32,8 @@ export interface ItemDraft {
 export interface ItemPatch {
   name?: string;
   locationId?: string;
-  category?: PantryCategory;
+  category?: string;
+  isEdible?: boolean;
   quantity?: number;
   unit?: string;
   sizeValue?: number | null;
@@ -40,12 +44,16 @@ export interface ItemPatch {
   notes?: string | null;
 }
 
-/** A new item: one of plain pieces, in `locationId`, with nothing else filled in. */
-export function emptyDraft(locationId: string): ItemDraft {
+/**
+ * A new item: one of plain pieces, in `locationId` and the default category,
+ * with nothing else filled in. `isEdible` is where that category starts an item.
+ */
+export function emptyDraft(locationId: string, isEdible: boolean): ItemDraft {
   return {
     name: '',
     locationId,
-    category: 'other',
+    category: DEFAULT_CATEGORY,
+    isEdible,
     quantity: '1',
     unit: COUNT_UNIT,
     sizeValue: '',
@@ -63,6 +71,7 @@ export function toDraft(item: PantryItem, quantity: number): ItemDraft {
     name: item.name,
     locationId: item.locationId,
     category: item.category,
+    isEdible: item.isEdible,
     quantity: String(quantity),
     unit: item.unit,
     sizeValue: item.sizeValue === null ? '' : String(item.sizeValue),
@@ -88,6 +97,10 @@ export function toPatch(base: ItemDraft, draft: ItemDraft): ItemPatch {
   if (draft.name !== base.name) patch.name = draft.name;
   if (draft.locationId !== base.locationId) patch.locationId = draft.locationId;
   if (draft.category !== base.category) patch.category = draft.category;
+  // Elsewhere the server takes the category's value, so the form never sends one.
+  if (draft.category === DEFAULT_CATEGORY && draft.isEdible !== base.isEdible) {
+    patch.isEdible = draft.isEdible;
+  }
   if (draft.quantity !== base.quantity) patch.quantity = toNumber(draft.quantity);
   if (draft.unit !== base.unit) patch.unit = draft.unit;
 
@@ -116,12 +129,15 @@ export function toPatch(base: ItemDraft, draft: ItemDraft): ItemPatch {
  * A new item in the shapes `CreatePantryItemDto` accepts: blanks are `null`,
  * and invalid numbers `NaN`, which it rejects.
  */
-export function toCreate(draft: ItemDraft): Required<ItemPatch> {
+export function toCreate(
+  draft: ItemDraft,
+): Required<Omit<ItemPatch, 'isEdible'>> & Pick<ItemPatch, 'isEdible'> {
   const size = parseSize(draft.sizeValue, draft.sizeUnit);
   return {
     name: draft.name,
     locationId: draft.locationId,
     category: draft.category,
+    ...(draft.category === DEFAULT_CATEGORY && { isEdible: draft.isEdible }),
     quantity: toNumber(draft.quantity),
     unit: draft.unit,
     sizeValue: size.value,
@@ -168,7 +184,7 @@ export function rebaseDraft(
   draft: ItemDraft,
   next: ItemDraft,
 ): { draft: ItemDraft; conflicts: DraftField[] } {
-  const rebased: Record<DraftField, string> = { ...draft };
+  const rebased: Record<DraftField, string | boolean> = { ...draft };
   const conflicts: DraftField[] = [];
 
   for (const field of Object.keys(base) as DraftField[]) {
@@ -192,6 +208,8 @@ export function draftFieldLabel(field: DraftField): string {
       return labels.location;
     case 'category':
       return labels.category;
+    case 'isEdible':
+      return labels.edible;
     case 'quantity':
       return labels.howMany;
     case 'unit':

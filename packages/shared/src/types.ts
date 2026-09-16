@@ -2,13 +2,11 @@ import type {
   HOUSEHOLD_ROLE,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
-  PANTRY_CATEGORIES,
   UNIT_KINDS,
   UNIT_SYSTEM_PREFERENCES,
   UNIT_SYSTEMS,
 } from './constants';
 
-export type PantryCategory = (typeof PANTRY_CATEGORIES)[number];
 export type UnitKind = (typeof UNIT_KINDS)[number];
 export type UnitSystem = (typeof UNIT_SYSTEMS)[number];
 export type UnitSystemPreference = (typeof UNIT_SYSTEM_PREFERENCES)[number];
@@ -45,6 +43,21 @@ export interface Unit {
   system: UnitSystem;
   /** To the base unit of its kind (g, ml, pcs). Nothing converts with it yet. */
   factor: number;
+}
+
+/** A row of the `categories` lookup table: _what_ a thing is, as a location is where. */
+export interface Category {
+  /** Stable, since items reference it. Lowercase words joined by hyphens: `personal-care`. */
+  code: string;
+  /** English. The frontend shows its catalog's name for a code it knows, and this otherwise. */
+  label: string;
+  /** Ascending: the order pickers list categories in. */
+  sortOrder: number;
+  /**
+   * Food or drink. Items in the category are the same, except in the default
+   * category (`other`), where this is only where a new item starts.
+   */
+  isEdible: boolean;
 }
 
 export interface Household {
@@ -99,7 +112,13 @@ export interface PantryItem {
   /** The catalog product this batch is an instance of, if any. */
   productId: string | null;
   name: string;
-  category: PantryCategory;
+  /** A `Category.code`. */
+  category: string;
+  /**
+   * Food or drink: the category's `isEdible`, except in the default category
+   * (`other`), where each item is set on its own.
+   */
+  isEdible: boolean;
   /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
   quantity: number;
   /** The `Unit.code` of a count unit: what is counted, such as `pcs`, `bottle` or `can`. */

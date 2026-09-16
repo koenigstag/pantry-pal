@@ -2,13 +2,12 @@ import {
   ITEM_STATUS,
   ITEM_STATUSES,
   MAX_ITEM_NAME_LENGTH,
-  PANTRY_CATEGORIES,
   QUANTITY_UNIT_KIND,
   type ItemStatus,
-  type PantryCategory,
 } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   foreignKey,
@@ -23,6 +22,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { inList, literal } from './_sql';
+import { categories } from './categories';
 import { households } from './households';
 import { locations } from './locations';
 import { products } from './products';
@@ -41,7 +41,14 @@ export const items = pgTable(
     name: varchar('name', { length: MAX_ITEM_NAME_LENGTH }).notNull(),
     /** Must belong to the same household: see `items_location_household_fk`. */
     locationId: uuid('location_id').notNull(),
-    category: text('category').$type<PantryCategory>().notNull(),
+    /** A `categories.code`: see `items_category_fk`. */
+    category: text('category').notNull(),
+    /**
+     * Food or drink. Equal to the category's `is_edible`, except in the default
+     * category (`other`), where the user decides. The items and categories
+     * services keep it so; no constraint can state the exception.
+     */
+    isEdible: boolean('is_edible').notNull(),
 
     /**
      * Quantity is two parts so `2 cans × 400 g` can be represented: how many
@@ -121,7 +128,16 @@ export const items = pgTable(
       foreignColumns: [units.code, units.kind],
     }).onDelete('restrict'),
 
-    check('items_category_check', sql`category in (${inList(PANTRY_CATEGORIES)})`),
+    /**
+     * Categories are rows, so adding one needs no migration. RESTRICT counts
+     * deleted and consumed items too: a category that ever held one stays.
+     */
+    foreignKey({
+      name: 'items_category_fk',
+      columns: [t.category],
+      foreignColumns: [categories.code],
+    }).onDelete('restrict'),
+
     check('items_status_check', sql`status in (${inList(ITEM_STATUSES)})`),
     check('items_quantity_positive', sql`quantity >= 0`),
     check('items_unit_kind_count', sql`unit_kind = ${literal(QUANTITY_UNIT_KIND)}`),

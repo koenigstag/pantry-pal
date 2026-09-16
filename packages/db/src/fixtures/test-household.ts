@@ -1,6 +1,7 @@
 import {
   createId,
   daysUntil,
+  DEFAULT_CATEGORY,
   DEFAULT_LOCATIONS,
   EXPIRY_WARNING_DAYS,
   HOUSEHOLD_ROLE,
@@ -8,7 +9,6 @@ import {
   ITEM_STATUS,
   type HouseholdRole,
   type ItemStatus,
-  type PantryCategory,
   type UnitSystemPreference,
 } from '@pantry-pal/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -24,7 +24,7 @@ import {
   type NewItemEventRow,
   type NewItemRow,
 } from '../schema';
-import { seedDefaultLocations, seedUnits } from '../seed';
+import { CATEGORY_SEED, seedCategories, seedDefaultLocations, seedUnits } from '../seed';
 
 /**
  * A realistic household for local development: every default location in use,
@@ -70,7 +70,8 @@ interface ProductFixture {
   brand: string;
   /** A count unit: what one batch of this product is counted in. */
   defaultUnit: string;
-  defaultCategory: PantryCategory;
+  /** A category code from `CATEGORY_SEED`. */
+  defaultCategory: string;
   defaultShelfLifeDays: number;
 }
 
@@ -122,7 +123,10 @@ const PRODUCTS = {
 interface ItemFixture {
   name: string;
   location: (typeof DEFAULT_LOCATIONS)[number];
-  category: PantryCategory;
+  /** A category code from `CATEGORY_SEED`. */
+  category: string;
+  /** Only for the default category, where each item decides; others copy their category's. */
+  isEdible?: boolean;
   quantity: number;
   unit: string;
   /** What is inside one of them: `[300, 'ml']` is the `300 ml` in `1 can 300 ml`. */
@@ -541,6 +545,7 @@ const ITEMS: readonly ItemFixture[] = [
     name: 'AA batteries',
     location: 'Other',
     category: 'other',
+    isEdible: false,
     quantity: 4,
     unit: 'pcs',
     expiresIn: 1500,
@@ -599,6 +604,19 @@ const required = <T>(value: T | undefined, what: string): T => {
   return value;
 };
 
+const SEEDED_CATEGORIES = new Map(CATEGORY_SEED.map((category) => [category.code, category]));
+
+/** The rule the items service applies: the category's value, or the item's own in `other`. */
+const edibleFor = (fixture: ItemFixture): boolean => {
+  const category = required(
+    SEEDED_CATEGORIES.get(fixture.category),
+    `category ${fixture.category}`,
+  );
+  return category.code === DEFAULT_CATEGORY
+    ? (fixture.isEdible ?? category.isEdible)
+    : category.isEdible;
+};
+
 /**
  * Resets and re-creates the test household in a single transaction.
  *
@@ -612,7 +630,9 @@ export function seedTestHousehold(
   { now = new Date() }: SeedTestHouseholdOptions = {},
 ): Promise<TestHouseholdSummary> {
   return db.transaction(async (tx) => {
+    // Restores any default unit or category an admin deleted that the items below use.
     await seedUnits(tx);
+    await seedCategories(tx);
 
     const userRows = await tx
       .insert(users)
@@ -703,6 +723,7 @@ export function seedTestHousehold(
         name: fixture.name,
         locationId: required(locationIdByName.get(fixture.location), fixture.location),
         category: fixture.category,
+        isEdible: edibleFor(fixture),
         quantity: fixture.quantity,
         unit: fixture.unit,
         sizeValue: fixture.size?.[0] ?? null,

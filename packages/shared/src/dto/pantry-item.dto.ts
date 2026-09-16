@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -15,15 +16,15 @@ import {
 
 import {
   ITEM_STATUSES,
+  MAX_CATEGORY_CODE_LENGTH,
   MAX_ITEM_NAME_LENGTH,
   MAX_ITEM_NOTES_LENGTH,
   MAX_ITEM_QUANTITY,
   MAX_PERIOD_AFTER_OPENING_DAYS,
   MAX_UNIT_CODE_LENGTH,
-  PANTRY_CATEGORIES,
   SIZE_DECIMAL_PLACES,
 } from '../constants';
-import type { ItemStatus, PantryCategory } from '../types';
+import type { ItemStatus } from '../types';
 import { IsIsoDate, IsOmittable, Trim } from './decorators';
 
 /**
@@ -37,8 +38,8 @@ import { IsIsoDate, IsOmittable, Trim } from './decorators';
  * shared package is bundled with esbuild, which does not emit design-time types.
  *
  * What a DTO cannot express is checked by the server: that `locationId` belongs
- * to the household, that unit codes exist, that `unit` is a count unit, and that
- * `sizeValue`/`sizeUnit` come as a pair.
+ * to the household, that the category and unit codes exist, that `unit` is a
+ * count unit, and that `sizeValue`/`sizeUnit` come as a pair.
  */
 export class CreatePantryItemDto {
   @Trim()
@@ -49,8 +50,19 @@ export class CreatePantryItemDto {
   @IsUUID()
   locationId!: string;
 
-  @IsIn([...PANTRY_CATEGORIES])
-  category!: PantryCategory;
+  /** The code of a category from `GET /categories`: `dairy`, `personal-care`. */
+  @IsString()
+  @Length(1, MAX_CATEGORY_CODE_LENGTH)
+  category!: string;
+
+  /**
+   * Food or drink. Only chosen in the default category (`other`), where omitting
+   * it takes that category's value; elsewhere the category decides, and a
+   * different value is refused.
+   */
+  @IsOmittable()
+  @IsBoolean()
+  isEdible?: boolean;
 
   /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
   @Type(() => Number)
@@ -117,8 +129,17 @@ export class UpdatePantryItemDto {
   locationId?: string;
 
   @IsOmittable()
-  @IsIn([...PANTRY_CATEGORIES])
-  category?: PantryCategory;
+  @IsString()
+  @Length(1, MAX_CATEGORY_CODE_LENGTH)
+  category?: string;
+
+  /**
+   * Only for an item in the default category (`other`), counting a `category`
+   * sent alongside. Moving to any other category takes that category's value.
+   */
+  @IsOmittable()
+  @IsBoolean()
+  isEdible?: boolean;
 
   /** Zero is allowed here, unlike on create: a used-up item that has not been cleared yet. */
   @IsOmittable()

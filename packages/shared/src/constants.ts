@@ -64,20 +64,14 @@ export const PANTRY_COMMAND = {
 } as const;
 export type PantryCommandName = (typeof PANTRY_COMMAND)[keyof typeof PANTRY_COMMAND];
 
-export const PANTRY_CATEGORIES = [
-  'produce',
-  'dairy',
-  'meat',
-  'grains',
-  'canned',
-  'frozen',
-  'spices',
-  'beverages',
-  'medicine',
-  'personal-care',
-  'cleaning',
-  'other',
-] as const;
+/**
+ * Categories themselves are rows in the `categories` table (served by
+ * `GET /categories`), so adding one is an INSERT through the admin API.
+ *
+ * This is the one fixed code: the catch-all a new item starts in. It cannot be
+ * deleted.
+ */
+export const DEFAULT_CATEGORY = 'other';
 
 /**
  * Units themselves are rows in the `units` table (served by `GET /units`), so
@@ -157,7 +151,7 @@ export const DEFAULT_LOCATIONS = [
   'Spices',
   'Bathroom',
   'Medicines',
-  /** Last, like `'other'` in PANTRY_CATEGORIES: the catch-all for anything unplaced. */
+  /** Last, like the `other` category: the catch-all for anything unplaced. */
   FALLBACK_LOCATION_NAME,
 ] as const;
 
@@ -184,3 +178,6 @@ export const MAX_LOCATIONS_PER_HOUSEHOLD = 50;
 
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;
+
+export const MAX_CATEGORY_CODE_LENGTH = 32;
+export const MAX_CATEGORY_LABEL_LENGTH = 40;

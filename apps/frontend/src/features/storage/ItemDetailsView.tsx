@@ -37,7 +37,7 @@ export const ItemDetailsView = observer(function ItemDetailsView({
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap gap-2">
           {location !== undefined && <Chip icon={MapPin}>{location.name}</Chip>}
-          <Chip icon={Tag}>{messages.categories[item.category]}</Chip>
+          <Chip icon={Tag}>{pantry.categoryName(item.category)}</Chip>
         </div>
 
         <DetailsSection title={messages.itemDetails.quantity}>

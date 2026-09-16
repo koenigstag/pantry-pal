@@ -73,7 +73,8 @@ Every domain row belongs to a household, and every household route checks the
 caller's membership before a service runs. Identity is currently a development
 stand-in — the `x-dev-user-email` header, honoured only with `DEV_AUTH=true` —
 behind a seam real authentication will replace. Global reference data (units,
-default locations) is managed through `/admin`, authenticated by an API key.
+categories, default locations) is managed through `/admin`, authenticated by an
+API key.
 Details in `apps/backend/CLAUDE.md`.
 
 ### The frontend applies one optimistic update, and only one
@@ -176,11 +177,12 @@ set to _GitHub Actions_ once, in its settings.
 
 ## Conventions
 
-- Values shared between the apps (ports, paths, event names, categories, roles,
-  statuses, unit kinds) belong in `packages/shared/src/constants.ts`. A literal
+- Values shared between the apps (ports, paths, event names, roles, statuses,
+  unit kinds) belong in `packages/shared/src/constants.ts`. A literal
   duplicated across both apps will drift. `packages/db` generates its CHECK
   constraints from these same lists rather than defining its own.
-- Units themselves are rows, not a constant: read them from `GET /units`.
+- Units and categories are rows, not constants: read them from `GET /units` and
+  `GET /categories`.
 - Dates cross the wire as ISO-8601 **strings**, never `Date` — JSON has no date
   type, so a `Date` in a wire type is a lie after `JSON.parse`.
 - The frontend imports DTOs as values only where it needs runtime validation;

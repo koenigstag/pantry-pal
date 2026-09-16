@@ -7,8 +7,9 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Ten tables, the transaction layer, seed data, and repositories for users,
-households, members, locations, items, item events, units and app settings.
+Eleven tables, the transaction layer, seed data, and repositories for users,
+households, members, locations, items, item events, units, categories and app
+settings.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -105,6 +106,14 @@ These are deliberate. Changing any of them affects the whole workspace.
   `default-locations` setting (code default: Kitchen / Fridge / Freezer /
   Pantry / Spices / Bathroom / Medicines / Other). Location (_where_) and
   category (_what_) are separate axes — do not collapse them.
+- **`categories` is a lookup table**, like `units`: `items.category` and
+  `products.default_category` reference `categories(code)` (`RESTRICT`), so
+  adding a category is an INSERT through the admin API. `CATEGORY_SEED` is the
+  default list; `other` is the fixed catch-all a new item starts in.
+- **`is_edible`**: a category's says whether its items are food or drink, and
+  `items.is_edible` copies it — except in `other`, where each item sets its own
+  and the category's flag is only the starting value. No constraint can state
+  that exception, so the items and categories services keep it.
 - **Locations are soft-deleted.** The items foreign key is `RESTRICT` and counts
   consumed, discarded and soft-deleted rows too, so a hard delete would be
   impossible for any location that ever held an item. The case-insensitive name
@@ -246,16 +255,23 @@ any of these edits keeps the old columns and constraints: drop and re-create it
 edited `CREATE TABLE` statements were also compared against a from-scratch
 generation.
 
-## Resolved: the category blocker
+`0002_categories` and `0003_edible` are new migrations, not in-place edits, so
+an existing database upgrades with `db:migrate`. Both are hand-edited, and say so:
 
-`PANTRY_CATEGORIES` in `@pantry-pal/shared` gained `medicine`,
-`personal-care` and `cleaning`, so Bathroom and Medicines items now satisfy
-`items_category_check`.
+- `0002` inserts the default categories between the `CREATE TABLE` and the
+  foreign keys that replace the old CHECKs, or existing items would violate them.
+- `0003` flags the inedible categories, then adds `items.is_edible` in three
+  steps — nullable, backfilled from each item's category, then `NOT NULL` —
+  because drizzle-kit's one-statement `ADD COLUMN ... NOT NULL` fails on a table
+  with rows.
 
-Note the asymmetry this leaves behind: that CHECK is **generated from the shared
-constant into the DDL**, so adding another category needs a new migration.
-Adding a _unit_ does not — `units` is a lookup table, so it is an INSERT. If
-categories start churning, promote them to a table for the same reason.
+Both were verified on a database migrated to `0001` and seeded before them.
+
+## Resolved: categories are a table
+
+Categories used to be a CHECK generated from a shared constant, so adding one
+needed a migration while adding a unit did not. `0002_categories` promoted them to
+a lookup table like `units`, and the asymmetry is gone.
 
 ## Deferred
 

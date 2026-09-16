@@ -165,6 +165,19 @@ follows a rename made elsewhere. The server answers 409 when the list the user
 edited was stale; the store then refetches, the draft rebases, and the user
 checks the list and saves again.
 
+### Categories
+
+Categories are rows (`GET /categories`), loaded by `refreshCategories` beside
+the bootstrap rather than inside it: if they fail to load, the page still works,
+with names from the catalog and the item's own category in the picker. Show a
+category through `pantry.categoryName(code)` — the catalog's name for a seeded
+code (`messages.categories.name`), else the label an admin gave it.
+
+The item form shows the Edible checkbox only for the default category (`other`):
+every other category states the value, so choosing one copies its `isEdible`
+into the draft, and a patch never sends `isEdible` outside `other` — the server
+would refuse a contradicting value.
+
 ## Styling — Tailwind CSS 4
 
 - Wired through `@tailwindcss/vite`; the theme lives in `src/index.css`.

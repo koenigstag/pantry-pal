@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import {
   AppSettingsRepository,
+  CategoriesRepository,
   createDatabase,
   createTransactionalDatabase,
   HouseholdMembersRepository,
@@ -18,6 +19,7 @@ import {
   ItemEventsRepository,
   ItemsRepository,
   LocationsRepository,
+  seedCategories,
   seedUnits,
   UnitsRepository,
   UsersRepository,
@@ -30,6 +32,7 @@ import { DATABASE, DATABASE_HANDLE } from './database.tokens';
 
 const REPOSITORIES = [
   AppSettingsRepository,
+  CategoriesRepository,
   HouseholdMembersRepository,
   HouseholdsRepository,
   ItemEventsRepository,
@@ -81,19 +84,26 @@ export class DatabaseModule implements OnModuleInit, OnApplicationShutdown {
   constructor(
     @Inject(DATABASE_HANDLE) private readonly handle: DatabaseHandle,
     private readonly units: UnitsRepository,
+    private readonly categories: CategoriesRepository,
   ) {}
 
   /**
    * Doubles as the startup connectivity check: an unreachable database fails
    * the boot here instead of on the first request.
    *
-   * Units are seeded only into an empty table. Seeding on every boot would
-   * resurrect units an admin deliberately deleted.
+   * Units and categories are seeded only into an empty table. Seeding on every
+   * boot would resurrect rows an admin deliberately deleted. (Migration
+   * `0002_categories` already inserts the categories; this covers a schema
+   * created with `db:push`.)
    */
   async onModuleInit(): Promise<void> {
     if ((await this.units.count()) === 0) {
       await seedUnits(this.handle.db);
       this.logger.log('Seeded the empty units table');
+    }
+    if ((await this.categories.count()) === 0) {
+      await seedCategories(this.handle.db);
+      this.logger.log('Seeded the empty categories table');
     }
   }
 

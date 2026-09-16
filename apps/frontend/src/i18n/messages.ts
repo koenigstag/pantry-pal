@@ -1,4 +1,4 @@
-import type { PantryCategory, UnitKind } from '@pantry-pal/shared';
+import type { UnitKind } from '@pantry-pal/shared';
 
 import { formatNumber, plural, type PluralForms } from './format';
 
@@ -23,6 +23,27 @@ const COUNT_NOUNS = new Map<string, PluralForms>([
   ['pack', { one: 'pack', other: 'packs' }],
   ['pill', { one: 'pill', other: 'pills' }],
   ['tube', { one: 'tube', other: 'tubes' }],
+]);
+
+/**
+ * The names of the seeded categories, by category code — a `Map` for the same
+ * reason as `COUNT_NOUNS`. A code an admin added is missing here, and shows the
+ * label the API gives it.
+ */
+const CATEGORY_NAMES = new Map<string, string>([
+  ['produce', 'Produce'],
+  ['dairy', 'Dairy'],
+  ['meat', 'Meat'],
+  ['fish', 'Fish'],
+  ['grains', 'Grains'],
+  ['canned', 'Canned'],
+  ['frozen', 'Frozen'],
+  ['spices', 'Spices'],
+  ['beverages', 'Beverages'],
+  ['medicine', 'Medicine'],
+  ['personal-care', 'Personal care'],
+  ['cleaning', 'Cleaning'],
+  ['other', 'Other'],
 ]);
 
 /**
@@ -88,19 +109,12 @@ export const messages = {
   },
 
   categories: {
-    produce: 'Produce',
-    dairy: 'Dairy',
-    meat: 'Meat',
-    grains: 'Grains',
-    canned: 'Canned',
-    frozen: 'Frozen',
-    spices: 'Spices',
-    beverages: 'Beverages',
-    medicine: 'Medicine',
-    'personal-care': 'Personal care',
-    cleaning: 'Cleaning',
-    other: 'Other',
-  } satisfies Record<PantryCategory, string>,
+    /**
+     * A category's name. `label` is the API's, shown for a code this catalog
+     * lacks — one an admin added — until the catalog learns its name.
+     */
+    name: (code: string, label: string): string => CATEGORY_NAMES.get(code) ?? label,
+  },
 
   storage: {
     title: 'Storage',
@@ -260,6 +274,7 @@ export const messages = {
     namePlaceholder: 'Whole milk',
     location: 'Storage space',
     category: 'Category',
+    edible: 'Edible',
     quantity: 'Quantity',
     howMany: 'How many',
     decreaseQuantity: 'Decrease quantity',
