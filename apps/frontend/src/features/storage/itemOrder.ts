@@ -2,7 +2,7 @@ import type { PantryItem } from '@pantry-pal/shared';
 
 import { nameCollator, normalizeForSearch } from '../../i18n/format';
 
-export const SORT_FIELDS = ['name', 'expiry', 'quantity', 'size'] as const;
+export const SORT_FIELDS = ['name', 'expiry', 'quantity', 'size', 'added'] as const;
 export type SortField = (typeof SORT_FIELDS)[number];
 
 export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
@@ -45,6 +45,9 @@ export function sizeOf(item: PantryItem): Size | null {
  *
  * `quantity` sorts by the server's value, not a pending tap, so a card does not
  * jump away from under the finger while its quantity is being stepped.
+ *
+ * `added` is named for its default order, "Last added": ascending puts the
+ * newest first, by `createdAt`.
  */
 export function sortItems(
   items: readonly PantryItem[],
@@ -70,6 +73,9 @@ export function sortItems(
           sign,
           (x, y) => nameCollator.compare(unitLabel(x.unit), unitLabel(y.unit)) || x.value - y.value,
         );
+      case 'added':
+        // "Last added": the newest first in the default order, the oldest first reversed.
+        return sign * compareStrings(b.createdAt, a.createdAt);
     }
   };
 

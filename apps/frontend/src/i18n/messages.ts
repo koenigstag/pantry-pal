@@ -129,6 +129,8 @@ export const messages = {
       expiry: 'Expiry',
       quantity: 'Quantity',
       size: 'Size',
+      /** Newest first; the direction arrow reverses it to oldest first. */
+      added: 'Last added',
     },
     ascending: 'Ascending order',
     descending: 'Descending order',
