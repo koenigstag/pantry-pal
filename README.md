@@ -108,6 +108,18 @@ enforced by the task graph rather than by convention.
 In watch mode `shared` runs `tsup --watch`, so edits to the library flow into
 both apps without restarting anything.
 
+## Deployment
+
+Pushing to `main` builds the frontend and publishes it to GitHub Pages
+(`.github/workflows/deploy-pages.yml`); the workflow can also be run by hand
+from the Actions tab. Once per repository, set **Settings → Pages → Source** to
+**GitHub Actions**.
+
+The site is the frontend alone, because Pages cannot run the backend: the shell
+and navigation work, and pages that need the API show their load error. It is
+served from `https://<owner>.github.io/<repo>/`, a path the workflow passes to
+the build as `BASE_PATH`.
+
 ## Decisions worth knowing
 
 ### Module formats

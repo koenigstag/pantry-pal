@@ -126,6 +126,16 @@ Nest 12 runs on Express 5, whose `query parser` defaults to `simple`, silently
 breaking `?tags[]=a&tags[]=b` and `?filter[name]=x`. `main.ts` restores it with
 `app.set('query parser', 'extended')`. Leave that in place.
 
+### Turborepo hides undeclared environment variables
+
+Turborepo 2 runs tasks in strict env mode: a task's process sees only the
+variables declared under `env` or `globalEnv` in `turbo.json`, plus `VITE_*`,
+which it infers for Vite. Anything else set in the shell or CI is dropped
+without a warning. Undeclared, `BASE_PATH=/x pnpm build` would build for `/`.
+`.env*` files are unaffected, because the apps read them from disk. Declare any
+variable a task reads from its environment in `turbo.json`; that also puts it
+in the cache key.
+
 ## Tooling
 
 - **oxlint and oxfmt — not ESLint or Prettier.** Configs are `.oxlintrc.json`
@@ -145,6 +155,24 @@ Every package ships a `.env.example`. Real values go in `.env.local`, which is
 git-ignored and takes precedence over `.env`. The backend loads them via
 `ConfigModule`; the frontend via Vite's `loadEnv`, where only `VITE_`-prefixed
 variables reach browser code.
+
+## Deployment
+
+`.github/workflows/deploy-pages.yml` publishes the frontend to GitHub Pages on
+every push to `main`, or when run by hand from the Actions tab. Pages serves
+static files only, so the site has **no backend**: the shell renders, and pages
+that need the API show their load error. The repository's Pages source must be
+set to _GitHub Actions_ once, in its settings.
+
+- A project site is served under `/<repo>/`. The workflow passes that path as
+  `BASE_PATH`, which sets Vite's `base`, and the router takes its `basename`
+  from `import.meta.env.BASE_URL`. Link through the router: a hard-coded
+  `href="/…"` escapes the base path.
+- Pages has no SPA rewrites. The workflow copies `index.html` to `404.html`, so a
+  deep link boots the app (with a 404 status) and the router takes over.
+- Actions are pinned to commit SHAs, with the version in a comment; update both
+  together. No dependency cache is restored, so nothing another run wrote can
+  reach the published site.
 
 ## Conventions
 
