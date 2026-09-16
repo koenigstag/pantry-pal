@@ -13,8 +13,8 @@ export const EXPIRY_TONES: Record<ExpiryStatus, string> = {
 type UnitLabel = (code: string) => string;
 
 /**
- * The size line: `2 × 400 g` for counted things with a size, `1.5 kg` for loose
- * goods, or `null` for a bare count, whose number the stepper already shows.
+ * An item's size: `2 × 400 g` for counted things with a size, `1.5 kg` for loose
+ * goods, or `null` for a bare count.
  *
  * Takes the quantity to show rather than reading `item.quantity`, so a step not
  * yet saved updates the line too.
@@ -28,7 +28,10 @@ export function sizeText(item: PantryItem, quantity: number, unitLabel: UnitLabe
     : messages.item.sizeWithCount(quantity, size.value, unitLabel(size.unit));
 }
 
-/** Like `sizeText`, but a bare count reads `5 pcs` instead of nothing. */
+/**
+ * The amount line of cards and the details: like `sizeText`, but a bare count
+ * reads `5 pcs` instead of nothing, so every card shows the line.
+ */
 export function amountText(item: PantryItem, quantity: number, unitLabel: UnitLabel): string {
   return (
     sizeText(item, quantity, unitLabel) ?? messages.item.amount(quantity, unitLabel(item.unit))

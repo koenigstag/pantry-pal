@@ -8,7 +8,7 @@ import { messages } from '../../i18n/messages';
 import { usePantryStore, useQuantities } from '../../stores/StoreContext';
 import { cn } from '../../ui/cn';
 import { OPENED_FROM_LIST } from './itemDetailsNavigation';
-import { EXPIRY_TONES, sizeText } from './itemDisplay';
+import { amountText, EXPIRY_TONES } from './itemDisplay';
 import { QuantityStepper } from './QuantityStepper';
 
 interface ItemCardProps {
@@ -25,7 +25,7 @@ interface ItemCardProps {
 
 /**
  * One item: expiry and selection on top, a photo placeholder, the name, its
- * size, and a quantity stepper. Anywhere else on the card opens its details.
+ * amount, and a quantity stepper. Anywhere else on the card opens its details.
  *
  * The whole-card target is the name's link stretched over the card by an
  * `::after` overlay, so the checkbox and the stepper are not nested inside a
@@ -43,7 +43,7 @@ export const ItemCard = observer(function ItemCard({
   const quantities = useQuantities();
   const nameId = useId();
 
-  const size = sizeText(item, quantities.quantityOf(item), pantry.unitLabel);
+  const amount = amountText(item, quantities.quantityOf(item), pantry.unitLabel);
 
   return (
     <article
@@ -83,7 +83,7 @@ export const ItemCard = observer(function ItemCard({
         </Link>
       </h3>
 
-      {size !== null && <p className="mt-0.5 truncate text-xs text-ink-muted">{size}</p>}
+      <p className="mt-0.5 truncate text-xs text-ink-muted">{amount}</p>
 
       <QuantityStepper item={item} onRemove={onRemove} className="relative z-10 mt-auto pt-2" />
     </article>
