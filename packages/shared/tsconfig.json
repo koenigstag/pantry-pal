@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "lib": ["ES2023", "DOM"],
+    "experimentalDecorators": true,
+    // tsup@8 injects the deprecated `baseUrl` when generating declarations.
+    "ignoreDeprecations": "6.0",
+    "useDefineForClassFields": false
+  },
+  "include": ["src/**/*.ts", "tsup.config.ts"],
+  "exclude": ["dist", "node_modules"]
+}

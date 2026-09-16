@@ -1,0 +1,15 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm >=10 does not run dependency install scripts unless they are allowlisted.
+# esbuild (via tsup and vite) links its platform binary in a postinstall script.
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@nestjs/cli@12.0.3'
+  - '@nestjs/schematics@12.0.3'
+  - '@types/node@22.20.3'
+
+engineStrict: true

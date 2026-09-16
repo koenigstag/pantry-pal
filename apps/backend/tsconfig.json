@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /* NestJS 12 ships ESM-only. Output here is still CommonJS (this package is
+       not "type": "module"), which works because Node >=22.12 supports
+       require() of ESM. "nodenext" is what lets tsc model that, and it also
+       resolves package "exports" subpaths such as @pantry-pal/shared/dto. */
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"],
+
+    /* Nest resolves providers from decorator metadata at runtime. */
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false,
+
+    "declaration": false,
+    "declarationMap": false,
+    "isolatedModules": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

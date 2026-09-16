@@ -1,0 +1,19 @@
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  // Two entry points: the client/repositories, and the raw schema for tooling
+  // and for consumers that only want table definitions.
+  entry: ['src/index.ts', 'src/schema/index.ts'],
+  // ESM only. Unlike `@pantry-pal/shared`, this package has no browser consumer
+  // and only one server consumer, which reaches it through Node's require(esm)
+  // support — the same path it already uses for NestJS 12 itself.
+  format: ['esm'],
+  dts: true,
+  sourcemap: true,
+  clean: true,
+  treeshake: true,
+  target: 'es2023',
+  outDir: 'dist',
+  // Never bundle the driver: pg loads native/optional bits at runtime.
+  external: ['pg', 'drizzle-orm'],
+});

@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "builtin": true,
+    "es2024": true
+  },
+  "ignorePatterns": ["**/dist/**", "**/.turbo/**", "**/coverage/**"],
+  "rules": {
+    "no-console": "off",
+    "unicorn/prefer-node-protocol": "error",
+    "import/no-duplicates": "error",
+    "import/no-unassigned-import": "off"
+  },
+  "overrides": [
+    {
+      "files": ["apps/frontend/**/*.{ts,tsx}"],
+      "plugins": ["react", "jsx-a11y"],
+      "env": {
+        "browser": true
+      },
+      "rules": {
+        "react/react-in-jsx-scope": "off"
+      }
+    },
+    {
+      "files": ["apps/backend/**/*.ts"],
+      "env": {
+        "node": true
+      },
+      "rules": {
+        "typescript/no-extraneous-class": "off",
+        "promise/valid-params": "off"
+      }
+    },
+    {
+      "files": ["packages/shared/**/*.ts"],
+      "env": {
+        "node": true,
+        "browser": true
+      }
+    }
+  ]
+}
