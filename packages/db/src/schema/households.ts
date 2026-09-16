@@ -1,16 +1,9 @@
+import { HOUSEHOLD_ROLE, HOUSEHOLD_ROLES, type HouseholdRole } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import { check, index, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { inList } from './_sql';
 import { users } from './users';
-
-export const HOUSEHOLD_ROLE = {
-  Owner: 'owner',
-  Member: 'member',
-} as const;
-
-export type HouseholdRole = (typeof HOUSEHOLD_ROLE)[keyof typeof HOUSEHOLD_ROLE];
-export const HOUSEHOLD_ROLES = Object.values(HOUSEHOLD_ROLE);
 
 /**
  * Tenancy exists from day one even for a single user: every domain row is keyed

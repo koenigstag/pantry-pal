@@ -1,4 +1,6 @@
-import { DEFAULT_LOCATIONS, locations, units, type LocationRow, type UnitRow } from './schema';
+import { DEFAULT_LOCATIONS } from '@pantry-pal/shared';
+
+import { locations, units, type LocationRow, type UnitRow } from './schema';
 import type { Executor } from './transaction';
 
 /**

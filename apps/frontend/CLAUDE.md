@@ -40,7 +40,17 @@ for the resulting server broadcast to mutate state. This keeps every connected
 client in agreement — preserve it unless deliberately changing the model.
 
 Reads arrive two ways: a REST fetch on mount (so the list populates even if the
-socket never connects) and a snapshot on socket connect.
+socket never connects) and a snapshot requested on socket connect.
+
+The store shows **one household**: the user's first, or a new "Home" created
+for a user with none. The socket delivers events for every household the user
+belongs to, so each handler ignores payloads for any other household. Items
+that stop being active (consumed, discarded) leave the list.
+
+**Identity is a development stand-in.** `services/identity.ts` sends
+`VITE_DEV_USER_EMAIL` (default: the seeded test household's owner) as the
+`x-dev-user-email` header and in the socket handshake `auth`. Real sign-in
+replaces that one module.
 
 `StoreProvider` constructs the root store in a `useState` lazy initialiser
 because `new RootStore()` opens a socket — it must not run on every render.

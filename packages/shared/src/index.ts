@@ -10,5 +10,6 @@
  */
 export * from './constants';
 export * from './events';
+export * from './settings';
 export * from './types';
 export * from './utils';

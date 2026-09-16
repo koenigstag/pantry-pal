@@ -16,6 +16,16 @@ export class ItemEventsRepository {
     return row;
   }
 
+  /** One statement for many events, e.g. every item moved out of a deleted location. */
+  recordMany(inputs: readonly RecordEventInput[]): Promise<ItemEventRow[]> {
+    if (inputs.length === 0) return Promise.resolve([]);
+
+    return this.db
+      .insert(itemEvents)
+      .values([...inputs])
+      .returning();
+  }
+
   listRecent(householdId: string, limit = 50): Promise<ItemEventRow[]> {
     return this.db
       .select()

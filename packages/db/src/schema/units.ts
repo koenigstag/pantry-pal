@@ -1,19 +1,16 @@
+import { UNIT_KINDS, UNIT_SYSTEMS, type UnitKind, type UnitSystem } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import { check, numeric, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { inList } from './_sql';
 
-/** Conversions never bridge two kinds: `oz` is mass, `fl oz` is volume. */
-export const UNIT_KINDS = ['mass', 'volume', 'count'] as const;
-export const UNIT_SYSTEMS = ['metric', 'imperial', 'both'] as const;
-
-export type UnitKind = (typeof UNIT_KINDS)[number];
-export type UnitSystem = (typeof UNIT_SYSTEMS)[number];
-
 /**
  * Reference data, not domain logic. Adding `fl_oz_us` or `tbsp` is an INSERT,
  * never a migration — which is why `items.unit` is a foreign key and not a
  * CHECK constraint.
+ *
+ * The kind and system value sets live in `@pantry-pal/shared`, because the
+ * admin DTOs validate against the same lists these CHECKs are generated from.
  */
 export const units = pgTable(
   'units',
@@ -36,3 +33,4 @@ export const units = pgTable(
 );
 
 export type UnitRow = typeof units.$inferSelect;
+export type NewUnitRow = typeof units.$inferInsert;

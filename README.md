@@ -16,20 +16,25 @@ pantry-pal/
 │   └── frontend/         @pantry-pal/frontend  React 19 · MobX 7 · Vite 8
 └── packages/
     ├── shared/           @pantry-pal/shared    constants · DTOs · utils · WS contract
-    └── db/               @pantry-pal/db        Drizzle + pg  (skeleton only)
+    └── db/               @pantry-pal/db        Drizzle + pg · schema · repositories · transactions
 ```
 
 Dependencies run one way: `db → shared`, `backend → {shared, db}`,
 `frontend → shared`. Nothing depends on an app.
 
-`packages/db` is a skeleton — it exposes `createDatabase(connectionString)` and
-an empty schema barrel. The agreed schema and transaction design, and the
-blocker to clear first, are recorded in `packages/db/CLAUDE.md`.
+`packages/db` owns the PostgreSQL schema, migrations, repositories and the
+transaction layer; its design is recorded in `packages/db/CLAUDE.md`. The
+backend's API — households, members, locations, items, and an admin API for
+units and default locations — is described in `apps/backend/CLAUDE.md`.
 
 `packages/shared` is the point of the workspace. It holds:
 
-- **constants** — API prefix, ports, Socket.IO namespace, event names, categories/units
-- **types** — `PantryItem` and the socket payload shapes
+- **constants** — API prefix, ports, Socket.IO namespace, event names, and the
+  value sets (categories, roles, statuses) the database constraints are
+  generated from
+- **types** — the wire types (`PantryItem`, `PantryLocation`, `Household`, ...)
+  and the socket payload shapes
+- **settings** — keys, value types and defaults of the admin-managed settings
 - **utils** — expiry maths, formatting, id generation (pure, no dependencies)
 - **events** — `ServerToClientEvents` / `ClientToServerEvents`, so a renamed
   socket event or a changed payload is a compile error on _both_ sides
@@ -58,10 +63,18 @@ pnpm install
 ```
 
 Copy the env templates you need — every package ships a `.env.example`, and
-`.env.local` is git-ignored:
+`.env.local` is git-ignored — and fill in the `DATABASE_*` values:
 
 ```bash
+cp packages/db/.env.example packages/db/.env.local
 cp apps/backend/.env.example apps/backend/.env.local
+```
+
+Create the schema, and optionally a test household to look at:
+
+```bash
+pnpm --filter @pantry-pal/db db:migrate
+pnpm --filter @pantry-pal/db db:seed
 ```
 
 Then run everything:
@@ -173,9 +186,11 @@ Nest 12 runs on Express 5, which changed the default `query parser` from
 
 ### One write path
 
-`PantryService` publishes mutations onto an RxJS subject; `PantryGateway`
-subscribes and broadcasts. HTTP and WebSocket writes therefore both fan out
-exactly once, and neither transport depends on the other (no circular DI).
+The backend services publish mutations onto `ChangeFeed`, an RxJS subject;
+`PantryGateway` subscribes and broadcasts to the household's room. HTTP and
+WebSocket writes therefore both fan out exactly once, and neither transport
+depends on the other (no circular DI). A change is published only once its
+transaction commits, so a rolled-back write is never announced.
 
 The MobX store deliberately applies **no optimistic update** — an added item
 appears only when the server broadcast arrives, so every connected client shows
@@ -195,7 +210,7 @@ The shared package removes most drift, but one gap remains. In
 `apps/frontend/src/services/api.ts`:
 
 ```ts
-request<PantryItem[]>('/items');
+request<PantryItem[]>(`${household(householdId)}/items`);
 ```
 
 The path is a hand-written string and the return type is an **unchecked cast**.

@@ -1,8 +1,16 @@
-import { MAX_ITEM_NAME_LENGTH, PANTRY_CATEGORIES } from '@pantry-pal/shared';
+import {
+  ITEM_STATUS,
+  ITEM_STATUSES,
+  MAX_ITEM_NAME_LENGTH,
+  PANTRY_CATEGORIES,
+  type ItemStatus,
+  type PantryCategory,
+} from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import {
   check,
   date,
+  foreignKey,
   index,
   integer,
   numeric,
@@ -19,15 +27,6 @@ import { locations } from './locations';
 import { products } from './products';
 import { units } from './units';
 
-export const ITEM_STATUS = {
-  Active: 'active',
-  Consumed: 'consumed',
-  Discarded: 'discarded',
-} as const;
-
-export type ItemStatus = (typeof ITEM_STATUS)[keyof typeof ITEM_STATUS];
-export const ITEM_STATUSES = Object.values(ITEM_STATUS);
-
 /** The batch half of product + batch: one physical package, with its own expiry. */
 export const items = pgTable(
   'items',
@@ -39,10 +38,9 @@ export const items = pgTable(
     /** Optional: a freeform item never has to become a catalog entry. */
     productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
     name: varchar('name', { length: MAX_ITEM_NAME_LENGTH }).notNull(),
-    locationId: uuid('location_id')
-      .notNull()
-      .references(() => locations.id, { onDelete: 'restrict' }),
-    category: text('category').notNull(),
+    /** Must belong to the same household: see `items_location_household_fk`. */
+    locationId: uuid('location_id').notNull(),
+    category: text('category').$type<PantryCategory>().notNull(),
 
     /**
      * Quantity is three parts so `1 can 300 ml` can be represented:
@@ -85,6 +83,20 @@ export const items = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (t) => [
+    /**
+     * Tenancy, enforced by the database rather than trusted to every caller: a
+     * plain FK on `location_id` would only check that the location exists, so an
+     * item could be filed under another household's shelf.
+     *
+     * RESTRICT counts soft-deleted and consumed rows too, which is why locations
+     * are soft-deleted rather than removed.
+     */
+    foreignKey({
+      name: 'items_location_household_fk',
+      columns: [t.householdId, t.locationId],
+      foreignColumns: [locations.householdId, locations.id],
+    }).onDelete('restrict'),
+
     check('items_category_check', sql`category in (${inList(PANTRY_CATEGORIES)})`),
     check('items_status_check', sql`status in (${inList(ITEM_STATUSES)})`),
     check('items_quantity_positive', sql`quantity >= 0`),

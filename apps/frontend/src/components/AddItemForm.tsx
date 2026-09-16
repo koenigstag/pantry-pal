@@ -1,10 +1,9 @@
 import {
+  COUNT_UNIT,
   MAX_ITEM_NAME_LENGTH,
   PANTRY_CATEGORIES,
-  PANTRY_UNITS,
   titleCase,
   type PantryCategory,
-  type PantryUnit,
 } from '@pantry-pal/shared';
 import { CreatePantryItemDto, toFieldMessages, validateDto } from '@pantry-pal/shared/dto';
 import { observer } from 'mobx-react-lite';
@@ -15,7 +14,9 @@ import { usePantryStore } from '../stores/StoreContext';
 const EMPTY = {
   name: '',
   quantity: '1',
-  unit: 'pcs' as PantryUnit,
+  unit: COUNT_UNIT,
+  /** Empty means "the first location", which is not known until locations load. */
+  locationId: '',
   category: 'other' as PantryCategory,
   expiresAt: '',
 };
@@ -26,6 +27,8 @@ export const AddItemForm = observer(function AddItemForm(): ReactElement {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setSubmitting] = useState(false);
 
+  const locationId = draft.locationId === '' ? (pantry.locations[0]?.id ?? '') : draft.locationId;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
@@ -33,10 +36,11 @@ export const AddItemForm = observer(function AddItemForm(): ReactElement {
     // uses, so anything accepted here is accepted there. A rejection costs no
     // network round-trip.
     const result = validateDto(CreatePantryItemDto, {
-      name: draft.name.trim(),
+      name: draft.name,
+      locationId,
+      category: draft.category,
       quantity: Number(draft.quantity),
       unit: draft.unit,
-      category: draft.category,
       // The date input yields '' when empty; the API expects null.
       expiresAt: draft.expiresAt === '' ? null : draft.expiresAt,
     });
@@ -51,7 +55,8 @@ export const AddItemForm = observer(function AddItemForm(): ReactElement {
     const created = await pantry.addItem(result.value);
     setSubmitting(false);
 
-    if (created) setDraft(EMPTY);
+    // Keep the chosen location and unit: the next item usually goes to the same place.
+    if (created) setDraft({ ...EMPTY, locationId: draft.locationId, unit: draft.unit });
   }
 
   function errorFor(field: string): ReactElement | null {
@@ -80,6 +85,8 @@ export const AddItemForm = observer(function AddItemForm(): ReactElement {
           <span>Qty</span>
           <input
             type="number"
+            min="0"
+            step="any"
             aria-invalid={fieldErrors['quantity'] !== undefined}
             value={draft.quantity}
             onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
@@ -89,12 +96,14 @@ export const AddItemForm = observer(function AddItemForm(): ReactElement {
         <label className="field field--narrow">
           <span>Unit</span>
           <select
+            aria-invalid={fieldErrors['unit'] !== undefined}
             value={draft.unit}
-            onChange={(event) => setDraft({ ...draft, unit: event.target.value as PantryUnit })}
+            onChange={(event) => setDraft({ ...draft, unit: event.target.value })}
           >
-            {PANTRY_UNITS.map((unit) => (
-              <option key={unit} value={unit}>
-                {unit}
+            {pantry.units.map((unit) => (
+              <option key={unit.code} value={unit.code}>
+                {unit.label}
+                {unit.label === unit.code ? '' : ` (${unit.code})`}
               </option>
             ))}
           </select>
@@ -102,8 +111,25 @@ export const AddItemForm = observer(function AddItemForm(): ReactElement {
       </div>
 
       {errorFor('quantity')}
+      {errorFor('unit')}
 
       <div className="form__row">
+        <label className="field field--grow">
+          <span>Location</span>
+          <select
+            aria-invalid={fieldErrors['locationId'] !== undefined}
+            value={locationId}
+            onChange={(event) => setDraft({ ...draft, locationId: event.target.value })}
+          >
+            {pantry.locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
+            ))}
+          </select>
+          {errorFor('locationId')}
+        </label>
+
         <label className="field field--grow">
           <span>Category</span>
           <select
@@ -131,7 +157,11 @@ export const AddItemForm = observer(function AddItemForm(): ReactElement {
           {errorFor('expiresAt')}
         </label>
 
-        <button className="button" type="submit" disabled={isSubmitting}>
+        <button
+          className="button"
+          type="submit"
+          disabled={isSubmitting || pantry.household === null}
+        >
           {isSubmitting ? 'Adding…' : 'Add item'}
         </button>
       </div>

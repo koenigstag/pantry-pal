@@ -1,11 +1,8 @@
+import { UNIT_SYSTEM_PREFERENCES, type UnitSystemPreference } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import { check, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { inList } from './_sql';
-
-/** Which units the create/edit picker offers. A display preference, nothing more. */
-export const UNIT_SYSTEM_PREFERENCES = ['metric', 'imperial'] as const;
-export type UnitSystemPreference = (typeof UNIT_SYSTEM_PREFERENCES)[number];
 
 export const users = pgTable(
   'users',
@@ -59,4 +56,5 @@ export const refreshTokens = pgTable(
 );
 
 export type UserRow = typeof users.$inferSelect;
+export type NewUserRow = typeof users.$inferInsert;
 export type RefreshTokenRow = typeof refreshTokens.$inferSelect;

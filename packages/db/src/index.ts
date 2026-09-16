@@ -1,11 +1,23 @@
 export { createDatabase, type Database, type DatabaseHandle } from './client';
 export * as schema from './schema';
+export type {
+  AppSettingRow,
+  HouseholdMemberRow,
+  HouseholdRow,
+  ItemEventRow,
+  ItemRow,
+  LocationRow,
+  ProductRow,
+  UnitRow,
+  UserRow,
+} from './schema';
 export * from './repositories';
 export {
   createTransactionalDatabase,
   currentExecutor,
   isTransactionActive,
   runInTransaction,
+  runOnCommit,
   Transactional,
   PROPAGATION,
   type Executor,
@@ -13,6 +25,7 @@ export {
   type Transaction,
   type TransactionalOptions,
 } from './transaction';
+export { findPostgresError, PG_ERROR, type PgErrorCode, type PostgresErrorInfo } from './errors';
 export { seedUnits, seedDefaultLocations, UNIT_SEED } from './seed';
 export {
   buildConnectionString,

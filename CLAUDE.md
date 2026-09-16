@@ -56,14 +56,25 @@ not work around it by importing across package `src/` directories.
 
 ### Two transports, one write path
 
-`PantryService` publishes every mutation onto an RxJS `Subject` (`changes$`).
-`PantryGateway` subscribes once and broadcasts. The HTTP controller and the
-socket gateway both go through the service, so a write over either transport
-fans out to all clients exactly once, and neither transport depends on the other
-(no circular DI).
+Services publish every mutation onto `ChangeFeed` (an RxJS `Subject`).
+`PantryGateway` subscribes once and broadcasts to the affected household's
+room. Controllers and the socket gateway both go through the services, so a
+write over either transport fans out exactly once, and neither transport
+depends on the other (no circular DI). Publishing waits for the transaction to
+commit (`runOnCommit` in `@pantry-pal/db`), so a rolled-back write is never
+announced.
 
-**Do not emit socket events from the service or controller directly.** Publish a
+**Do not emit socket events from a service or controller directly.** Publish a
 change and let the gateway broadcast it.
+
+### Households scope everything
+
+Every domain row belongs to a household, and every household route checks the
+caller's membership before a service runs. Identity is currently a development
+stand-in — the `x-dev-user-email` header, honoured only with `DEV_AUTH=true` —
+behind a seam real authentication will replace. Global reference data (units,
+default locations) is managed through `/admin`, authenticated by an API key.
+Details in `apps/backend/CLAUDE.md`.
 
 ### The frontend applies no optimistic updates
 
@@ -134,9 +145,11 @@ variables reach browser code.
 
 ## Conventions
 
-- Values shared between the apps (ports, paths, event names, category/unit
-  lists) belong in `packages/shared/src/constants.ts`. A literal duplicated
-  across both apps will drift.
+- Values shared between the apps (ports, paths, event names, categories, roles,
+  statuses, unit kinds) belong in `packages/shared/src/constants.ts`. A literal
+  duplicated across both apps will drift. `packages/db` generates its CHECK
+  constraints from these same lists rather than defining its own.
+- Units themselves are rows, not a constant: read them from `GET /units`.
 - Dates cross the wire as ISO-8601 **strings**, never `Date` — JSON has no date
   type, so a `Date` in a wire type is a lie after `JSON.parse`.
 - The frontend imports DTOs as values only where it needs runtime validation;

@@ -15,6 +15,7 @@ export const App = observer(function App(): ReactElement {
         <div>
           <h1>Pantry Pal</h1>
           <p className="app__subtitle">
+            {pantry.household === null ? 'No household' : pantry.household.name} ·{' '}
             {pantry.all.length} items · {pantry.expiringSoon.length} expiring soon ·{' '}
             {pantry.expiredCount} expired
           </p>
@@ -25,7 +26,7 @@ export const App = observer(function App(): ReactElement {
             className="button button--ghost"
             type="button"
             onClick={() => pantry.requestSync()}
-            disabled={!pantry.isOnline}
+            disabled={!pantry.isOnline || pantry.household === null}
           >
             Sync
           </button>
@@ -47,7 +48,7 @@ export const App = observer(function App(): ReactElement {
       </section>
 
       <footer className="app__footer">
-        Open a second tab — changes broadcast over the socket to every client.
+        Open a second tab — changes broadcast over the socket to every member of the household.
       </footer>
     </main>
   );

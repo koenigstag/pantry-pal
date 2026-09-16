@@ -55,6 +55,20 @@ A decorator that infers its constraint from the TypeScript type will receive
 `ValidationPipe`'s options (`whitelist`, `forbidNonWhitelisted`) so both sides
 accept exactly the same payloads — change one and change the other.
 
+Helpers in `src/dto/decorators.ts` cover the recurring cases:
+
+- **`@IsOmittable()`** for optional fields of a PATCH that must not be null.
+  `@IsOptional()` lets `null` through too, which is right for a nullable column
+  ("clear the notes") and wrong for `name`, where it would pass validation and
+  fail the NOT NULL constraint as a 500.
+- **`@Trim()`** / **`@NormalizeEmail()`** transform before validation, so
+  `"  "` fails a minimum length.
+- **`@IsIsoDate()`** accepts `YYYY-MM-DD` only, and only real days — a full
+  timestamp would be truncated by Postgres in the server's time zone.
+
+A DTO validates shape; what it cannot know (does this unit code exist, does this
+location belong to the household) is checked by the backend services.
+
 ## The WebSocket contract
 
 `src/events.ts` declares `ServerToClientEvents` / `ClientToServerEvents` using
@@ -62,14 +76,33 @@ computed keys from the `PANTRY_EVENT` / `PANTRY_COMMAND` const objects. Both the
 gateway and the socket client are typed with these, so a renamed event or a
 changed payload is a compile error on both ends rather than a silent no-op.
 
-Add new events by extending the const object _and_ the interface together.
+Add new events by extending the const object _and_ the interface together. Every
+payload identifies its household, and every command names one: a socket follows
+all of its user's households at once.
+
+## Settings
+
+`src/settings.ts` defines the admin-managed global settings: `APP_SETTING`
+keys, each value's type in `AppSettingValues`, and `APP_SETTING_DEFAULTS`. The
+defaults are what a key means while no override is stored. Values are always
+objects, never bare arrays, so a DTO class can validate them and a field can be
+added later without a new key. Adding a key also needs a validation DTO in
+`src/dto/settings.dto.ts` and an entry in the backend's `SETTINGS_REGISTRY` —
+the registry's mapped type makes forgetting that a compile error.
 
 ## Conventions
 
 - `src/utils/` is pure and dependency-free, and runs in both Node and the
   browser. Keep it that way — anything needing a runtime dependency belongs in
   a separate entry point.
-- Wire types use ISO-8601 **strings** for dates, never `Date`.
-- Value sets (`PANTRY_UNITS`, `PANTRY_CATEGORIES`) are `as const` arrays with
-  types derived via `(typeof X)[number]`, so the runtime list used by
-  `@IsIn([...X])` and the compile-time union can never disagree.
+- Wire types use ISO-8601 **strings** for instants, never `Date`, and plain
+  `YYYY-MM-DD` strings for calendar dates (expiry, opened).
+- Value sets (`PANTRY_CATEGORIES`, `HOUSEHOLD_ROLE`, `ITEM_STATUS`, `UNIT_KINDS`,
+  ...) are `as const` arrays or objects with types derived from them, so the
+  runtime list used by `@IsIn([...X])` and the compile-time union can never
+  disagree. `@pantry-pal/db` generates its CHECK constraints from the same
+  lists, so they live here rather than there.
+- There is no unit list here. Units are rows in the database (`GET /units`), so
+  a unit code is validated as a string and checked for existence by the server.
+- Expiry maths reads `effectiveExpiresAt`, never `expiresAt` — the database
+  folds opened + period-after-opening into it.

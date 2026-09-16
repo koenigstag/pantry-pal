@@ -12,19 +12,26 @@ import type { ReactElement } from 'react';
 
 import { usePantryStore } from '../stores/StoreContext';
 
+/**
+ * Reads `effectiveExpiresAt`, never `expiresAt`: an opened jar's use-within
+ * period can end long before its printed date, and that earlier date is the
+ * one that matters.
+ */
 function expiryLabel(item: PantryItem, status: ExpiryStatus): string {
-  if (item.expiresAt === null) return 'No expiry date';
+  if (item.effectiveExpiresAt === null) return 'No expiry date';
 
-  const days = daysUntil(item.expiresAt);
-  const formatted = formatDate(item.expiresAt);
+  const days = daysUntil(item.effectiveExpiresAt);
+  const formatted = formatDate(item.effectiveExpiresAt);
+  // The effective date differs from the printed one only when opened + period-after-opening won.
+  const opened = item.effectiveExpiresAt === item.expiresAt ? '' : ' (opened)';
 
   switch (status) {
     case 'expired':
-      return `Expired ${formatted}`;
+      return `Expired ${formatted}${opened}`;
     case 'expiring-soon':
-      return days === 0 ? `Expires today` : `Expires in ${days}d — ${formatted}`;
+      return days === 0 ? `Expires today${opened}` : `Expires in ${days}d — ${formatted}${opened}`;
     default:
-      return `Expires ${formatted}`;
+      return `Expires ${formatted}${opened}`;
   }
 }
 
@@ -37,7 +44,8 @@ const PantryRow = observer(function PantryRow({ item }: { item: PantryItem }): R
       <div className="item__main">
         <span className="item__name">{item.name}</span>
         <span className="item__meta">
-          {formatQuantity(item.quantity, item.unit)} · {titleCase(item.category)}
+          {formatQuantity(item.quantity, pantry.unitLabel(item.unit))} ·{' '}
+          {pantry.locationName(item.locationId)} · {titleCase(item.category)}
         </span>
       </div>
 

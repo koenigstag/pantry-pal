@@ -1,11 +1,12 @@
-import type { PantryUnit } from '../types';
-
-const PLURALISABLE = new Set<PantryUnit>(['pack', 'can', 'bottle']);
-
-/** `2, 'can'` -> `"2 cans"`; `1, 'kg'` -> `"1 kg"`. */
-export function formatQuantity(quantity: number, unit: PantryUnit): string {
-  const suffix = quantity === 1 || !PLURALISABLE.has(unit) ? unit : `${unit}s`;
-  return `${quantity} ${suffix}`;
+/**
+ * `0.5, 'kg'` -> `"0.5 kg"`; `3, 'pcs'` -> `"3 pcs"`.
+ *
+ * Takes the unit's display label, not its code: `fl_oz_us` renders as `fl oz`.
+ * Container nouns ("3 cans") belong to `products.package_label`, not to a unit,
+ * so nothing is pluralised here.
+ */
+export function formatQuantity(quantity: number, unitLabel: string): string {
+  return `${quantity} ${unitLabel}`;
 }
 
 export function titleCase(value: string): string {

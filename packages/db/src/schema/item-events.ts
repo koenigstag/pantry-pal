@@ -1,3 +1,4 @@
+import { ITEM_EVENT_TYPES, type ItemEventType } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import { check, index, jsonb, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
@@ -5,18 +6,6 @@ import { inList } from './_sql';
 import { households } from './households';
 import { items } from './items';
 import { users } from './users';
-
-export const ITEM_EVENT_TYPE = {
-  Added: 'added',
-  Updated: 'updated',
-  Opened: 'opened',
-  Consumed: 'consumed',
-  Discarded: 'discarded',
-  Restored: 'restored',
-} as const;
-
-export type ItemEventType = (typeof ITEM_EVENT_TYPE)[keyof typeof ITEM_EVENT_TYPE];
-export const ITEM_EVENT_TYPES = Object.values(ITEM_EVENT_TYPE);
 
 /** Append-only. Feeds the activity feed, waste statistics and undo. */
 export const itemEvents = pgTable(

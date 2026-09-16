@@ -15,8 +15,9 @@ pnpm type-check   # tsc --noEmit
 ```
 
 Served at `http://localhost:3001/api/v1`; socket namespace `/pantry`.
-`GET /api/v1/health` is the liveness route. Set `SEED_DEMO_DATA=true` to boot
-with sample items.
+`GET /api/v1/health` is the liveness route. The database must be migrated first
+(`pnpm --filter @pantry-pal/db db:migrate`); `pnpm db:seed` there adds a test
+household whose owner is `owner@pantry-pal.test`.
 
 ## Module format — read before touching tsconfig
 
@@ -28,29 +29,114 @@ That is why `tsconfig.json` uses `"module": "nodenext"` with
 _and_ resolve package `exports` subpaths. Plain `"commonjs"` + `"node10"` still
 compiles and runs, but cannot resolve `@pantry-pal/shared/dto` and will fail
 with a confusing "could not be resolved under your current moduleResolution"
-error. The package is deliberately **not** `"type": "module"`.
+error. The package is deliberately **not** `"type": "module"`. `@pantry-pal/db`
+is ESM-only too and arrives through the same `require(esm)` path.
 
 `emitDecoratorMetadata` and `experimentalDecorators` are required here — Nest
 resolves providers from decorator metadata at runtime. `useDefineForClassFields`
 must stay `false` for constructor parameter properties to behave.
 
+## Layout
+
+```
+src/
+  database/     DatabaseModule (@Global): pool, transactional proxy, repositories;
+                Postgres error -> HTTP translation
+  auth/         AccessGuard (global), IdentityService, @Public/@AdminOnly, GET /me
+  common/       request context: @CurrentUser, @CurrentMembership, Membership
+  households/   households + members, MembershipService, HouseholdAccessGuard
+  locations/    per-household locations: CRUD, reorder, soft delete
+  items/        per-household items and their event history
+  units/        GET /units (public reference data)
+  settings/     typed access to app_settings, with code defaults
+  admin/        /admin/units, /admin/settings
+  realtime/     ChangeFeed, PantryGateway, Socket.IO adapter, WS exception filter
+```
+
+### Routes
+
+```
+GET    /me
+GET    /units
+GET    POST            /households
+GET    PATCH  DELETE   /households/:householdId                       PATCH/DELETE: owner
+GET    POST            /households/:householdId/members               POST: owner
+GET    PATCH  DELETE   /households/:householdId/members/:userId       PATCH: owner; DELETE: owner or self
+GET    POST            /households/:householdId/locations
+PUT                    /households/:householdId/locations/order       full ordered id list
+GET    PATCH  DELETE   /households/:householdId/locations/:locationId DELETE takes ?moveItemsTo=
+GET    POST            /households/:householdId/items                 GET takes ?status=&locationId=
+GET    PATCH  DELETE   /households/:householdId/items/:itemId
+GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
+GET                    /admin/settings           GET PUT   DELETE /admin/settings/:key
+```
+
+## Authentication and authorization
+
+**Every route requires a user unless marked otherwise.** `AccessGuard` is
+registered as `APP_GUARD`, so a new controller fails closed. `@Public()` opts
+out (health, units); `@AdminOnly()` switches to the `x-admin-api-key` header,
+which compares in constant time and answers 403 while `ADMIN_API_KEY` is unset.
+
+**Identity is a development stand-in.** With `DEV_AUTH=true`, the
+`x-dev-user-email` header names the caller, and an email seen for the first time
+becomes a user — the way a first sign-in through an identity provider would.
+`IdentityService.authenticate()` is the seam real authentication replaces;
+`AccessGuard` and the socket handshake call nothing else. Configuration refuses
+to boot with `DEV_AUTH=true` under `NODE_ENV=production`.
+
+**Household scope.** Every route with `:householdId` goes through
+`HouseholdAccessGuard`, which resolves the caller's membership (404, not 403,
+for non-members, so ids cannot be probed) and enforces `@RequireHouseholdRole`.
+Household-scoped service methods take a `Membership`, never a bare household id,
+so they cannot be reached without the check. Owners manage the household and its
+members; any member manages locations and items.
+
 ## Request flow
 
 ```
-HTTP  → PantryController ┐
-                         ├→ PantryService ──→ changes$ (RxJS Subject)
-WS    → PantryGateway   ┘                          │
-                              PantryGateway ◄──────┘  broadcasts to all clients
+HTTP  → Controller ─┐                                          ┌→ household room
+                    ├→ Service ──→ ChangeFeed.publish() ──commit──→ PantryGateway
+WS    → Gateway ────┘   (@Transactional)                       └→ user room
 ```
 
-Both transports write through `PantryService`, which publishes onto `changes$`.
-`PantryGateway` holds the single subscription and does all broadcasting.
+Both transports write through the same services, which publish a
+`DomainChange` onto `ChangeFeed`. `PantryGateway` holds the single subscription
+and does all broadcasting.
 
-**Never emit socket events from the service or the controller.** Publish a
-change; the gateway fans it out. This is what keeps HTTP and WebSocket writes
-consistent and avoids circular DI between gateway and service.
+**Never emit socket events from a service or controller.** Publish a change; the
+gateway fans it out. This keeps HTTP and WebSocket writes consistent and avoids
+circular DI between gateway and services.
 
-The store is in-memory (a `Map`); there is no database yet.
+**Publishing inside a transaction is safe and expected.** `ChangeFeed.publish()`
+defers through `runOnCommit()` from `@pantry-pal/db`, so a rolled-back write
+announces nothing, and a released NESTED savepoint's changes wait for the outer
+commit.
+
+### Rooms
+
+Each socket joins `user:<id>` and `household:<id>` for every membership at
+connect time. Broadcasts go to the household room. `member.added` moves the
+user's sockets into the room before emitting (so the new member hears it);
+`member.removed` and `household.deleted` emit first, then move sockets out.
+Joining a room only grants receiving: socket commands resolve membership per
+call, exactly as HTTP does.
+
+The gateway's subscriber catches its own errors. RxJS rethrows a subscriber's
+error asynchronously, which would crash the process.
+
+## Concurrency
+
+Row locks, not isolation levels, keep multi-row invariants:
+
+- Membership changes lock the household row (`FOR NO KEY UPDATE`, which does
+  not block inserts referencing the household), then re-check the caller's
+  role and the owner count under the lock. A household always keeps an owner.
+- Location create, reorder and delete take the same household lock.
+- Filing an item under a location share-locks it; deleting a location locks it
+  exclusively. The delete therefore waits for in-flight item writes, and an item
+  can never be filed under a location deleted a moment earlier.
+- An item update locks the item, so the before/after it records is exact.
 
 ## Validation and error handling
 
@@ -64,8 +150,28 @@ WebSocket handlers included. Consequences:
   (applied via `@UseFilters` on the gateway) re-wraps HTTP exceptions as
   `WsException` so validation details survive. Keep it on any new gateway.
 
+**Postgres errors** are translated by `translateDatabaseError()`: unique and
+foreign-key violations become 409, check/not-null/invalid-input become 400,
+anything else stays a 500. `DatabaseExceptionFilter` applies it to HTTP as an
+`APP_FILTER`. **Global filters do not run for gateways in Nest 12**, so
+`WsExceptionFilter` calls the same function itself. Services still check the
+common cases up front (unknown unit, foreign location, size rules) for precise
+messages; the translation is the safety net for races.
+
 DTOs come from `@pantry-pal/shared/dto` and must be imported **as values** in
 controllers and gateways — Nest reads the runtime class from parameter metadata.
+
+## Admin settings
+
+`/admin/settings/:key` is generic over `APP_SETTING` in `@pantry-pal/shared`.
+`SETTINGS_REGISTRY` maps each key to its validation DTO; the mapped type makes a
+missing entry a compile error. The PUT body is `unknown` so the global pipe
+skips it, and `SettingsService` validates with a `ValidationPipe` configured
+like the global one — same rules, same 400 shape. Stored values are validated
+again on read; an invalid row logs a warning and falls back to the default.
+
+A household copies the `default-locations` setting in force when it is
+created. Later changes to the setting never reach existing households.
 
 ## Socket.IO configuration
 
@@ -73,6 +179,9 @@ Socket.IO does its own CORS handling and **ignores `app.enableCors()`**. Origins
 are applied in `PantryIoAdapter`, registered via `app.useWebSocketAdapter()`.
 The `@WebSocketGateway()` decorator sets only the namespace, because decorator
 options are evaluated at import time — before `ConfigModule` has loaded `.env`.
+
+Browsers cannot set headers on a WebSocket, so the handshake carries identity in
+`auth.devUserEmail`; the header is accepted too, for non-browser clients.
 
 ## Express 5
 
@@ -85,5 +194,10 @@ The app is typed as `NestExpressApplication` so `app.set()` is available.
 ## Configuration
 
 `config/configuration.ts` is the only place that reads `process.env`; everything
-else goes through `ConfigService`. `ConfigModule` loads `.env.local` ahead of
+else goes through `ConfigService`. It throws at boot on dangerous or invalid
+settings rather than failing later. `ConfigModule` loads `.env.local` ahead of
 `.env`. See `.env.example` for the supported variables.
+
+On boot, `DatabaseModule` seeds `units` **only into an empty table** — seeding
+every time would resurrect units an admin deleted. That first query doubles as
+the connectivity check.

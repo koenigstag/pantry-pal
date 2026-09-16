@@ -8,6 +8,13 @@
       "when": 1789570887143,
       "tag": "0000_round_absorbing_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789578194874,
+      "tag": "0001_household_services",
+      "breakpoints": true
     }
   ]
 }

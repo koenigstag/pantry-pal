@@ -1,7 +1,8 @@
-import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { ITEM_STATUS, type ItemStatus } from '@pantry-pal/shared';
+import { and, asc, count, eq, gt, isNull, sql, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../client';
-import { ITEM_STATUS, items, type ItemRow, type NewItemRow } from '../schema';
+import { items, type ItemRow, type NewItemRow } from '../schema';
 
 /** Everything the caller supplies; tenancy and identity are applied by the repository. */
 export type CreateItemInput = Omit<
@@ -10,6 +11,12 @@ export type CreateItemInput = Omit<
 >;
 
 export type UpdateItemInput = Partial<CreateItemInput>;
+
+export interface ListItemsFilter {
+  /** Omit for every status. Soft-deleted rows are never listed. */
+  status?: ItemStatus;
+  locationId?: string;
+}
 
 /**
  * Plain class, no decorators: `apps/backend` bridges it into Nest DI with a
@@ -23,25 +30,28 @@ export class ItemsRepository {
   constructor(private readonly db: Database) {}
 
   /**
-   * The main list: most urgent first.
+   * Most urgent first.
    *
    * Ordered by `effective_expires_at`, never `expires_at` — an opened jar with a
    * short period-after-opening has to outrank its printed date. Postgres sorts
    * NULLs last on ASC, so items with no expiry fall to the bottom, matching
    * `sortByUrgency` in `@pantry-pal/shared`.
    */
-  listActive(householdId: string): Promise<ItemRow[]> {
+  list(householdId: string, { status, locationId }: ListItemsFilter = {}): Promise<ItemRow[]> {
+    const conditions: SQL[] = [eq(items.householdId, householdId), isNull(items.deletedAt)];
+    if (status !== undefined) conditions.push(eq(items.status, status));
+    if (locationId !== undefined) conditions.push(eq(items.locationId, locationId));
+
     return this.db
       .select()
       .from(items)
-      .where(
-        and(
-          eq(items.householdId, householdId),
-          isNull(items.deletedAt),
-          eq(items.status, ITEM_STATUS.Active),
-        ),
-      )
-      .orderBy(asc(items.effectiveExpiresAt), asc(items.name));
+      .where(and(...conditions))
+      .orderBy(asc(items.effectiveExpiresAt), asc(items.name), asc(items.id));
+  }
+
+  /** The main list: what is on the shelves now. */
+  listActive(householdId: string): Promise<ItemRow[]> {
+    return this.list(householdId, { status: ITEM_STATUS.Active });
   }
 
   /**
@@ -57,11 +67,22 @@ export class ItemsRepository {
   }
 
   async findById(householdId: string, id: string): Promise<ItemRow | undefined> {
+    const [row] = await this.db.select().from(items).where(this.live(householdId, id)).limit(1);
+
+    return row;
+  }
+
+  /**
+   * Reads an item and row-locks it until the transaction ends, so a
+   * read-compare-write (an update that records what changed) cannot interleave
+   * with another one on the same item.
+   */
+  async lock(householdId: string, id: string): Promise<ItemRow | undefined> {
     const [row] = await this.db
       .select()
       .from(items)
-      .where(and(eq(items.householdId, householdId), eq(items.id, id), isNull(items.deletedAt)))
-      .limit(1);
+      .where(this.live(householdId, id))
+      .for('update');
 
     return row;
   }
@@ -83,10 +104,16 @@ export class ItemsRepository {
     id: string,
     patch: UpdateItemInput,
   ): Promise<ItemRow | undefined> {
+    // Drizzle throws "No values to set" on an empty SET, even though
+    // `updated_at` has `$onUpdate`. An empty patch is a no-op, not an error.
+    if (Object.values(patch).every((value) => value === undefined)) {
+      return this.findById(householdId, id);
+    }
+
     const [row] = await this.db
       .update(items)
       .set(patch)
-      .where(and(eq(items.householdId, householdId), eq(items.id, id), isNull(items.deletedAt)))
+      .where(this.live(householdId, id))
       .returning();
 
     return row;
@@ -97,9 +124,48 @@ export class ItemsRepository {
     const [row] = await this.db
       .update(items)
       .set({ deletedAt: sql`now()` })
-      .where(and(eq(items.householdId, householdId), eq(items.id, id), isNull(items.deletedAt)))
+      .where(this.live(householdId, id))
       .returning();
 
     return row;
+  }
+
+  async countActiveInLocation(householdId: string, locationId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ total: count() })
+      .from(items)
+      .where(this.activeIn(householdId, locationId));
+
+    return row?.total ?? 0;
+  }
+
+  /**
+   * Moves every active item from one location to another and returns the moved
+   * rows. Consumed, discarded and soft-deleted rows stay where they were: they
+   * are history, and history records where things actually lived.
+   */
+  moveActive(
+    householdId: string,
+    fromLocationId: string,
+    toLocationId: string,
+  ): Promise<ItemRow[]> {
+    return this.db
+      .update(items)
+      .set({ locationId: toLocationId })
+      .where(this.activeIn(householdId, fromLocationId))
+      .returning();
+  }
+
+  private live(householdId: string, id: string) {
+    return and(eq(items.householdId, householdId), eq(items.id, id), isNull(items.deletedAt));
+  }
+
+  private activeIn(householdId: string, locationId: string) {
+    return and(
+      eq(items.householdId, householdId),
+      eq(items.locationId, locationId),
+      eq(items.status, ITEM_STATUS.Active),
+      isNull(items.deletedAt),
+    );
   }
 }

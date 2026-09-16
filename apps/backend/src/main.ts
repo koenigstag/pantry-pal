@@ -3,10 +3,16 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { API_BASE_PATH, API_PREFIX, API_VERSION, PANTRY_WS_NAMESPACE } from '@pantry-pal/shared';
+import {
+  API_BASE_PATH,
+  API_PREFIX,
+  API_VERSION,
+  DEV_USER_HEADER,
+  PANTRY_WS_NAMESPACE,
+} from '@pantry-pal/shared';
 
 import { AppModule } from './app.module';
-import { PantryIoAdapter } from './pantry/io-adapter';
+import { PantryIoAdapter } from './realtime/io-adapter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
@@ -41,6 +47,12 @@ async function bootstrap(): Promise<void> {
   logger.log(`HTTP      http://localhost:${port}${API_BASE_PATH}`);
   logger.log(`WebSocket ws://localhost:${port}${PANTRY_WS_NAMESPACE}`);
   logger.log(`CORS      ${corsOrigins.join(', ') || '(none configured)'}`);
+  logger.log(
+    `Identity  ${config.get<boolean>('auth.devIdentity') === true ? `dev header (${DEV_USER_HEADER})` : 'none configured'}`,
+  );
+  logger.log(
+    `Admin API ${config.get<string>('admin.apiKey') === undefined ? 'disabled' : 'enabled'}`,
+  );
 }
 
 void bootstrap();

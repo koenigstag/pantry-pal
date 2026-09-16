@@ -7,7 +7,8 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Nine tables, repositories, the transaction layer and seed data are in place.
+Ten tables, the transaction layer, seed data, and repositories for users,
+households, members, locations, items, item events, units and app settings.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -15,8 +16,10 @@ constraint, the `lower(name)` expression indexes and the partial indexes all
 execute as written, and a rollback correctly unwinds writes made through two
 separate repositories.
 
-Not yet written: the `pg_notify` LISTEN subscriber, and repositories for
-households, locations and products.
+Migration `0001_household_services` adds `app_settings`, soft-deleted locations,
+the composite tenancy foreign key on `items`, and the `deleted` event type.
+
+Not yet written: the `pg_notify` LISTEN subscriber, and a products repository.
 
 ## Commands
 
@@ -91,11 +94,25 @@ These are deliberate. Changing any of them affects the whole workspace.
 
 - **Tenancy** via `households` + `household_members` from day one — not a
   `user_id` column. Retrofitting tenancy later is a rewrite.
+- **Tenancy is enforced by foreign keys, not trusted to callers.** `items`
+  references `locations(household_id, id)` with a composite key, so an item
+  cannot be filed under another household's location. That needs the otherwise
+  redundant `UNIQUE (household_id, id)` on `locations` as its target.
 - **`products` (catalog, barcode) + `items` (a physical batch with its own
   expiry).** One product, many batches.
-- **`locations`** is per-household, seeded Kitchen / Fridge / Freezer / Pantry /
-  Spices / Bathroom / Medicines / Other. Location (_where_) and category (_what_) are
-  separate axes — do not collapse them.
+- **`locations`** is per-household, copied on creation from the
+  `default-locations` setting (code default: Kitchen / Fridge / Freezer /
+  Pantry / Spices / Bathroom / Medicines / Other). Location (_where_) and
+  category (_what_) are separate axes — do not collapse them.
+- **Locations are soft-deleted.** The items foreign key is `RESTRICT` and counts
+  consumed, discarded and soft-deleted rows too, so a hard delete would be
+  impossible for any location that ever held an item. The case-insensitive name
+  index is partial (`WHERE deleted_at IS NULL`), so a deleted name can be reused.
+  `sort_order` is display order, rewritten densely by a reorder.
+- **`app_settings`** is key → jsonb for global, admin-managed values. Untyped
+  here on purpose: keys, value types and defaults live in `@pantry-pal/shared`
+  (`APP_SETTING`), and the backend validates every read and write. A missing row
+  means "use the default", so it needs no seed.
 - **Quantity is three parts** so `1 can 300 ml` can be represented: `quantity` +
   `unit` + `size_value` + `size_unit`. `pcs` is the only count unit; container
   nouns like "can" or "jar" are display-only via `products.package_label`.
@@ -117,6 +134,14 @@ These are deliberate. Changing any of them affects the whole workspace.
 `ALTER TYPE ... ADD VALUE` cannot run in the same transaction that adds it,
 which breaks Drizzle's transactional migrations. Use `text` with a CHECK
 constraint generated from the shared constants, or a lookup table.
+
+### Value sets live in `@pantry-pal/shared`
+
+`HOUSEHOLD_ROLE`, `ITEM_STATUS`, `ITEM_EVENT_TYPE`, `UNIT_KINDS`, `UNIT_SYSTEMS`,
+`UNIT_SYSTEM_PREFERENCES` and `DEFAULT_LOCATIONS` are defined in
+`shared/src/constants.ts` and imported by the schema, never redefined here. The
+request DTOs and the frontend need the same lists the CHECK constraints are
+generated from, and neither can depend on this package.
 
 ### Value sets are const objects, never TS `enum`
 
@@ -145,7 +170,35 @@ throw when accessed through a Proxy.
 `@Transactional()` decorates service methods, modelled on
 `typeorm-transactional`, supporting REQUIRED / REQUIRES_NEW / MANDATORY /
 NESTED. Write it in **legacy decorator form**: the backend sets
-`experimentalDecorators` for Nest, so the two must agree.
+`experimentalDecorators` for Nest, so the two must agree. Use it on service
+methods only: above a Nest route decorator it would replace the function that
+carries the route metadata.
+
+`runOnCommit(callback)` defers a side effect until the outermost transaction
+commits, or runs it at once outside one. It is dropped on rollback, including
+the rollback of a NESTED savepoint; a released savepoint hands its callbacks to
+the enclosing transaction. Callbacks must not throw — the write is durable by
+then. The backend's realtime broadcasts go through it.
+
+Repositories lock rows explicitly where a service reads before it writes
+(`HouseholdsRepository.lock`, `LocationsRepository.lock`, `ItemsRepository.lock`),
+and every `update()` treats an empty patch as a no-op — Drizzle itself throws
+"No values to set" on an empty SET, `$onUpdate` columns notwithstanding.
+
+## Errors
+
+`findPostgresError(error)` walks the `cause` chain (Drizzle wraps driver errors
+in `DrizzleQueryError`) and returns the SQLSTATE, constraint, table and detail.
+It recognises the driver error by shape, so callers need no `pg` import.
+`PG_ERROR` names the codes worth translating.
+
+## Migrations
+
+drizzle-kit orders statements by kind, not by dependency. In `0001` it emitted
+the composite foreign key before the `UNIQUE (household_id, id)` it points at,
+which Postgres rejects; the file is hand-ordered and says so. Read a generated
+migration before applying it, especially when it adds a key and its target
+together.
 
 ## Resolved: the category blocker
 

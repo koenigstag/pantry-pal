@@ -1,9 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
+import { AdminModule } from './admin/admin.module';
+import { AuthModule } from './auth/auth.module';
 import { configuration } from './config/configuration';
+import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
-import { PantryModule } from './pantry/pantry.module';
+import { HouseholdsModule } from './households/households.module';
+import { ItemsModule } from './items/items.module';
+import { LocationsModule } from './locations/locations.module';
+import { ChangeFeedModule } from './realtime/change-feed';
+import { RealtimeModule } from './realtime/realtime.module';
+import { SettingsModule } from './settings/settings.module';
+import { UnitsModule } from './units/units.module';
 
 @Module({
   imports: [
@@ -14,7 +23,16 @@ import { PantryModule } from './pantry/pantry.module';
       // `.env.local` holds developer-specific overrides and is git-ignored.
       envFilePath: ['.env.local', '.env'],
     }),
-    PantryModule,
+    DatabaseModule,
+    ChangeFeedModule,
+    AuthModule,
+    SettingsModule,
+    UnitsModule,
+    HouseholdsModule,
+    LocationsModule,
+    ItemsModule,
+    AdminModule,
+    RealtimeModule,
   ],
   controllers: [HealthController],
 })

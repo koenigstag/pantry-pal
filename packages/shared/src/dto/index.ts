@@ -10,5 +10,10 @@
  */
 import 'reflect-metadata';
 
+export * from './decorators';
+export * from './household.dto';
+export * from './location.dto';
 export * from './pantry-item.dto';
+export * from './settings.dto';
+export * from './unit.dto';
 export * from './validate';

@@ -1,4 +1,4 @@
-import { MAX_ITEM_NAME_LENGTH, PANTRY_CATEGORIES } from '@pantry-pal/shared';
+import { MAX_ITEM_NAME_LENGTH, PANTRY_CATEGORIES, type PantryCategory } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -35,7 +35,7 @@ export const products = pgTable(
      * unit, so this is what keeps "3 cans of beans" from reading "3 pcs".
      */
     packageLabel: text('package_label'),
-    defaultCategory: text('default_category'),
+    defaultCategory: text('default_category').$type<PantryCategory>(),
     defaultUnit: text('default_unit').references(() => units.code, { onDelete: 'restrict' }),
     defaultShelfLifeDays: integer('default_shelf_life_days'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

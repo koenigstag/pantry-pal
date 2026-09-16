@@ -34,15 +34,46 @@ export interface TransactionalOptions {
   isolationLevel?: PgTransactionConfig['isolationLevel'];
 }
 
-const txStorage = new AsyncLocalStorage<Transaction>();
+interface TransactionScope {
+  readonly tx: Transaction;
+  /** Deferred until this scope's transaction commits; see `runOnCommit`. */
+  readonly onCommit: Array<() => void>;
+}
+
+const txStorage = new AsyncLocalStorage<TransactionScope>();
 
 let defaultRoot: Database | undefined;
 
 /** The executor in force right now: the active transaction, else the pool. */
-export const currentExecutor = (fallback: Database): Executor => txStorage.getStore() ?? fallback;
+export const currentExecutor = (fallback: Database): Executor =>
+  txStorage.getStore()?.tx ?? fallback;
 
 /** Whether a transaction is currently in scope. Useful in assertions and tests. */
 export const isTransactionActive = (): boolean => txStorage.getStore() !== undefined;
+
+/**
+ * Runs `callback` once the active transaction commits — or straight away when
+ * none is active, since autocommit has already happened by then.
+ *
+ * This is how a side effect that must never announce a write that did not
+ * happen (a realtime broadcast, say) waits for durability: on rollback the
+ * callback is dropped. Registered inside a NESTED savepoint, it is dropped if
+ * the savepoint rolls back and otherwise waits for the enclosing commit.
+ *
+ * Callbacks run in registration order, after COMMIT has returned. They must not
+ * throw: the write is already durable, and a throw would still surface as a
+ * failure of the call that made it. Catch and report inside the callback.
+ */
+export function runOnCommit(callback: () => void): void {
+  const scope = txStorage.getStore();
+
+  if (scope === undefined) {
+    callback();
+    return;
+  }
+
+  scope.onCommit.push(callback);
+}
 
 /**
  * Wraps a database so that every property access resolves against the active
@@ -58,7 +89,7 @@ export function createTransactionalDatabase(root: Database): Database {
 
   return new Proxy(root, {
     get(target, property) {
-      const active: object = txStorage.getStore() ?? target;
+      const active: object = txStorage.getStore()?.tx ?? target;
       const value: unknown = Reflect.get(active, property, active);
 
       // Bind to the real object, never to the proxy: Drizzle reads private
@@ -89,7 +120,16 @@ export async function runInTransaction<T>(
   }
 
   if (propagation === PROPAGATION.Nested && active !== undefined) {
-    return active.transaction((savepoint) => txStorage.run(savepoint as Transaction, fn));
+    const onCommit: Array<() => void> = [];
+    const result = await active.tx.transaction((savepoint) =>
+      txStorage.run({ tx: savepoint as Transaction, onCommit }, fn),
+    );
+
+    // A released savepoint is not a commit: its callbacks now wait on the
+    // enclosing transaction. Had it rolled back, the await above would have
+    // thrown and they would be dropped with it.
+    active.onCommit.push(...onCommit);
+    return result;
   }
 
   if (propagation === PROPAGATION.Required && active !== undefined) {
@@ -102,10 +142,17 @@ export async function runInTransaction<T>(
     );
   }
 
-  const start = () => root.transaction((tx) => txStorage.run(tx, fn), config);
+  const onCommit: Array<() => void> = [];
+  const start = () => root.transaction((tx) => txStorage.run({ tx, onCommit }, fn), config);
 
   // REQUIRES_NEW must not inherit the outer transaction's connection.
-  return propagation === PROPAGATION.RequiresNew ? txStorage.exit(start) : start();
+  const result = await (propagation === PROPAGATION.RequiresNew ? txStorage.exit(start) : start());
+
+  for (const callback of onCommit) {
+    callback();
+  }
+
+  return result;
 }
 
 /**
