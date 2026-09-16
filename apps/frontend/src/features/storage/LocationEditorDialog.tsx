@@ -45,13 +45,8 @@ import {
 
 interface LocationEditorDialogProps {
   open: boolean;
-  /** Opened from the + beside the tabs: starts with a focused, empty row for a new location. */
-  addingLocation: boolean;
   onClose: () => void;
 }
-
-/** The empty row a dialog opened for adding starts with; rows added later count up from 1. */
-const FIRST_NEW_KEY = 'new-0';
 
 /** Rows only move up and down. */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -82,7 +77,6 @@ function focusName(list: HTMLElement | null, key: string): void {
  */
 export const LocationEditorDialog = observer(function LocationEditorDialog({
   open,
-  addingLocation,
   onClose,
 }: LocationEditorDialogProps): ReactElement {
   const pantry = usePantryStore();
@@ -93,7 +87,7 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
   const [isSaving, setSaving] = useState(false);
   const [isConfirmingDiscard, setConfirmingDiscard] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
-  const nextKey = useRef(1);
+  const nextKey = useRef(0);
   const pendingFocus = useRef<string | null>(null);
   const announcedOver = useRef<UniqueIdentifier | null>(null);
   const limitHintId = useId();
@@ -111,19 +105,14 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
     focusName(listRef.current, key);
   });
 
-  // Runs after the dialog's own effect, whose showModal() focused the first control.
-  useEffect(() => {
-    if (open && addingLocation) focusName(listRef.current, FIRST_NEW_KEY);
-  }, [open, addingLocation]);
-
-  const rows =
-    draft === null
-      ? [...toDraft(pantry.locations), ...(addingLocation ? [newDraftLocation(FIRST_NEW_KEY)] : [])]
-      : rebase(draft, pantry.locations);
+  const rows = draft === null ? toDraft(pantry.locations) : rebase(draft, pantry.locations);
 
   const holdsItems = (locationId: string): boolean => pantry.itemsIn(locationId).length > 0;
   const errors = draftErrors(rows, holdsItems);
   const keepsNone = keptRows(rows).length === 0;
+  const saved = rows.filter((row) => row.id !== null && !row.removed);
+  /** The one saved location left, if only one is: it cannot be deleted. */
+  const onlyKey = saved.length === 1 ? saved[0]?.key : undefined;
   const changed = isChanged(rows, pantry.locations);
   const canAdd = rows.filter((row) => !row.removed).length < MAX_LOCATIONS_PER_HOUSEHOLD;
 
@@ -141,6 +130,7 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
   }
 
   function removeLocation(row: DraftLocation): void {
+    if (row.key === onlyKey) return;
     if (row.id === null) setDraft(rows.filter((candidate) => candidate.key !== row.key));
     else update(row.key, { removed: true });
   }
@@ -209,7 +199,11 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
   const announcements: Announcements = {
     onDragStart: ({ active }) => {
       announcedOver.current = active.id;
-      return messages.locationEditor.pickedUp(nameOf(active.id), positionOf(active.id), rows.length);
+      return messages.locationEditor.pickedUp(
+        nameOf(active.id),
+        positionOf(active.id),
+        rows.length,
+      );
     },
     // Also fires as the drag starts, over the row itself. Announcing that would
     // replace "picked up" before a screen reader got to read it.
@@ -264,6 +258,7 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
                         itemCount={row.id === null ? 0 : pantry.itemsIn(row.id).length}
                         targets={row.removed ? moveTargets(rows, row) : []}
                         target={row.removed ? moveTarget(rows, row) : null}
+                        isOnlyLocation={row.key === onlyKey}
                         disabled={isSaving}
                         onNameChange={(name) => update(row.key, { name })}
                         onRemove={() => removeLocation(row)}
@@ -363,6 +358,8 @@ interface LocationRowProps {
   /** A removed row's choice of where its items go. */
   targets: readonly DraftLocation[];
   target: string | null;
+  /** The last saved location left, which cannot be deleted; new rows do not count. */
+  isOnlyLocation: boolean;
   disabled: boolean;
   onNameChange: (name: string) => void;
   onRemove: () => void;
@@ -376,6 +373,7 @@ function LocationRow({
   itemCount,
   targets,
   target,
+  isOnlyLocation,
   disabled,
   onNameChange,
   onRemove,
@@ -383,6 +381,7 @@ function LocationRow({
   onTargetChange,
 }: LocationRowProps): ReactElement {
   const errorId = useId();
+  const onlyHintId = useId();
   const {
     attributes,
     listeners,
@@ -450,13 +449,22 @@ function LocationRow({
             className="text-ink-muted hover:bg-sunken hover:text-ink"
           />
         ) : (
+          // aria-disabled rather than disabled: it stays focusable and says why.
           <IconButton
             icon={Trash}
             label={messages.locationEditor.remove(name)}
+            title={isOnlyLocation ? messages.locationEditor.keepOne : undefined}
+            aria-disabled={isOnlyLocation || undefined}
+            aria-describedby={isOnlyLocation ? onlyHintId : undefined}
             disabled={disabled}
-            onClick={onRemove}
-            className="text-ink-muted hover:bg-danger-soft hover:text-danger"
+            onClick={isOnlyLocation ? undefined : onRemove}
+            className="text-ink-muted hover:bg-danger-soft hover:text-danger aria-disabled:cursor-not-allowed aria-disabled:hover:bg-transparent aria-disabled:hover:text-ink-muted"
           />
+        )}
+        {isOnlyLocation && (
+          <span id={onlyHintId} className="sr-only">
+            {messages.locationEditor.keepOne}
+          </span>
         )}
       </div>
 

@@ -14,8 +14,8 @@ interface LocationTabsProps {
   link: (locationId: string) => Partial<Path>;
   /** Present while searching: how many matches each location holds. */
   matchCounts: ReadonlyMap<string, number> | null;
-  /** Opens the locations editor with an empty row for the new location. */
-  onAddLocation: () => void;
+  /** Opens the locations editor, where locations are added too. */
+  onEditLocations: () => void;
 }
 
 /**
@@ -30,7 +30,7 @@ export function LocationTabs({
   activeLocationId,
   link,
   matchCounts,
-  onAddLocation,
+  onEditLocations,
 }: LocationTabsProps): ReactElement {
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -83,8 +83,8 @@ export function LocationTabs({
 
       <IconButton
         icon={Plus}
-        label={messages.storage.addLocation}
-        onClick={onAddLocation}
+        label={messages.storage.editLocations}
+        onClick={onEditLocations}
         className="border border-on-accent/40 hover:bg-on-accent/10 md:border-line md:text-ink-muted md:hover:bg-sunken"
       />
     </nav>

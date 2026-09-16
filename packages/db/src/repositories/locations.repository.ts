@@ -6,7 +6,7 @@ import { locations, type LocationRow, type NewLocationRow } from '../schema';
 export type CreateLocationInput = Pick<NewLocationRow, 'name' | 'icon' | 'sortOrder'>;
 export type UpdateLocationInput = Partial<Pick<NewLocationRow, 'name' | 'icon'>>;
 
-/** A location created with an id its caller chose, so it can be placed before the insert returns. */
+/** A location whose id the caller generated, so the caller knows the whole order before inserting. */
 export type CreateLocationWithIdInput = CreateLocationInput & Pick<LocationRow, 'id'>;
 
 /** One location's part of `updateMany`. An omitted field keeps its current value. */

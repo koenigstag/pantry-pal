@@ -17,8 +17,12 @@ pnpm type-check   # tsc --noEmit
 `vite build` only bundles. Type errors surface in `pnpm type-check`, which
 Turborepo runs as its own task — check both before assuming a change is clean.
 
-`strictPort` is on deliberately: silently moving to another port would fall
-outside the backend's CORS allowlist and produce confusing socket failures.
+`strictPort` is on, so a taken port fails loudly instead of Vite moving on by
+itself. Another port works when chosen on purpose: `PORT` sets it, which is how
+the preview in `.claude/launch.json` gets one (`autoPort`). The backend's CORS
+allowlist does not need to list it, because the browser only ever talks to Vite:
+REST and the socket go through the proxy, and the socket uses the `websocket`
+transport, whose upgrade Socket.IO does not check against its `cors` origins.
 
 ## Layout
 
@@ -113,13 +117,16 @@ cycle and doubled bootstrap requests; the resulting console warning is expected.
 
 ### The locations editor
 
-`LocationEditorDialog` opens from ⋮ → Edit locations, and from the `+` beside
-the tabs with an empty row focused (an empty new row is ignored on save). It
+`LocationEditorDialog` opens from the `+` beside the tabs, its only entry point,
+showing the saved locations only; its Add location button appends an
+empty row, which is ignored on save until named. It
 renames, adds, deletes and reorders, then saves everything with **one**
 `PUT .../locations` (`PantryStore.saveLocations`); other clients receive one
 `LocationsUpserted` list, never the intermediate steps. Deleting a location that
 holds items asks where they go (`moveItemsTo`), and the server moves them in the
-same transaction.
+same transaction. The last saved location (a row with an id) cannot be deleted,
+however many new rows are named: its trash button is `aria-disabled` and
+explains why.
 
 The draft lives in the component, not the store, and is **rebased onto
 `pantry.locations` on every render** (`locationDraft.ts`): locations other

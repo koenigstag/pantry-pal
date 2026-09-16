@@ -96,7 +96,6 @@ export const messages = {
     addItem: 'Add item',
     selectAll: 'Select all',
     editLocations: 'Edit locations',
-    addLocation: 'Add location',
     refresh: 'Refresh',
     itemCount: (count: number) => plural(count, { one: '# item', other: '# items' }),
     matchCount: (count: number) => plural(count, { one: '# match', other: '# matches' }),

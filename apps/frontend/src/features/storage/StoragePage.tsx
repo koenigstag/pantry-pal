@@ -1,5 +1,5 @@
 import type { PantryItem } from '@pantry-pal/shared';
-import { CheckCheck, PackagePlus, RefreshCw, SquarePen } from 'lucide-react';
+import { CheckCheck, PackagePlus, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { Navigate, Outlet } from 'react-router';
@@ -25,8 +25,7 @@ type OpenSheet =
   | { kind: 'delete'; itemIds: readonly string[] }
   | { kind: 'move'; itemIds: readonly string[] }
   | { kind: 'add' }
-  /** `adding`: opened from the + beside the tabs, with an empty row ready for a name. */
-  | { kind: 'locations'; adding: boolean };
+  | { kind: 'locations' };
 
 /** A selection belongs to the location it was made in; switching tabs leaves it behind. */
 interface Selection {
@@ -140,12 +139,6 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         }),
     },
     {
-      key: 'edit-locations',
-      label: messages.storage.editLocations,
-      icon: SquarePen,
-      onSelect: () => setSheet({ kind: 'locations', adding: false }),
-    },
-    {
       key: 'refresh',
       label: messages.storage.refresh,
       icon: RefreshCw,
@@ -167,7 +160,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
           activeLocationId={location.id}
           link={params.locationLink}
           matchCounts={matchCounts}
-          onAddLocation={() => setSheet({ kind: 'locations', adding: true })}
+          onEditLocations={() => setSheet({ kind: 'locations' })}
         />
       </StorageHeader>
 
@@ -237,11 +230,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         onClose={closeSheet}
         defaultLocationId={location.id}
       />
-      <LocationEditorDialog
-        open={sheet.kind === 'locations'}
-        addingLocation={sheet.kind === 'locations' && sheet.adding}
-        onClose={closeSheet}
-      />
+      <LocationEditorDialog open={sheet.kind === 'locations'} onClose={closeSheet} />
     </div>
   );
 });

@@ -161,12 +161,16 @@ export class LocationsService {
       );
     }
 
+    if (
+      removals.some(
+        (removal) => removal.moveItemsTo !== undefined && !keptIds.includes(removal.moveItemsTo),
+      )
+    ) {
+      throw new BadRequestException('moveItemsTo must name a location that is kept');
+    }
+
     // Deletions first: they free their names for the renames and additions below.
     for (const removal of removals) {
-      if (removal.moveItemsTo !== undefined && !keptIds.includes(removal.moveItemsTo)) {
-        throw new BadRequestException('moveItemsTo must name a location that is kept');
-      }
-
       // One at a time on purpose: each waits out item writes into its location,
       // and every statement shares the transaction's connection anyway.
       // oxlint-disable-next-line no-await-in-loop
