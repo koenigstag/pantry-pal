@@ -1,5 +1,5 @@
 import type { PantryItem } from '@pantry-pal/shared';
-import { CheckCheck, PackagePlus, RefreshCw } from 'lucide-react';
+import { CheckCheck, PackagePlus, RefreshCw, SquarePen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { Navigate, Outlet } from 'react-router';
@@ -137,6 +137,12 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
           locationId: location.id,
           ids: new Set(visibleItems.map((item) => item.id)),
         }),
+    },
+    {
+      key: 'edit-locations',
+      label: messages.storage.editLocations,
+      icon: SquarePen,
+      onSelect: () => setSheet({ kind: 'locations' }),
     },
     {
       key: 'refresh',

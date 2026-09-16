@@ -2,6 +2,7 @@ import {
   ITEM_STATUS,
   PANTRY_COMMAND,
   PANTRY_EVENT,
+  QUANTITY_UNIT_KIND,
   type CurrentUser,
   type HouseholdDeletedPayload,
   type HouseholdMemberRemovedPayload,
@@ -141,6 +142,18 @@ export class PantryStore {
   /** `fl_oz_us` renders as `fl oz`; an unknown code renders as itself. */
   unitLabel(code: string): string {
     return this.unitsByCode.get(code)?.label ?? code;
+  }
+
+  /**
+   * A unit as it reads after `count`. A count unit is a noun that agrees with it,
+   * `2 cans`; any other unit is its label, `12 fl oz`.
+   */
+  unitName(code: string, count: number): string {
+    const unit = this.unitsByCode.get(code);
+    if (unit === undefined) return code;
+    return unit.kind === QUANTITY_UNIT_KIND
+      ? messages.units.countNoun(code, count, unit.label)
+      : unit.label;
   }
 
   get itemsByLocation(): ReadonlyMap<string, readonly PantryItem[]> {

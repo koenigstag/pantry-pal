@@ -1,4 +1,4 @@
-import { DEFAULT_LOCATIONS } from '@pantry-pal/shared';
+import { DEFAULT_LOCATIONS, withFallbackLocation } from '@pantry-pal/shared';
 
 import { locations, units, type LocationRow, type UnitRow } from './schema';
 import type { Executor } from './transaction';
@@ -15,9 +15,22 @@ import type { Executor } from './transaction';
  * `factor` converts to the base unit for its kind: grams, millilitres, pieces.
  * Nothing reads it yet — conversions are deferred — but the column is here so
  * that adding them later needs no migration and no backfill.
+ *
+ * Count units are what an item is counted in, so containers are units too: a
+ * bottle is one piece. Their labels are the singular noun; the frontend's
+ * message catalog has the plurals, and shows the label for a code it lacks.
  */
 export const UNIT_SEED: readonly UnitRow[] = [
   { code: 'pcs', label: 'pcs', kind: 'count', system: 'both', factor: 1 },
+  { code: 'bag', label: 'bag', kind: 'count', system: 'both', factor: 1 },
+  { code: 'blister', label: 'blister', kind: 'count', system: 'both', factor: 1 },
+  { code: 'bottle', label: 'bottle', kind: 'count', system: 'both', factor: 1 },
+  { code: 'box', label: 'box', kind: 'count', system: 'both', factor: 1 },
+  { code: 'can', label: 'can', kind: 'count', system: 'both', factor: 1 },
+  { code: 'jar', label: 'jar', kind: 'count', system: 'both', factor: 1 },
+  { code: 'pack', label: 'pack', kind: 'count', system: 'both', factor: 1 },
+  { code: 'pill', label: 'pill', kind: 'count', system: 'both', factor: 1 },
+  { code: 'tube', label: 'tube', kind: 'count', system: 'both', factor: 1 },
 
   { code: 'g', label: 'g', kind: 'mass', system: 'metric', factor: 1 },
   { code: 'kg', label: 'kg', kind: 'mass', system: 'metric', factor: 1000 },
@@ -49,6 +62,9 @@ export const UNIT_SEED: readonly UnitRow[] = [
  * `items.unit` is a foreign key into this table, so no item can be written
  * until it has been populated at least once. Accepts a transaction as well as
  * the pool, so it composes into a larger seed.
+ *
+ * Existing codes are left alone, so re-running it only adds the missing ones:
+ * units introduced since, and any an admin deleted.
  */
 export async function seedUnits(db: Executor): Promise<void> {
   await db
@@ -58,8 +74,9 @@ export async function seedUnits(db: Executor): Promise<void> {
 }
 
 /**
- * Gives a household the default starting places. They are ordinary rows, so
- * the user can rename, reorder, delete or add to them straight away.
+ * Gives a household the default starting places, "Other" among them as its
+ * fallback. The rest are ordinary rows, so the user can rename, reorder, delete
+ * or add to them straight away.
  *
  * Re-running it on an existing household only adds defaults introduced since:
  * the unique index on `(household_id, lower(name))` turns every existing name
@@ -67,9 +84,19 @@ export async function seedUnits(db: Executor): Promise<void> {
  * deliberately rather than on every boot.
  */
 export function seedDefaultLocations(db: Executor, householdId: string): Promise<LocationRow[]> {
+  const defaults = withFallbackLocation(DEFAULT_LOCATIONS.map((name) => ({ name, icon: null })));
+
   return db
     .insert(locations)
-    .values(DEFAULT_LOCATIONS.map((name, index) => ({ householdId, name, sortOrder: index })))
+    .values(
+      defaults.map(({ name, icon, isFallback }, index) => ({
+        householdId,
+        name,
+        icon,
+        isFallback,
+        sortOrder: index,
+      })),
+    )
     .onConflictDoNothing()
     .returning();
 }

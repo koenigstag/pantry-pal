@@ -4,6 +4,9 @@ import type { Database } from '../client';
 import { locations, type LocationRow, type NewLocationRow } from '../schema';
 
 export type CreateLocationInput = Pick<NewLocationRow, 'name' | 'icon' | 'sortOrder'>;
+
+/** A location of a household being created, which is where the fallback comes from. */
+export type CreateInitialLocationInput = CreateLocationInput & Pick<NewLocationRow, 'isFallback'>;
 export type UpdateLocationInput = Partial<Pick<NewLocationRow, 'name' | 'icon'>>;
 
 /** A location whose id the caller generated, so the caller knows the whole order before inserting. */
@@ -95,10 +98,33 @@ export class LocationsRepository {
   }
 
   /**
+   * Reads the household's fallback location and share-locks it until the
+   * transaction ends, so it stays put while items are moved into it.
+   */
+  async lockFallback(householdId: string): Promise<LocationRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(locations)
+      .where(
+        and(
+          eq(locations.householdId, householdId),
+          eq(locations.isFallback, true),
+          isNull(locations.deletedAt),
+        ),
+      )
+      .for('share');
+
+    return row;
+  }
+
+  /**
    * Bulk insert for seeding a household. A name that already exists (ignoring
    * case) is skipped rather than failing the batch.
    */
-  createMany(householdId: string, inputs: readonly CreateLocationInput[]): Promise<LocationRow[]> {
+  createMany(
+    householdId: string,
+    inputs: readonly CreateInitialLocationInput[],
+  ): Promise<LocationRow[]> {
     if (inputs.length === 0) return Promise.resolve([]);
 
     return this.db

@@ -13,6 +13,7 @@ import {
   COUNT_UNIT,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
+  QUANTITY_UNIT_KIND,
   type ItemEventType,
   type PantryItem,
 } from '@pantry-pal/shared';
@@ -68,8 +69,8 @@ export class ItemsService {
     const sizeValue = dto.sizeValue ?? null;
     const sizeUnit = dto.sizeUnit ?? null;
 
-    assertSize(dto.unit, sizeValue, sizeUnit);
-    await this.assertUnitsExist([dto.unit, sizeUnit]);
+    assertSizePair(sizeValue, sizeUnit);
+    await this.assertUnits(dto.unit, sizeUnit);
     await this.lockLocation(householdId, dto.locationId);
 
     const row = await this.items.create(householdId, {
@@ -130,12 +131,11 @@ export class ItemsService {
     const changes = diff(before, patch);
     if (Object.keys(changes).length === 0) return toPantryItem(before);
 
-    const unit = patch.unit ?? before.unit;
     const sizeValue = patch.sizeValue === undefined ? before.sizeValue : patch.sizeValue;
     const sizeUnit = patch.sizeUnit === undefined ? before.sizeUnit : patch.sizeUnit;
-    assertSize(unit, sizeValue, sizeUnit);
+    assertSizePair(sizeValue, sizeUnit);
 
-    await this.assertUnitsExist([changes.unit && unit, changes.sizeUnit && sizeUnit]);
+    await this.assertUnits(changes.unit && patch.unit, changes.sizeUnit && sizeUnit);
     if (changes.locationId !== undefined && patch.locationId !== undefined) {
       await this.lockLocation(householdId, patch.locationId);
     }
@@ -183,28 +183,39 @@ export class ItemsService {
     }
   }
 
-  private async assertUnitsExist(codes: ReadonlyArray<string | null | undefined | false>) {
-    const wanted = codes.filter((code): code is string => typeof code === 'string');
-    if (wanted.length === 0) return;
+  /**
+   * That the units exist, and that the quantity is counted in a count unit:
+   * `2 kg` is refused, because `1 bag × 2 kg` is how that is said. Mirrors
+   * `items_unit_count_fk`, so the client gets a message naming its mistake
+   * rather than a constraint name. A unit left `undefined` is not being written.
+   */
+  private async assertUnits(
+    unit: string | undefined,
+    sizeUnit: string | null | undefined,
+  ): Promise<void> {
+    const codes = [unit, sizeUnit].filter((code): code is string => typeof code === 'string');
+    if (codes.length === 0) return;
 
-    const existing = await this.units.findExistingCodes(wanted);
-    const unknown = wanted.filter((code) => !existing.has(code));
+    const kinds = await this.units.findKinds(codes);
+    const unknown = codes.filter((code) => !kinds.has(code));
     if (unknown.length > 0) {
       throw new BadRequestException(`Unknown unit code(s): ${unknown.join(', ')}`);
+    }
+    if (unit !== undefined && kinds.get(unit) !== QUANTITY_UNIT_KIND) {
+      throw new BadRequestException(
+        `unit must be a count unit such as "${COUNT_UNIT}", not "${unit}": a weight or volume goes in sizeValue and sizeUnit`,
+      );
     }
   }
 }
 
 /**
- * Mirrors the `items_size_pair` and `items_size_only_count` constraints, so the
- * client gets a message naming its mistake rather than a constraint name.
+ * Mirrors the `items_size_pair` constraint, so the client gets a message naming
+ * its mistake rather than a constraint name.
  */
-function assertSize(unit: string, sizeValue: number | null, sizeUnit: string | null): void {
+function assertSizePair(sizeValue: number | null, sizeUnit: string | null): void {
   if ((sizeValue === null) !== (sizeUnit === null)) {
     throw new BadRequestException('sizeValue and sizeUnit must be given together');
-  }
-  if (sizeValue !== null && unit !== COUNT_UNIT) {
-    throw new BadRequestException(`sizeValue is only allowed when unit is "${COUNT_UNIT}"`);
   }
 }
 

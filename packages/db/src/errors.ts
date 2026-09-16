@@ -2,6 +2,8 @@
 export const PG_ERROR = {
   UniqueViolation: '23505',
   ForeignKeyViolation: '23503',
+  /** An `ON DELETE RESTRICT` foreign key, which does not report `23503`. */
+  RestrictViolation: '23001',
   NotNullViolation: '23502',
   CheckViolation: '23514',
   StringDataRightTruncation: '22001',

@@ -17,6 +17,13 @@ export function formatNumber(value: number): string {
   return numberFormat.format(value);
 }
 
+const listFormat = new Intl.ListFormat(LOCALE, { style: 'long', type: 'conjunction' });
+
+/** `['Name', 'Notes']` -> `"Name and Notes"`, with the locale's own conjunction. */
+export function formatList(values: readonly string[]): string {
+  return listFormat.format(values);
+}
+
 const calendarDateFormat = new Intl.DateTimeFormat(LOCALE, {
   dateStyle: 'medium',
   timeZone: 'UTC',
@@ -38,7 +45,7 @@ export function formatInstant(isoInstant: string): string {
   return Number.isNaN(date.getTime()) ? isoInstant : instantFormat.format(date);
 }
 
-type PluralForms = { other: string } & Partial<Record<Intl.LDMLPluralRule, string>>;
+export type PluralForms = { other: string } & Partial<Record<Intl.LDMLPluralRule, string>>;
 
 /**
  * Picks the plural form `Intl.PluralRules` selects for `count`, and replaces

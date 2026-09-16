@@ -25,13 +25,18 @@ interface DialogProps {
   onClose: () => void;
   title: string;
   /**
-   * `sheet` rises from the bottom edge on narrow screens and centres on wide ones;
-   * `fullscreen` fills a phone and is a large panel on wide screens, with a header bar.
+   * On a phone a dialog is a sheet or fills the screen:
+   * - `modal` fills a phone, with a header bar, and is a box centred on wide screens;
+   * - `sheet` rises from the bottom edge on narrow screens and centres on wide ones;
+   * - `fullscreen` fills a phone and is a large panel on wide screens, with a header bar on both.
    */
   variant?: DialogVariant;
-  /** `fullscreen` only: replaces the close button at the start of the header. */
+  /** Not for `sheet`: replaces the close button at the start of the header bar. */
   headerStart?: ReactNode;
-  /** `fullscreen` only: actions at the end of the header. */
+  /**
+   * Not for `sheet`: actions at the end of the header bar. A `modal` has the bar
+   * below `md` only, so its content shows the same actions itself from `md` up.
+   */
   headerEnd?: ReactNode;
   /**
    * `fullscreen` only. `center` centres the title on the header itself, not on
@@ -42,7 +47,8 @@ interface DialogProps {
 }
 
 const DIALOG_CLASSES: Record<DialogVariant, string> = {
-  modal: 'm-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg',
+  modal:
+    'm-0 h-dvh max-h-none w-full max-w-none md:m-auto md:h-auto md:max-h-[85dvh] md:w-[calc(100%-2rem)] md:max-w-lg',
   sheet: 'mx-0 mt-auto mb-0 max-h-[85dvh] w-full max-w-none md:m-auto md:max-w-md',
   fullscreen:
     'm-0 h-dvh max-h-none w-full max-w-none md:m-auto md:h-[min(90dvh,52rem)] md:w-[calc(100%-4rem)] md:max-w-5xl',
@@ -75,6 +81,7 @@ export function Dialog({
   const pressStartedOnBackdrop = useRef(false);
   const unmounting = useRef(false);
   const latest = useRef({ open, onClose });
+  const isModal = variant === 'modal';
 
   useLayoutEffect(() => {
     latest.current = { open, onClose };
@@ -144,18 +151,32 @@ export function Dialog({
         DIALOG_CLASSES[variant],
       )}
     >
-      {variant === 'fullscreen' ? (
-        <div className="flex h-full flex-col overflow-hidden bg-surface md:rounded-2xl md:shadow-xl">
+      {variant === 'sheet' ? (
+        <div className="flex max-h-[85dvh] flex-col overflow-y-auto rounded-t-2xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl md:rounded-2xl md:pb-4">
+          <h2 id={titleId} className="mb-3 text-lg font-semibold text-balance">
+            {title}
+          </h2>
+          {children}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            'flex h-full flex-col overflow-hidden bg-surface md:rounded-2xl md:shadow-xl',
+            isModal && 'md:h-auto md:max-h-[85dvh]',
+          )}
+        >
           <header
             className={cn(
-              'min-h-14 shrink-0 items-center gap-2 border-b border-line px-2 pt-[env(safe-area-inset-top)] md:px-3',
+              'min-h-14 shrink-0 items-center gap-2 border-b border-line px-2 pt-[env(safe-area-inset-top)]',
+              // From `md` up a modal is a plain box: the bar folds into a heading.
+              isModal ? 'md:min-h-0 md:border-b-0 md:px-4 md:pt-4' : 'md:px-3',
               titleAlign === 'center'
                 ? // Equal side tracks centre the title; each is at least as wide as its buttons.
                   'grid grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)]'
                 : 'flex',
             )}
           >
-            <div className="flex justify-start">
+            <div className={cn('flex justify-start', isModal && 'md:hidden')}>
               {headerStart ?? (
                 <IconButton
                   icon={X}
@@ -165,34 +186,31 @@ export function Dialog({
                 />
               )}
             </div>
+            {/* Focusable from script only: the place focus goes when the content swaps. */}
             <h2
               id={titleId}
+              tabIndex={-1}
+              data-dialog-title=""
               className={cn(
-                'min-w-0 truncate font-semibold',
+                'min-w-0 truncate font-semibold outline-none',
                 titleAlign === 'center' ? 'text-center' : 'flex-1',
+                isModal && 'md:text-lg md:text-balance md:whitespace-normal',
               )}
             >
               {title}
             </h2>
-            <div className="flex justify-end">{headerEnd}</div>
+            <div className={cn('flex justify-end', isModal && 'md:hidden')}>{headerEnd}</div>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+          <div
+            className={cn(
+              'min-h-0 flex-1 overflow-y-auto overscroll-contain',
+              isModal
+                ? 'flex flex-col p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pt-3 md:pb-4'
+                : 'pb-[env(safe-area-inset-bottom)]',
+            )}
+          >
             {children}
           </div>
-        </div>
-      ) : (
-        <div
-          className={cn(
-            'flex max-h-[85dvh] flex-col overflow-y-auto bg-surface p-4 shadow-xl',
-            variant === 'sheet'
-              ? 'rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] md:rounded-2xl md:pb-4'
-              : 'rounded-2xl',
-          )}
-        >
-          <h2 id={titleId} className="mb-3 text-lg font-semibold text-balance">
-            {title}
-          </h2>
-          {children}
         </div>
       )}
     </dialog>

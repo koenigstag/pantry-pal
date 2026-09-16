@@ -4,10 +4,13 @@ import { and, asc, count, eq, gt, isNull, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '../client';
 import { items, type ItemRow, type NewItemRow } from '../schema';
 
-/** Everything the caller supplies; tenancy and identity are applied by the repository. */
+/**
+ * Everything the caller supplies; tenancy and identity are applied by the
+ * repository, and `unitKind` by the database.
+ */
 export type CreateItemInput = Omit<
   NewItemRow,
-  'id' | 'householdId' | 'createdAt' | 'updatedAt' | 'deletedAt'
+  'id' | 'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
 >;
 
 export type UpdateItemInput = Partial<CreateItemInput>;

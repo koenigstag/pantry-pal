@@ -81,11 +81,18 @@ export class LocationsService {
     return location;
   }
 
+  /** The fallback location keeps its name; its icon can change. */
   async update(
     membership: Membership,
     id: string,
     dto: UpdateLocationDto,
   ): Promise<PantryLocation> {
+    // Being the fallback never changes, so reading it outside a transaction is safe.
+    const current = await this.findLocation(membership.householdId, id);
+    if (current.isFallback && dto.name !== undefined && dto.name !== current.name) {
+      throw fallbackRefused(current, 'renamed');
+    }
+
     const patch = { name: dto.name, icon: dto.icon };
     const row = await this.locations.update(membership.householdId, id, patch);
     if (row === undefined) throw new NotFoundException('Location not found');
@@ -169,6 +176,18 @@ export class LocationsService {
       throw new BadRequestException('moveItemsTo must name a location that is kept');
     }
 
+    // Checked before anything is written, like the rest of the list.
+    for (const removal of removals) {
+      const row = current.get(removal.id);
+      if (row?.isFallback === true) throw fallbackRefused(row, 'deleted');
+    }
+    for (const entry of dto.locations) {
+      const row = entry.id === undefined ? undefined : current.get(entry.id);
+      if (row?.isFallback === true && entry.name !== row.name) {
+        throw fallbackRefused(row, 'renamed');
+      }
+    }
+
     // Deletions first: they free their names for the renames and additions below.
     for (const removal of removals) {
       // One at a time on purpose: each waits out item writes into its location,
@@ -212,12 +231,12 @@ export class LocationsService {
   }
 
   /**
-   * Soft-deletes a location.
+   * Soft-deletes a location. The fallback location cannot be deleted.
    *
-   * Active items have to go somewhere first: with `moveItemsTo` they are moved
-   * (each move recorded in the item's history and broadcast); without it, a
-   * location that still holds any is refused. Consumed and discarded items stay
-   * put — history keeps the place things actually lived.
+   * Active items have to go somewhere first: to `moveItemsTo`, or without it to
+   * the household's fallback location, each move recorded in the item's history
+   * and broadcast. Consumed and discarded items stay put — history keeps the
+   * place things actually lived.
    */
   @Transactional()
   async remove(membership: Membership, id: string, moveItemsTo: string | undefined): Promise<void> {
@@ -229,8 +248,9 @@ export class LocationsService {
   }
 
   /**
-   * Moves a location's active items to `moveItemsTo`, then soft-deletes it.
-   * The caller holds the household lock and announces the deletion itself.
+   * Moves a location's active items to `moveItemsTo`, or to the fallback
+   * location without it, then soft-deletes it. The caller holds the household
+   * lock and announces the deletion itself.
    */
   private async deleteLocation(
     membership: Membership,
@@ -243,6 +263,7 @@ export class LocationsService {
     // and makes new ones wait until the delete commits.
     const location = await this.locations.lock(householdId, id, 'update');
     if (location === undefined) throw new NotFoundException('Location not found');
+    if (location.isFallback) throw fallbackRefused(location, 'deleted');
 
     let target: LocationRow | undefined;
     if (moveItemsTo !== undefined) {
@@ -258,10 +279,12 @@ export class LocationsService {
     const activeItems = await this.items.countActiveInLocation(householdId, id);
 
     if (activeItems > 0) {
+      target ??= await this.locations.lockFallback(householdId);
       if (target === undefined) {
+        // Only a household created without one: every new household gets it.
         throw new ConflictException(
-          `"${location.name}" still holds ${activeItems} active item(s). ` +
-            'Pass moveItemsTo to move them to another location first.',
+          `"${location.name}" still holds ${activeItems} active item(s), and the household has ` +
+            'no fallback location to move them to. Pass moveItemsTo.',
         );
       }
 
@@ -295,4 +318,14 @@ export class LocationsService {
     if (row === undefined) throw new NotFoundException('Location not found');
     return row;
   }
+}
+
+/**
+ * The fallback location is where items go when their location is deleted, so
+ * it has to stay: never renamed, never deleted.
+ */
+function fallbackRefused(location: LocationRow, action: 'renamed' | 'deleted'): ConflictException {
+  return new ConflictException(
+    `"${location.name}" is the household's fallback location and cannot be ${action}`,
+  );
 }

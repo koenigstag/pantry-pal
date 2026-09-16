@@ -1,4 +1,4 @@
-import { toFieldMessages, UpdatePantryItemDto, validateDto } from '@pantry-pal/shared/dto';
+import { UpdatePantryItemDto, validateDto } from '@pantry-pal/shared/dto';
 import { ArrowLeft, SquarePen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react';
@@ -10,15 +10,28 @@ import { Dialog } from '../../ui/Dialog';
 import { NoticeRegion } from '../shell/NoticeRegion';
 import { wasOpenedFromList, type StorageOutletContext } from './itemDetailsNavigation';
 import { ItemDetailsView } from './ItemDetailsView';
-import { sizeErrors, toDraft, toPatch, todayIsoDate, type ItemDraft } from './itemDraft';
+import {
+  rebaseDraft,
+  ruleErrors,
+  toDraft,
+  toPatch,
+  todayIsoDate,
+  type DraftField,
+  type ItemDraft,
+} from './itemDraft';
 import { ItemEditForm } from './ItemEditForm';
+import { itemFieldErrors } from './itemFieldErrors';
 import { useStorageParams } from './useStorageParams';
 
 interface EditState {
-  /** The item as the form first showed it: the patch is what changed since. */
+  /** The item as the form last saw it: the patch is what the user changed since. */
   base: ItemDraft;
+  /** The `updatedAt` of the item `base` was taken from. */
+  baseVersion: string;
   draft: ItemDraft;
   errors: Readonly<Record<string, string>>;
+  /** Fields another member changed differently while the form was open. */
+  conflicts: readonly DraftField[];
 }
 
 /**
@@ -28,10 +41,11 @@ interface EditState {
  * The URL makes the back button close it and a reload keep it open. Closing
  * pops the history entry the card's link pushed, or replaces the URL when the
  * details were opened directly. While the edit form has unsaved changes, any
- * way out — Escape, the backdrop, Cancel, the back button — asks first.
+ * way out — Escape, the backdrop, Back, the browser's back button — asks first.
  *
  * Nothing here is optimistic: a save waits for the server and shows its error
- * in the dialog, which covers the page's notices.
+ * in the dialog, which covers the page's notices. A save made elsewhere while
+ * the form is open flows into every field the user has not touched.
  */
 export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactElement | null {
   const pantry = usePantryStore();
@@ -41,6 +55,7 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const formId = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -49,6 +64,7 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
   const closing = useRef(false);
 
   const item = pantry.items.find((candidate) => candidate.id === params.itemId);
+  const isEditing = edit !== null;
   const isDirty =
     item !== undefined && edit !== null && Object.keys(toPatch(edit.base, edit.draft)).length > 0;
   const blocker = useBlocker(isDirty);
@@ -70,17 +86,58 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
     if (isGone) close();
   });
 
+  // Switching modes replaces the content that had focus. A keyboard or mouse user
+  // continues in the form's first field; on a touch screen that would pop the
+  // keyboard up, so focus goes to the title, which also tells a screen reader
+  // where it is.
+  const shownMode = useRef(isEditing);
+  useEffect(() => {
+    if (shownMode.current === isEditing) return;
+    shownMode.current = isEditing;
+
+    const dialog = contentRef.current?.closest('dialog');
+    const firstField = dialog?.querySelector<HTMLElement>('form :is(input, select, textarea)');
+    if (isEditing && firstField && window.matchMedia('(pointer: fine)').matches) {
+      firstField.focus();
+    } else {
+      dialog?.querySelector<HTMLElement>('[data-dialog-title]')?.focus();
+    }
+  }, [isEditing]);
+
   if (item === undefined) return null;
+
+  // Another member saved this item while the form is open. Adjusting state during
+  // render, as React allows, keeps the form from ever showing the stale copy.
+  if (edit !== null && edit.baseVersion !== item.updatedAt) {
+    const next = toDraft(item, quantities.quantityOf(item));
+    const rebased = rebaseDraft(edit.base, edit.draft, next);
+    setEdit({
+      ...edit,
+      base: next,
+      baseVersion: item.updatedAt,
+      draft: rebased.draft,
+      conflicts: [...new Set([...edit.conflicts, ...rebased.conflicts])],
+    });
+  }
 
   const startEditing = (): void => {
     const base = toDraft(item, quantities.quantityOf(item));
-    setEdit({ base, draft: base, errors: {} });
+    setEdit({ base, baseVersion: item.updatedAt, draft: base, errors: {}, conflicts: [] });
     setServerError(null);
   };
 
   const cancelEditing = (): void => {
     if (isDirty) setConfirmingCancel(true);
     else setEdit(null);
+  };
+
+  const focusFirstInvalidField = (): void => {
+    requestAnimationFrame(() => {
+      contentRef.current
+        ?.closest('dialog')
+        ?.querySelector<HTMLElement>('form [aria-invalid="true"]')
+        ?.focus();
+    });
   };
 
   const save = async (): Promise<void> => {
@@ -92,14 +149,15 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
       return;
     }
 
-    // The same DTO the server enforces, plus the size-pair rule it checks separately.
+    // The same DTO the server enforces, plus the rules it cannot state.
     const result = validateDto(UpdatePantryItemDto, patch);
     const errors = {
-      ...(result.ok ? {} : toFieldMessages(result.errors)),
-      ...sizeErrors(edit.draft),
+      ...(result.ok ? {} : itemFieldErrors(result.errors, 0)),
+      ...ruleErrors(edit.draft),
     };
     if (!result.ok || Object.keys(errors).length > 0) {
       setEdit({ ...edit, errors });
+      focusFirstInvalidField();
       return;
     }
 
@@ -169,43 +227,48 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
             {messages.itemDetails.edit}
           </button>
         ) : (
+          // Enabled only with something to save; a disabled default button also
+          // stops Enter from submitting an unchanged form.
           <button
             type="submit"
             form={formId}
-            disabled={isBusy}
-            className="focus-ring h-10 cursor-pointer rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isBusy || !isDirty}
+            className="focus-ring h-10 cursor-pointer rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isBusy ? messages.itemDetails.saving : messages.itemDetails.save}
           </button>
         )
       }
     >
-      {serverError !== null && (
-        <p
-          role="alert"
-          className="mx-4 mt-4 rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger md:mx-6"
-        >
-          {serverError}
-        </p>
-      )}
+      <div ref={contentRef} className="contents">
+        {serverError !== null && (
+          <p
+            role="alert"
+            className="mx-4 mt-4 rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger md:mx-6"
+          >
+            {serverError}
+          </p>
+        )}
 
-      {edit === null ? (
-        <ItemDetailsView
-          item={item}
-          isBusy={isBusy}
-          onMarkOpened={() => void markOpened()}
-          onRemove={openRemoveSheet}
-        />
-      ) : (
-        <ItemEditForm
-          id={formId}
-          draft={edit.draft}
-          errors={edit.errors}
-          disabled={isBusy}
-          onChange={(draft) => setEdit({ ...edit, draft })}
-          onSubmit={() => void save()}
-        />
-      )}
+        {edit === null ? (
+          <ItemDetailsView
+            item={item}
+            isBusy={isBusy}
+            onMarkOpened={() => void markOpened()}
+            onRemove={openRemoveSheet}
+          />
+        ) : (
+          <ItemEditForm
+            id={formId}
+            draft={edit.draft}
+            errors={edit.errors}
+            conflicts={edit.conflicts}
+            disabled={isBusy}
+            onChange={(draft) => setEdit({ ...edit, draft })}
+            onSubmit={() => void save()}
+          />
+        )}
+      </div>
 
       <NoticeRegion placement="dialog" />
 

@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { MAX_LOCATION_NAME_LENGTH, MAX_LOCATIONS_PER_HOUSEHOLD } from '@pantry-pal/shared';
 import { UpsertLocationsDto, validateDto } from '@pantry-pal/shared/dto';
-import { GripVertical, Plus, Trash, Undo2 } from 'lucide-react';
+import { GripVertical, Lock, Plus, Trash, Undo2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactElement } from 'react';
 
@@ -32,7 +32,6 @@ import { IconButton } from '../../ui/IconButton';
 import {
   draftErrors,
   isChanged,
-  keptRows,
   moveTarget,
   moveTargets,
   newDraftLocation,
@@ -51,6 +50,9 @@ interface LocationEditorDialogProps {
 /** Rows only move up and down. */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 const MODIFIERS = [restrictToVerticalAxis];
+
+const SAVE_BUTTON =
+  'focus-ring h-10 cursor-pointer rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60';
 
 const ERROR_MESSAGES: Record<Exclude<DraftError, 'nowhereToMove'>, string> = {
   required: messages.locationEditor.nameRequired,
@@ -73,7 +75,8 @@ function focusName(list: HTMLElement | null, key: string): void {
  * The draft is rebased onto the store's locations on every render: whatever
  * other members change while the editor is open shows up in it, and a save the
  * server refuses as stale needs nothing more than a second try. Deleting a
- * location that still holds items asks where they should go.
+ * location that still holds items asks where they should go, the fallback
+ * location ("Other") first; that one can only be reordered.
  */
 export const LocationEditorDialog = observer(function LocationEditorDialog({
   open,
@@ -91,6 +94,7 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
   const pendingFocus = useRef<string | null>(null);
   const announcedOver = useRef<UniqueIdentifier | null>(null);
   const limitHintId = useId();
+  const formId = useId();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -109,10 +113,6 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
 
   const holdsItems = (locationId: string): boolean => pantry.itemsIn(locationId).length > 0;
   const errors = draftErrors(rows, holdsItems);
-  const keepsNone = keptRows(rows).length === 0;
-  const saved = rows.filter((row) => row.id !== null && !row.removed);
-  /** The one saved location left, if only one is: it cannot be deleted. */
-  const onlyKey = saved.length === 1 ? saved[0]?.key : undefined;
   const changed = isChanged(rows, pantry.locations);
   const canAdd = rows.filter((row) => !row.removed).length < MAX_LOCATIONS_PER_HOUSEHOLD;
 
@@ -130,7 +130,7 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
   }
 
   function removeLocation(row: DraftLocation): void {
-    if (row.key === onlyKey) return;
+    if (row.isFallback) return;
     if (row.id === null) setDraft(rows.filter((candidate) => candidate.key !== row.key));
     else update(row.key, { removed: true });
   }
@@ -171,7 +171,6 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
       focusName(listRef.current, firstInvalid.key);
       return;
     }
-    if (keepsNone) return;
 
     // The DTO the server enforces has the last word on what is sent.
     const result = validateDto(UpsertLocationsDto, toUpsertLocations(rows, holdsItems));
@@ -220,11 +219,22 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
   };
 
   return (
-    <Dialog open={open} onClose={requestClose} title={messages.locationEditor.title}>
+    <Dialog
+      open={open}
+      onClose={requestClose}
+      title={messages.locationEditor.title}
+      // On a phone the dialog fills the screen and this takes the buttons' place.
+      headerEnd={
+        <button type="submit" form={formId} disabled={isSaving} className={SAVE_BUTTON}>
+          {isSaving ? messages.locationEditor.saving : messages.locationEditor.save}
+        </button>
+      }
+    >
       {open && (
         <>
           {/* noValidate: the checks below and the shared DTO decide what is valid. */}
           <form
+            id={formId}
             noValidate
             onSubmit={(event) => void save(event)}
             className="flex min-h-0 flex-col gap-3"
@@ -258,7 +268,6 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
                         itemCount={row.id === null ? 0 : pantry.itemsIn(row.id).length}
                         targets={row.removed ? moveTargets(rows, row) : []}
                         target={row.removed ? moveTarget(rows, row) : null}
-                        isOnlyLocation={row.key === onlyKey}
                         disabled={isSaving}
                         onNameChange={(name) => update(row.key, { name })}
                         onRemove={() => removeLocation(row)}
@@ -291,18 +300,14 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
               )}
             </div>
 
-            {showErrors && keepsNone && (
-              <p role="alert" className="text-sm text-danger">
-                {messages.locationEditor.keepOne}
-              </p>
-            )}
             {serverError !== null && (
               <p role="alert" className="rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger">
                 {serverError}
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
+            {/* From `md` up; a phone has these in the header bar. */}
+            <div className="hidden justify-end gap-2 md:flex">
               <button
                 type="button"
                 onClick={requestClose}
@@ -310,11 +315,7 @@ export const LocationEditorDialog = observer(function LocationEditorDialog({
               >
                 {messages.common.cancel}
               </button>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="focus-ring h-10 cursor-pointer rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <button type="submit" disabled={isSaving} className={SAVE_BUTTON}>
                 {isSaving ? messages.locationEditor.saving : messages.locationEditor.save}
               </button>
             </div>
@@ -358,8 +359,6 @@ interface LocationRowProps {
   /** A removed row's choice of where its items go. */
   targets: readonly DraftLocation[];
   target: string | null;
-  /** The last saved location left, which cannot be deleted; new rows do not count. */
-  isOnlyLocation: boolean;
   disabled: boolean;
   onNameChange: (name: string) => void;
   onRemove: () => void;
@@ -373,7 +372,6 @@ function LocationRow({
   itemCount,
   targets,
   target,
-  isOnlyLocation,
   disabled,
   onNameChange,
   onRemove,
@@ -381,7 +379,7 @@ function LocationRow({
   onTargetChange,
 }: LocationRowProps): ReactElement {
   const errorId = useId();
-  const onlyHintId = useId();
+  const fallbackHintId = useId();
   const {
     attributes,
     listeners,
@@ -426,6 +424,15 @@ function LocationRow({
           <span className="min-w-0 flex-1 truncate px-3 text-sm text-ink-muted line-through">
             {name}
           </span>
+        ) : row.isFallback ? (
+          // Read-only rather than plain text: a screen reader says so, and why.
+          <input
+            value={row.name}
+            readOnly
+            aria-label={messages.locationEditor.name}
+            aria-describedby={fallbackHintId}
+            className={cn(FIELD_CONTROL, 'min-w-0 flex-1 bg-sunken text-ink-muted')}
+          />
         ) : (
           <input
             value={row.name}
@@ -448,25 +455,27 @@ function LocationRow({
             onClick={onRestore}
             className="text-ink-muted hover:bg-sunken hover:text-ink"
           />
+        ) : row.isFallback ? (
+          // Where the delete button would be, so the rows line up.
+          <span className="flex size-10 shrink-0 items-center justify-center text-ink-muted">
+            <Lock aria-hidden="true" className="size-4" />
+          </span>
         ) : (
-          // aria-disabled rather than disabled: it stays focusable and says why.
           <IconButton
             icon={Trash}
             label={messages.locationEditor.remove(name)}
-            title={isOnlyLocation ? messages.locationEditor.keepOne : undefined}
-            aria-disabled={isOnlyLocation || undefined}
-            aria-describedby={isOnlyLocation ? onlyHintId : undefined}
             disabled={disabled}
-            onClick={isOnlyLocation ? undefined : onRemove}
-            className="text-ink-muted hover:bg-danger-soft hover:text-danger aria-disabled:cursor-not-allowed aria-disabled:hover:bg-transparent aria-disabled:hover:text-ink-muted"
+            onClick={onRemove}
+            className="text-ink-muted hover:bg-danger-soft hover:text-danger"
           />
         )}
-        {isOnlyLocation && (
-          <span id={onlyHintId} className="sr-only">
-            {messages.locationEditor.keepOne}
-          </span>
-        )}
       </div>
+
+      {row.isFallback && (
+        <p id={fallbackHintId} className="ps-11 pe-11 pt-1 pb-1 text-xs text-ink-muted">
+          {messages.locationEditor.fallbackHint}
+        </p>
+      )}
 
       {row.removed && (
         <div className="ps-11 pe-11 pb-2 text-sm text-ink-muted">

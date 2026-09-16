@@ -86,8 +86,8 @@ export class RemoveLocationEntryDto {
   id!: string;
 
   /**
-   * Where its active items go: required while it holds any, and it must be a
-   * location that stays, listed by id in `locations`.
+   * Where its active items go: a location that stays, listed by id in
+   * `locations`. Omitted: the household's fallback location.
    */
   @IsOmittable()
   @IsUUID()
@@ -135,8 +135,8 @@ export class UpsertLocationsDto {
 
 export class DeleteLocationQueryDto {
   /**
-   * Where the location's active items go. Required when it still holds any;
-   * consumed and discarded history keeps pointing at the deleted location.
+   * Where the location's active items go; omitted, the household's fallback
+   * location. Consumed and discarded history keeps pointing at the deleted one.
    */
   @IsOptional()
   @IsUUID()

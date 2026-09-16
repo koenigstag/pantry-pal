@@ -2,8 +2,8 @@
  * `0.5, 'kg'` -> `"0.5 kg"`; `3, 'pcs'` -> `"3 pcs"`.
  *
  * Takes the unit's display label, not its code: `fl_oz_us` renders as `fl oz`.
- * Container nouns ("3 cans") belong to `products.package_label`, not to a unit,
- * so nothing is pluralised here.
+ * Nothing is pluralised here, so `3 can` stays singular: the frontend's message
+ * catalog owns the plural nouns of count units.
  */
 export function formatQuantity(quantity: number, unitLabel: string): string {
   return `${quantity} ${unitLabel}`;

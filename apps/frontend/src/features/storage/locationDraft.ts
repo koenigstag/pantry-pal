@@ -15,6 +15,8 @@ export interface DraftLocation {
   removed: boolean;
   /** Where a removed location's items go, once the user has picked a location. */
   moveItemsTo: string | null;
+  /** The household's fallback location: it cannot be renamed or removed. */
+  isFallback: boolean;
 }
 
 export type DraftError = 'required' | 'duplicate' | 'nowhereToMove';
@@ -27,6 +29,7 @@ function fromLocation(location: PantryLocation): DraftLocation {
     savedName: location.name,
     removed: false,
     moveItemsTo: null,
+    isFallback: location.isFallback,
   };
 }
 
@@ -35,7 +38,15 @@ export function toDraft(locations: readonly PantryLocation[]): DraftLocation[] {
 }
 
 export function newDraftLocation(key: string): DraftLocation {
-  return { key, id: null, name: '', savedName: null, removed: false, moveItemsTo: null };
+  return {
+    key,
+    id: null,
+    name: '',
+    savedName: null,
+    removed: false,
+    moveItemsTo: null,
+    isFallback: false,
+  };
 }
 
 /** A new row nobody has typed a name into: ignored, as if it were not there. */
@@ -109,10 +120,18 @@ export function moveTargets(draft: readonly DraftLocation[], row: DraftLocation)
   );
 }
 
-/** The user's pick while it is still possible, otherwise the first saved location that stays. */
+/**
+ * The user's pick while it is still possible, otherwise the fallback location —
+ * where the server would put the items anyway — or the first saved one that stays.
+ */
 export function moveTarget(draft: readonly DraftLocation[], row: DraftLocation): string | null {
   const targets = moveTargets(draft, row);
-  return targets.find((target) => target.id === row.moveItemsTo)?.id ?? targets[0]?.id ?? null;
+  return (
+    targets.find((target) => target.id === row.moveItemsTo)?.id ??
+    targets.find((target) => target.isFallback)?.id ??
+    targets[0]?.id ??
+    null
+  );
 }
 
 /**

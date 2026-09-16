@@ -4,15 +4,16 @@ import {
   PANTRY_CATEGORIES,
   type PantryCategory,
 } from '@pantry-pal/shared';
-import { CreatePantryItemDto, toFieldMessages, validateDto } from '@pantry-pal/shared/dto';
+import { CreatePantryItemDto, validateDto } from '@pantry-pal/shared/dto';
 import { observer } from 'mobx-react-lite';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useId, useState, type FormEvent, type ReactElement } from 'react';
 
 import { messages } from '../../i18n/messages';
 import { usePantryStore } from '../../stores/StoreContext';
 import { Dialog } from '../../ui/Dialog';
 import { Field, FIELD_CONTROL } from '../../ui/Field';
-import { pickerUnits } from './itemDraft';
+import { isQuantityUnit, nounCount, pickerUnits } from './itemDraft';
+import { itemFieldErrors } from './itemFieldErrors';
 
 interface AddItemDialogProps {
   open: boolean;
@@ -20,6 +21,9 @@ interface AddItemDialogProps {
   /** The location shown when the dialog opened; the user may pick another. */
   defaultLocationId: string;
 }
+
+const SUBMIT_BUTTON =
+  'focus-ring h-10 cursor-pointer rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60';
 
 const EMPTY_DRAFT = {
   name: '',
@@ -41,9 +45,12 @@ export const AddItemDialog = observer(function AddItemDialog({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
+  const formId = useId();
 
   const locationId = chosenLocationId ?? defaultLocationId;
-  const units = pickerUnits(pantry.units, pantry.user?.unitSystem, [draft.unit]);
+  const units = pickerUnits(pantry.units, pantry.user?.unitSystem, draft.unit).filter(
+    isQuantityUnit,
+  );
 
   function close(): void {
     setDraft(EMPTY_DRAFT);
@@ -69,7 +76,7 @@ export const AddItemDialog = observer(function AddItemDialog({
     });
 
     if (!result.ok) {
-      setFieldErrors(toFieldMessages(result.errors));
+      setFieldErrors(itemFieldErrors(result.errors, 1));
       return;
     }
 
@@ -84,9 +91,20 @@ export const AddItemDialog = observer(function AddItemDialog({
   }
 
   return (
-    <Dialog open={open} onClose={close} title={messages.addItem.title}>
+    <Dialog
+      open={open}
+      onClose={close}
+      title={messages.addItem.title}
+      // On a phone the dialog fills the screen and this takes the buttons' place.
+      headerEnd={
+        <button type="submit" form={formId} disabled={isSubmitting} className={SUBMIT_BUTTON}>
+          {isSubmitting ? messages.addItem.submitting : messages.addItem.submitShort}
+        </button>
+      }
+    >
       {/* noValidate: the shared DTO is the single source of validation truth. */}
       <form
+        id={formId}
         noValidate
         onSubmit={(event) => void handleSubmit(event)}
         className="grid grid-cols-2 gap-3"
@@ -129,7 +147,7 @@ export const AddItemDialog = observer(function AddItemDialog({
             >
               {units.map((unit) => (
                 <option key={unit.code} value={unit.code}>
-                  {unit.label}
+                  {pantry.unitName(unit.code, nounCount(draft.quantity))}
                 </option>
               ))}
             </select>
@@ -194,7 +212,8 @@ export const AddItemDialog = observer(function AddItemDialog({
           </p>
         )}
 
-        <div className="col-span-2 mt-2 flex justify-end gap-2">
+        {/* From `md` up; a phone has these in the header bar. */}
+        <div className="col-span-2 mt-2 hidden justify-end gap-2 md:flex">
           <button
             type="button"
             onClick={close}
@@ -202,11 +221,7 @@ export const AddItemDialog = observer(function AddItemDialog({
           >
             {messages.common.cancel}
           </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="focus-ring h-10 cursor-pointer rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <button type="submit" disabled={isSubmitting} className={SUBMIT_BUTTON}>
             {isSubmitting ? messages.addItem.submitting : messages.addItem.submit}
           </button>
         </div>

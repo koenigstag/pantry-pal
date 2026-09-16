@@ -92,6 +92,13 @@ Household-scoped service methods take a `Membership`, never a bare household id,
 so they cannot be reached without the check. Owners manage the household and its
 members; any member manages locations and items.
 
+**Every household has a fallback location**, "Other", created with it
+(`withFallbackLocation`). Deleting a location — `DELETE ...?moveItemsTo=` or a
+`removed` entry of the editor's `PUT` — moves its active items to `moveItemsTo`,
+or to the fallback when that is omitted. The fallback itself can be reordered and
+re-iconed but never renamed or deleted (409); the database backs the delete rule
+with `locations_fallback_not_deleted`.
+
 ## Request flow
 
 ```
@@ -162,7 +169,8 @@ foreign-key violations become 409, check/not-null/invalid-input become 400,
 anything else stays a 500. `DatabaseExceptionFilter` applies it to HTTP as an
 `APP_FILTER`. **Global filters do not run for gateways in Nest 12**, so
 `WsExceptionFilter` calls the same function itself. Services still check the
-common cases up front (unknown unit, foreign location, size rules) for precise
+common cases up front (unknown unit, a quantity unit that is not a count unit, a
+unit's kind changing while in use, foreign location, size pair) for precise
 messages; the translation is the safety net for races.
 
 DTOs come from `@pantry-pal/shared/dto` and must be imported **as values** in

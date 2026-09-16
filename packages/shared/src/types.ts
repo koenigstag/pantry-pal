@@ -82,6 +82,11 @@ export interface PantryLocation {
   icon: string | null;
   /** Ascending. Dense (0..n-1) after a reorder; new locations append. */
   sortOrder: number;
+  /**
+   * The household's one fallback location ("Other"): it cannot be renamed or
+   * deleted, and a deleted location's items move to it unless told otherwise.
+   */
+  isFallback: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -97,9 +102,9 @@ export interface PantryItem {
   category: PantryCategory;
   /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
   quantity: number;
-  /** A `Unit.code`. */
+  /** The `Unit.code` of a count unit: what is counted, such as `pcs`, `bottle` or `can`. */
   unit: string;
-  /** What is inside one `pcs`, e.g. `300` for a 300 ml can. Only with `unit: 'pcs'`. */
+  /** What is inside one, e.g. `300` for a 300 ml can. A unit of any kind. */
   sizeValue: number | null;
   sizeUnit: string | null;
   /** The printed date, `YYYY-MM-DD`. */

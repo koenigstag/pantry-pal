@@ -43,7 +43,7 @@ export const ItemCard = observer(function ItemCard({
   const quantities = useQuantities();
   const nameId = useId();
 
-  const amount = amountText(item, quantities.quantityOf(item), pantry.unitLabel);
+  const amount = amountText(item, quantities.quantityOf(item), pantry.unitName);
 
   return (
     <article
@@ -84,7 +84,8 @@ export const ItemCard = observer(function ItemCard({
       </h3>
 
       {/* mt-auto: the amount and the stepper sit at the bottom, level across a row however long the names. */}
-      <p className="mt-auto truncate pt-0.5 text-xs text-ink-muted">{amount}</p>
+      {/* Two lines rather than an ellipsis, which would hide the size: `2 blisters` / `× 10 pills`. */}
+      <p className="mt-auto line-clamp-2 pt-0.5 text-xs break-words text-ink-muted">{amount}</p>
 
       <QuantityStepper item={item} onRemove={onRemove} className="relative z-10 pt-2" />
     </article>

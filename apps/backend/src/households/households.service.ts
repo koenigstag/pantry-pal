@@ -5,7 +5,12 @@ import {
   LocationsRepository,
   Transactional,
 } from '@pantry-pal/db';
-import { APP_SETTING, HOUSEHOLD_ROLE, type UserHousehold } from '@pantry-pal/shared';
+import {
+  APP_SETTING,
+  HOUSEHOLD_ROLE,
+  withFallbackLocation,
+  type UserHousehold,
+} from '@pantry-pal/shared';
 import type { CreateHouseholdDto, UpdateHouseholdDto } from '@pantry-pal/shared/dto';
 
 import type { AuthenticatedUser, Membership } from '../common/request-context';
@@ -38,7 +43,8 @@ export class HouseholdsService {
 
   /**
    * The creator becomes the owner, and the default locations in force right now
-   * are copied in. Later changes to the defaults do not reach this household.
+   * are copied in, with the fallback location among them. Later changes to the
+   * defaults do not reach this household.
    */
   @Transactional()
   async create(user: AuthenticatedUser, dto: CreateHouseholdDto): Promise<UserHousehold> {
@@ -53,7 +59,12 @@ export class HouseholdsService {
     const defaults = await this.settings.get(APP_SETTING.DefaultLocations);
     await this.locations.createMany(
       household.id,
-      defaults.locations.map(({ name, icon }, index) => ({ name, icon, sortOrder: index })),
+      withFallbackLocation(defaults.locations).map(({ name, icon, isFallback }, index) => ({
+        name,
+        icon,
+        isFallback,
+        sortOrder: index,
+      })),
     );
 
     const owner = await this.members.find(household.id, user.id);

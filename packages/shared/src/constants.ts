@@ -89,8 +89,19 @@ export const UNIT_KINDS = ['mass', 'volume', 'count'] as const;
 export const UNIT_SYSTEMS = ['metric', 'imperial', 'both'] as const;
 
 /**
- * The only count unit. The `items_size_only_count` CHECK names it, so it can be
- * neither deleted nor reclassified.
+ * The kind of every unit an item is counted in — `pcs`, `bottle`, `can` — as
+ * opposed to its size, which may be of any kind: `2 cans × 400 g`. Loose goods
+ * are counted too, in what holds them: `1 bag × 2 kg` of rice.
+ *
+ * The database enforces it: `items.unit` references a unit's code and kind
+ * together, with the kind pinned to this value.
+ */
+export const QUANTITY_UNIT_KIND = 'count' satisfies (typeof UNIT_KINDS)[number];
+
+/**
+ * Plain pieces: the unit a new item starts in, and the one count unit with no
+ * noun of its own, so `2 × 400 g` needs no `pcs`. It can be neither deleted nor
+ * reclassified.
  */
 export const COUNT_UNIT = 'pcs';
 
@@ -123,6 +134,13 @@ export const ITEM_EVENT_TYPE = {
 export const ITEM_EVENT_TYPES = Object.values(ITEM_EVENT_TYPE);
 
 /**
+ * The name of every household's fallback location: the one that can be neither
+ * renamed nor deleted, and where a deleted location's items go when nobody says
+ * otherwise. A household gets it on creation (see `withFallbackLocation`).
+ */
+export const FALLBACK_LOCATION_NAME = 'Other';
+
+/**
  * The code-level fallback for the `default-locations` setting (see
  * `APP_SETTING_DEFAULTS`). An admin can override it at runtime; a new household
  * copies whichever is in force.
@@ -140,7 +158,7 @@ export const DEFAULT_LOCATIONS = [
   'Bathroom',
   'Medicines',
   /** Last, like `'other'` in PANTRY_CATEGORIES: the catch-all for anything unplaced. */
-  'Other',
+  FALLBACK_LOCATION_NAME,
 ] as const;
 
 /** An item within this many days of its expiry date counts as "expiring soon". */

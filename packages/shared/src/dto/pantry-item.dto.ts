@@ -37,8 +37,8 @@ import { IsIsoDate, IsOmittable, Trim } from './decorators';
  * shared package is bundled with esbuild, which does not emit design-time types.
  *
  * What a DTO cannot express is checked by the server: that `locationId` belongs
- * to the household, that unit codes exist, and that `sizeValue`/`sizeUnit` come
- * as a pair and only with `unit: 'pcs'`.
+ * to the household, that unit codes exist, that `unit` is a count unit, and that
+ * `sizeValue`/`sizeUnit` come as a pair.
  */
 export class CreatePantryItemDto {
   @Trim()
@@ -59,12 +59,12 @@ export class CreatePantryItemDto {
   @Max(MAX_ITEM_QUANTITY)
   quantity!: number;
 
-  /** A unit code from `GET /units`. */
+  /** The code of a count unit from `GET /units`: `pcs`, `bottle`, `can`. */
   @IsString()
   @Length(1, MAX_UNIT_CODE_LENGTH)
   unit!: string;
 
-  /** What is inside one `pcs`: `300` for a 300 ml can. */
+  /** What is inside one: `300` for a 300 ml can. */
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: SIZE_DECIMAL_PLACES })

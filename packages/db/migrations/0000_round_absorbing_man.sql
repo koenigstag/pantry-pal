@@ -4,6 +4,7 @@ CREATE TABLE "units" (
 	"kind" text NOT NULL,
 	"system" text NOT NULL,
 	"factor" numeric(20, 10) NOT NULL,
+	CONSTRAINT "units_code_kind_unique" UNIQUE("code","kind"),
 	CONSTRAINT "units_kind_check" CHECK (kind in ('mass', 'volume', 'count')),
 	CONSTRAINT "units_system_check" CHECK (system in ('metric', 'imperial', 'both')),
 	CONSTRAINT "units_factor_positive" CHECK (factor > 0)
@@ -69,13 +70,14 @@ CREATE TABLE "products" (
 	"name" varchar(80) NOT NULL,
 	"brand" text,
 	"barcode" text,
-	"package_label" text,
 	"default_category" text,
 	"default_unit" text,
+	"default_unit_kind" text DEFAULT 'count' NOT NULL,
 	"default_shelf_life_days" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "products_category_check" CHECK (default_category is null or default_category in ('produce', 'dairy', 'meat', 'grains', 'canned', 'frozen', 'spices', 'beverages', 'medicine', 'personal-care', 'cleaning', 'other'))
+	CONSTRAINT "products_category_check" CHECK (default_category is null or default_category in ('produce', 'dairy', 'meat', 'grains', 'canned', 'frozen', 'spices', 'beverages', 'medicine', 'personal-care', 'cleaning', 'other')),
+	CONSTRAINT "products_default_unit_kind_count" CHECK (default_unit_kind = 'count')
 );
 --> statement-breakpoint
 CREATE TABLE "items" (
@@ -87,6 +89,7 @@ CREATE TABLE "items" (
 	"category" text NOT NULL,
 	"quantity" integer NOT NULL,
 	"unit" text NOT NULL,
+	"unit_kind" text DEFAULT 'count' NOT NULL,
 	"size_value" numeric(10, 3),
 	"size_unit" text,
 	"expires_at" date,
@@ -101,8 +104,8 @@ CREATE TABLE "items" (
 	CONSTRAINT "items_category_check" CHECK (category in ('produce', 'dairy', 'meat', 'grains', 'canned', 'frozen', 'spices', 'beverages', 'medicine', 'personal-care', 'cleaning', 'other')),
 	CONSTRAINT "items_status_check" CHECK (status in ('active', 'consumed', 'discarded')),
 	CONSTRAINT "items_quantity_positive" CHECK (quantity >= 0),
-	CONSTRAINT "items_size_pair" CHECK ((size_value is null) = (size_unit is null)),
-	CONSTRAINT "items_size_only_count" CHECK (size_value is null or unit = 'pcs')
+	CONSTRAINT "items_unit_kind_count" CHECK (unit_kind = 'count'),
+	CONSTRAINT "items_size_pair" CHECK ((size_value is null) = (size_unit is null))
 );
 --> statement-breakpoint
 CREATE TABLE "item_events" (
@@ -123,11 +126,11 @@ ALTER TABLE "household_members" ADD CONSTRAINT "household_members_user_id_users_
 ALTER TABLE "households" ADD CONSTRAINT "households_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "locations" ADD CONSTRAINT "locations_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "products" ADD CONSTRAINT "products_default_unit_units_code_fk" FOREIGN KEY ("default_unit") REFERENCES "public"."units"("code") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "products" ADD CONSTRAINT "products_default_unit_count_fk" FOREIGN KEY ("default_unit","default_unit_kind") REFERENCES "public"."units"("code","kind") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_unit_units_code_fk" FOREIGN KEY ("unit") REFERENCES "public"."units"("code") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "items_unit_count_fk" FOREIGN KEY ("unit","unit_kind") REFERENCES "public"."units"("code","kind") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_size_unit_units_code_fk" FOREIGN KEY ("size_unit") REFERENCES "public"."units"("code") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "item_events" ADD CONSTRAINT "item_events_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "item_events" ADD CONSTRAINT "item_events_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

@@ -42,7 +42,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "units_code_kind_unique": {
+          "name": "units_code_kind_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code",
+            "kind"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "units_kind_check": {
@@ -582,12 +591,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "package_label": {
-          "name": "package_label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "default_category": {
           "name": "default_category",
           "type": "text",
@@ -599,6 +602,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "default_unit_kind": {
+          "name": "default_unit_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'count'"
         },
         "default_shelf_life_days": {
           "name": "default_shelf_life_days",
@@ -696,15 +706,17 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "products_default_unit_units_code_fk": {
-          "name": "products_default_unit_units_code_fk",
+        "products_default_unit_count_fk": {
+          "name": "products_default_unit_count_fk",
           "tableFrom": "products",
           "tableTo": "units",
           "columnsFrom": [
-            "default_unit"
+            "default_unit",
+            "default_unit_kind"
           ],
           "columnsTo": [
-            "code"
+            "code",
+            "kind"
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
@@ -717,6 +729,10 @@
         "products_category_check": {
           "name": "products_category_check",
           "value": "default_category is null or default_category in ('produce', 'dairy', 'meat', 'grains', 'canned', 'frozen', 'spices', 'beverages', 'medicine', 'personal-care', 'cleaning', 'other')"
+        },
+        "products_default_unit_kind_count": {
+          "name": "products_default_unit_kind_count",
+          "value": "default_unit_kind = 'count'"
         }
       },
       "isRLSEnabled": false
@@ -773,6 +789,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "unit_kind": {
+          "name": "unit_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'count'"
         },
         "size_value": {
           "name": "size_value",
@@ -977,15 +1000,17 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "items_unit_units_code_fk": {
-          "name": "items_unit_units_code_fk",
+        "items_unit_count_fk": {
+          "name": "items_unit_count_fk",
           "tableFrom": "items",
           "tableTo": "units",
           "columnsFrom": [
-            "unit"
+            "unit",
+            "unit_kind"
           ],
           "columnsTo": [
-            "code"
+            "code",
+            "kind"
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
@@ -1020,13 +1045,13 @@
           "name": "items_quantity_positive",
           "value": "quantity >= 0"
         },
+        "items_unit_kind_count": {
+          "name": "items_unit_kind_count",
+          "value": "unit_kind = 'count'"
+        },
         "items_size_pair": {
           "name": "items_size_pair",
           "value": "(size_value is null) = (size_unit is null)"
-        },
-        "items_size_only_count": {
-          "name": "items_size_only_count",
-          "value": "size_value is null or unit = 'pcs'"
         }
       },
       "isRLSEnabled": false

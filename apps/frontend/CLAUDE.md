@@ -54,6 +54,18 @@ src/i18n/                  message catalog and Intl formatters
   `replace` instead. While the edit form has unsaved changes, `useBlocker` holds
   every way out (Escape, backdrop, Back, the browser back button) behind a
   discard confirmation.
+- The edit form (`ItemEditForm`) reuses the details view's layout and sections
+  (`detailsLayout.tsx`), so switching modes keeps everything in place. Save is
+  enabled only once something changed, and sends only the changed fields.
+  If another member saves the item while the form is open, `rebaseDraft` moves
+  every untouched field onto their values and names any field both changed.
+  Switching modes moves focus to the first field (fine pointer) or the dialog
+  title (touch, where a focused field would pop the keyboard up); a failed save
+  focuses the first invalid field.
+- Field errors come from the catalog (`itemFieldErrors`), one message per field
+  saying what it accepts, rather than class-validator's English. Rules a DTO
+  cannot state (size value and unit together, no future opened date) live in
+  `ruleErrors`.
 
 ## MobX conventions
 
@@ -83,7 +95,12 @@ then re-applies the same data. `acceptItem` never regresses an item to an older
 `updatedAt`.
 
 Quantities are whole numbers (`@IsInt()` in the shared DTOs, `integer` in the
-database); a fractional amount is a size, `1 × 1.5 kg`.
+database), counted in a count unit — `pcs` or a container such as `bottle` or
+`bag`; an amount is a size of any kind, `1 bag × 1.5 kg`. So the quantity unit
+picker offers count units only, while the size picker groups every kind. Count
+units read as plural nouns from the catalog (`messages.units.countNoun`: `2
+cans`), and a code the catalog lacks, such as one an admin added, shows its API
+label. `pcs` alone is left out beside a size: `2 × 150 g`.
 
 **The one exception is stepping a quantity.** `QuantityUpdates` keeps an overlay
 of unconfirmed quantities, and cards render `quantityOf(item)`, so a tap shows at
@@ -117,16 +134,24 @@ cycle and doubled bootstrap requests; the resulting console warning is expected.
 
 ### The locations editor
 
-`LocationEditorDialog` opens from the `+` beside the tabs, its only entry point,
-showing the saved locations only; its Add location button appends an
-empty row, which is ignored on save until named. It
+Users know locations as **storage spaces**: the message catalog says so
+everywhere, while code, routes, the API and the database keep `location`.
+
+`LocationEditorDialog` opens from the `+` beside the tabs and from Edit storage
+spaces in the ⋮ menu, showing the saved locations only; its Add storage space
+button appends an empty row, which is ignored on save until named. It
 renames, adds, deletes and reorders, then saves everything with **one**
 `PUT .../locations` (`PantryStore.saveLocations`); other clients receive one
 `LocationsUpserted` list, never the intermediate steps. Deleting a location that
-holds items asks where they go (`moveItemsTo`), and the server moves them in the
-same transaction. The last saved location (a row with an id) cannot be deleted,
-however many new rows are named: its trash button is `aria-disabled` and
-explains why.
+holds items asks where they go (`moveItemsTo`), preselecting the fallback
+location, and the server moves them in the same transaction.
+
+Every household has one **fallback location**, "Other" (`isFallback`): the
+server moves a deleted location's items there when told nothing else, and
+refuses to rename or delete it. In the editor it can still be reordered, but its
+name is a read-only input, a lock stands where its delete button would be, and a
+hint under the row says why. Because it always stays, a household always keeps
+at least one location, and the editor needs no rule of its own for that.
 
 The draft lives in the component, not the store, and is **rebased onto
 `pantry.locations` on every render** (`locationDraft.ts`): locations other
@@ -153,10 +178,16 @@ checks the list and saves again.
 ## UI primitives — native elements, no component library
 
 - `ui/Dialog` is a native `<dialog>` opened with `showModal()`, which supplies
-  the focus trap, the inert page, Escape and the top layer. `variant="sheet"`
-  rises from the bottom on narrow screens; `fullscreen` fills a phone, with a
-  header bar. Keep it mounted and toggle `open`, so focus can return to the
-  opener.
+  the focus trap, the inert page, Escape and the top layer. **On a phone a
+  dialog is either a sheet or fills the screen.** `variant="sheet"` rises from
+  the bottom on narrow screens; `fullscreen` fills a phone and is a large panel
+  on wide screens, with a header bar on both. The default `modal` fills a phone
+  with a header bar — close button, title, and the primary action passed as
+  `headerEnd` — and is a centred box from `md` up, where the bar folds into a
+  plain heading. A modal form therefore shows its own Cancel/Save row only from
+  `md` up (`hidden md:flex`), and the header action submits it through
+  `form={formId}`. Keep a dialog mounted and toggle `open`, so focus can return
+  to the opener.
 - **A dialog never closes itself.** Escape (its `cancel` event is prevented), the
   backdrop and the close button only call `onClose`; the owner closes it by
   setting `open` to false or unmounting it, and may decline — a blocked

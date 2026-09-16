@@ -9,11 +9,13 @@ import { COUNT_UNIT } from '@pantry-pal/shared';
  */
 const CONSTRAINT_MESSAGES: Readonly<Record<string, string>> = {
   locations_household_name_idx: 'A location with this name already exists in this household',
+  locations_household_fallback_idx: 'A household has only one fallback location',
+  locations_fallback_not_deleted: "The household's fallback location cannot be deleted",
   household_members_household_id_user_id_pk: 'That user is already a member of this household',
   units_pkey: 'A unit with this code already exists',
   items_location_household_fk: 'The location does not exist in this household',
   items_size_pair: 'sizeValue and sizeUnit must be given together',
-  items_size_only_count: `sizeValue is only allowed when unit is "${COUNT_UNIT}"`,
+  items_unit_count_fk: `unit must be a count unit such as "${COUNT_UNIT}", and a count unit in use can be neither deleted nor given another kind`,
   items_quantity_positive: 'quantity must not be negative',
 };
 
@@ -27,7 +29,8 @@ const CONSTRAINT_MESSAGES: Readonly<Record<string, string>> = {
  * Foreign-key violations are all 409. The same constraint fires both for
  * "still referenced" (deleting something in use) and for "not present" (a
  * reference that vanished under a concurrent delete), and in both cases the
- * request conflicts with the current state of another record.
+ * request conflicts with the current state of another record. A key declared
+ * `ON DELETE RESTRICT` reports the former as its own SQLSTATE.
  */
 export function translateDatabaseError(error: unknown): HttpException | undefined {
   const pg = findPostgresError(error);
@@ -40,6 +43,7 @@ export function translateDatabaseError(error: unknown): HttpException | undefine
       return new ConflictException(known ?? 'A record with these values already exists');
 
     case PG_ERROR.ForeignKeyViolation:
+    case PG_ERROR.RestrictViolation:
       return new ConflictException(known ?? 'A related record is missing or still in use');
 
     case PG_ERROR.CheckViolation:

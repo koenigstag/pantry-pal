@@ -19,6 +19,8 @@ export interface FieldControlProps {
 
 interface FieldProps {
   label: string;
+  /** Keeps the label for assistive technology only, where a heading already names the field. */
+  hideLabel?: boolean;
   hint?: string;
   error: string | undefined;
   className?: string;
@@ -26,7 +28,14 @@ interface FieldProps {
   children: (props: FieldControlProps) => ReactNode;
 }
 
-export function Field({ label, hint, error, className, children }: FieldProps): ReactElement {
+export function Field({
+  label,
+  hideLabel = false,
+  hint,
+  error,
+  className,
+  children,
+}: FieldProps): ReactElement {
   const id = useId();
   const hintId = useId();
   const errorId = useId();
@@ -36,7 +45,10 @@ export function Field({ label, hint, error, className, children }: FieldProps): 
 
   return (
     <div className={cn('flex min-w-0 flex-col gap-1', className)}>
-      <label htmlFor={id} className="text-xs font-medium text-ink-muted">
+      <label
+        htmlFor={id}
+        className={cn('text-xs font-medium text-ink-muted', hideLabel && 'sr-only')}
+      >
         {label}
       </label>
       {children({

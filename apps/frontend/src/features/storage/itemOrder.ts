@@ -1,4 +1,4 @@
-import { COUNT_UNIT, type PantryItem } from '@pantry-pal/shared';
+import type { PantryItem } from '@pantry-pal/shared';
 
 import { nameCollator, normalizeForSearch } from '../../i18n/format';
 
@@ -19,24 +19,20 @@ export function parseSortDirection(value: string | null): SortDirection {
   return SORT_DIRECTIONS.find((direction) => direction === value) ?? DEFAULT_SORT_DIRECTION;
 }
 
-/** A value and a unit code: the `400 g` of `2 × 400 g`. */
+/** A value and a unit code: the `400 g` of `2 cans × 400 g`. */
 export interface Size {
   value: number;
   unit: string;
 }
 
 /**
- * The measure a card's size line shows, and what "sort by size" orders by.
- *
- * Counted things show what is inside each one (`2 × 400 g`); loose goods have
- * no per-piece size, so their own amount stands in (`1.5 kg`). A bare count
- * (`5 pcs`) has no size at all.
+ * What is inside each one, which "sort by size" orders by. A bare count
+ * (`6 cans`) has no size.
  */
 export function sizeOf(item: PantryItem): Size | null {
-  if (item.sizeValue !== null && item.sizeUnit !== null) {
-    return { value: item.sizeValue, unit: item.sizeUnit };
-  }
-  return item.unit === COUNT_UNIT ? null : { value: item.quantity, unit: item.unit };
+  return item.sizeValue === null || item.sizeUnit === null
+    ? null
+    : { value: item.sizeValue, unit: item.sizeUnit };
 }
 
 /**

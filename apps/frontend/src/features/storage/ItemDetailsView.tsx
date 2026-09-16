@@ -1,12 +1,13 @@
 import { daysUntil, getExpiryStatus, type PantryItem } from '@pantry-pal/shared';
-import { Clock, MapPin, Package, PackageOpen, Tag, Trash, type LucideIcon } from 'lucide-react';
+import { Clock, MapPin, PackageOpen, Tag, Trash, type LucideIcon } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useId, type ReactElement, type ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { formatCalendarDate, formatInstant } from '../../i18n/format';
 import { messages } from '../../i18n/messages';
 import { usePantryStore, useQuantities } from '../../stores/StoreContext';
 import { cn } from '../../ui/cn';
+import { DETAILS_GRID, DetailsSection, ItemPhoto } from './detailsLayout';
 import { amountText, EXPIRY_TONES } from './itemDisplay';
 import { QuantityStepper } from './QuantityStepper';
 
@@ -30,13 +31,8 @@ export const ItemDetailsView = observer(function ItemDetailsView({
   const location = pantry.locations.find((candidate) => candidate.id === item.locationId);
 
   return (
-    <div className="grid gap-5 p-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-8 md:p-6">
-      <div
-        aria-hidden="true"
-        className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-sunken text-ink-muted md:aspect-square md:self-start"
-      >
-        <Package className="size-1/4" strokeWidth={1} />
-      </div>
+    <div className={DETAILS_GRID}>
+      <ItemPhoto className="flex" />
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap gap-2">
@@ -44,16 +40,16 @@ export const ItemDetailsView = observer(function ItemDetailsView({
           <Chip icon={Tag}>{messages.categories[item.category]}</Chip>
         </div>
 
-        <Section title={messages.itemDetails.quantity}>
+        <DetailsSection title={messages.itemDetails.quantity}>
           <div className="flex items-center justify-between gap-4">
             <p className="min-w-0 break-words text-ink-muted">
-              {amountText(item, quantities.quantityOf(item), pantry.unitLabel)}
+              {amountText(item, quantities.quantityOf(item), pantry.unitName)}
             </p>
             <QuantityStepper item={item} onRemove={onRemove} size="md" className="w-36 shrink-0" />
           </div>
-        </Section>
+        </DetailsSection>
 
-        <Section title={messages.itemDetails.expiry}>
+        <DetailsSection title={messages.itemDetails.expiry}>
           <ExpirySummary item={item} />
           <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
             <DetailRow
@@ -95,12 +91,12 @@ export const ItemDetailsView = observer(function ItemDetailsView({
               {messages.itemDetails.markOpened}
             </button>
           )}
-        </Section>
+        </DetailsSection>
 
         {item.notes !== null && (
-          <Section title={messages.itemDetails.notes}>
+          <DetailsSection title={messages.itemDetails.notes}>
             <p className="text-sm break-words whitespace-pre-wrap">{item.notes}</p>
-          </Section>
+          </DetailsSection>
         )}
 
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs text-ink-muted">
@@ -153,22 +149,6 @@ function openingBroughtExpiryForward(item: PantryItem): boolean {
     item.expiresAt !== null &&
     item.effectiveExpiresAt !== null &&
     item.effectiveExpiresAt < item.expiresAt
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }): ReactElement {
-  const headingId = useId();
-
-  return (
-    <section aria-labelledby={headingId} className="rounded-xl border border-line p-4">
-      <h3
-        id={headingId}
-        className="mb-3 text-xs font-semibold tracking-wide text-ink-muted uppercase"
-      >
-        {title}
-      </h3>
-      {children}
-    </section>
   );
 }
 

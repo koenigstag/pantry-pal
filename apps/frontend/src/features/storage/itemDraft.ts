@@ -1,8 +1,9 @@
 import {
-  COUNT_UNIT,
+  QUANTITY_UNIT_KIND,
   type PantryCategory,
   type PantryItem,
   type Unit,
+  type UnitKind,
   type UnitSystemPreference,
 } from '@pantry-pal/shared';
 
@@ -94,38 +95,130 @@ export function toPatch(base: ItemDraft, draft: ItemDraft): ItemPatch {
 }
 
 /**
- * The one rule `UpdatePantryItemDto` cannot state: size value and unit come
- * together. The server checks it separately; checking it here puts the message
- * beside the field.
+ * Rules `UpdatePantryItemDto` cannot state, checked here so each message sits
+ * beside its field: a size's value and unit come together (the server checks
+ * that separately), and nothing is opened in the future.
  */
-export function sizeErrors(draft: ItemDraft): Record<string, string> {
+export function ruleErrors(
+  draft: ItemDraft,
+  today: string = todayIsoDate(),
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+
   const size = sizeOfDraft(draft);
   if (size.value !== null && size.unit === null) {
-    return { sizeUnit: messages.itemForm.sizeUnitRequired };
+    errors['sizeUnit'] = messages.fieldErrors.sizeUnitRequired;
+  } else if (size.value === null && size.unit !== null) {
+    errors['sizeValue'] = messages.fieldErrors.sizeValueRequired;
   }
-  if (size.value === null && size.unit !== null) {
-    return { sizeValue: messages.itemForm.sizeValueRequired };
+
+  // `YYYY-MM-DD` compares chronologically as a string.
+  if (draft.openedAt !== '' && draft.openedAt > today) {
+    errors['openedAt'] = messages.fieldErrors.openedInFuture;
   }
-  return {};
+
+  return errors;
+}
+
+export type DraftField = keyof ItemDraft;
+
+/**
+ * Moves an open form onto a newer copy of the item — one another member saved
+ * while it was being edited.
+ *
+ * A field the user has not touched follows the new value. A touched field keeps
+ * the user's value; if the other member changed it too, to something else, it is
+ * a conflict, since saving would replace their value — the form says so.
+ */
+export function rebaseDraft(
+  base: ItemDraft,
+  draft: ItemDraft,
+  next: ItemDraft,
+): { draft: ItemDraft; conflicts: DraftField[] } {
+  const rebased: Record<DraftField, string> = { ...draft };
+  const conflicts: DraftField[] = [];
+
+  for (const field of Object.keys(base) as DraftField[]) {
+    if (draft[field] === base[field]) {
+      rebased[field] = next[field];
+    } else if (next[field] !== base[field] && next[field] !== draft[field]) {
+      conflicts.push(field);
+    }
+  }
+
+  return { draft: rebased as ItemDraft, conflicts };
+}
+
+/** The label a field has in the edit form, for naming it in a message. */
+export function draftFieldLabel(field: DraftField): string {
+  const labels = messages.itemForm;
+  switch (field) {
+    case 'name':
+      return labels.name;
+    case 'locationId':
+      return labels.location;
+    case 'category':
+      return labels.category;
+    case 'quantity':
+      return labels.howMany;
+    case 'unit':
+      return labels.unit;
+    case 'sizeValue':
+    case 'sizeUnit':
+      return labels.sizeValue;
+    case 'expiresAt':
+      return labels.expires;
+    case 'openedAt':
+      return labels.opened;
+    case 'periodAfterOpeningDays':
+      return labels.periodAfterOpening;
+    case 'notes':
+      return labels.notes;
+  }
 }
 
 /**
  * The units a picker offers: the user's preferred system plus units common to
- * both — and always the ones already chosen, so an existing item never shows a
+ * both — and always the one already chosen, so an existing item never shows a
  * blank select. A display preference only; any unit can be stored.
  */
 export function pickerUnits(
   units: readonly Unit[],
   preference: UnitSystemPreference | undefined,
-  keep: readonly string[],
+  keep: string,
 ): Unit[] {
   return units.filter(
     (unit) =>
       preference === undefined ||
       unit.system === 'both' ||
       unit.system === preference ||
-      keep.includes(unit.code),
+      unit.code === keep,
   );
+}
+
+/** What an item can be counted in: `pcs`, `bottle`, `can` — never `kg`. */
+export function isQuantityUnit(unit: Unit): boolean {
+  return unit.kind === QUANTITY_UNIT_KIND;
+}
+
+/** Size picker groups: weights and volumes first, since most sizes are one. */
+const SIZE_KIND_ORDER: readonly UnitKind[] = ['mass', 'volume', 'count'];
+
+/** `units` by kind, in size picker order, leaving out kinds with none. */
+export function groupByKind(units: readonly Unit[]): { kind: UnitKind; units: Unit[] }[] {
+  return SIZE_KIND_ORDER.map((kind) => ({
+    kind,
+    units: units.filter((unit) => unit.kind === kind),
+  })).filter((group) => group.units.length > 0);
+}
+
+/**
+ * The count a unit's noun agrees with while a number is being typed: the
+ * number once there is one, else 1, so an empty field reads `bottle`.
+ */
+export function nounCount(value: string): number {
+  const count = Number(value);
+  return value.trim() !== '' && Number.isFinite(count) ? count : 1;
 }
 
 /** Today in the user's own calendar, as `YYYY-MM-DD`: in UTC it may still be yesterday. */
@@ -137,9 +230,7 @@ function padTwo(value: number): string {
   return String(value).padStart(2, '0');
 }
 
-/** Only a counted item has a size: switching the unit away from `pcs` clears it. */
 function sizeOfDraft(draft: ItemDraft): { value: number | null; unit: string | null } {
-  if (draft.unit !== COUNT_UNIT) return { value: null, unit: null };
   return {
     value: draft.sizeValue.trim() === '' ? null : toNumber(draft.sizeValue),
     unit: blankToNull(draft.sizeUnit),
