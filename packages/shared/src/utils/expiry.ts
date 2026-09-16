@@ -7,19 +7,28 @@ const MS_PER_DAY = 86_400_000;
 export type Expirable = Pick<PantryItem, 'effectiveExpiresAt'>;
 
 /**
- * Whole days from `now` until `isoDate`, compared date-to-date in UTC so that a
- * item expiring "later today" reads as 0 rather than a fraction.
+ * Whole days from today until the calendar date `isoDate` (`YYYY-MM-DD`): 0 for
+ * today, 1 for tomorrow, negative once it has passed.
  *
- * Returns `NaN` for an unparseable date.
+ * Today is `now`'s date **in the local time zone**, the user's own calendar —
+ * the one "opened today" is written in. Taking UTC's date instead put tomorrow
+ * two days away east of UTC between local midnight and UTC's.
+ *
+ * Returns `NaN` for a string that is not a date.
  */
 export function daysUntil(isoDate: string, now: Date = new Date()): number {
-  const target = new Date(isoDate);
-  if (Number.isNaN(target.getTime())) return Number.NaN;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  if (match === null) return Number.NaN;
 
-  const targetDay = Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate());
-  const nowDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const [year, month, day] = [Number(match[1]), Number(match[2]) - 1, Number(match[3])];
+  // Both days as UTC timestamps, so a daylight-saving change between them
+  // cannot make a day 23 hours long.
+  const targetDay = Date.UTC(year, month, day);
+  const target = new Date(targetDay);
+  if (target.getUTCMonth() !== month || target.getUTCDate() !== day) return Number.NaN;
 
-  return Math.round((targetDay - nowDay) / MS_PER_DAY);
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((targetDay - today) / MS_PER_DAY);
 }
 
 /**
