@@ -1,9 +1,10 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  // Two entry points: the client/repositories, and the raw schema for tooling
-  // and for consumers that only want table definitions.
-  entry: ['src/index.ts', 'src/schema/index.ts'],
+  // Three entry points: the client/repositories; the raw schema, for tooling and
+  // for consumers that only want table definitions; and the development
+  // fixtures, kept separate so seed data never enters the main import graph.
+  entry: ['src/index.ts', 'src/schema/index.ts', 'src/fixtures/index.ts'],
   // ESM only. Unlike `@pantry-pal/shared`, this package has no browser consumer
   // and only one server consumer, which reaches it through Node's require(esm)
   // support — the same path it already uses for NestJS 12 itself.

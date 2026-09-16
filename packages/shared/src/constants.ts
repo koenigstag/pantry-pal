@@ -44,6 +44,9 @@ export const PANTRY_CATEGORIES = [
   'frozen',
   'spices',
   'beverages',
+  'medicine',
+  'personal-care',
+  'cleaning',
   'other',
 ] as const;
 

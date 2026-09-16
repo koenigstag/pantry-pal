@@ -4,6 +4,9 @@
     "outDir": "dist",
     "lib": ["ES2023"],
     "types": ["node"],
+    // @Transactional() is written in legacy decorator form so that it matches
+    // what apps/backend compiles for Nest. See src/transaction.ts.
+    "experimentalDecorators": true,
     // tsup@8 injects the deprecated `baseUrl` when generating declarations.
     "ignoreDeprecations": "6.0"
   },

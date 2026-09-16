@@ -33,16 +33,17 @@ Four packages; `packages/shared` is the hub everything else depends on.
 apps/backend     NestJS 12 · REST + Socket.IO · CommonJS via tsc
 apps/frontend    React 19 + MobX 7 · Vite 8 · ESM
 packages/shared  constants · DTOs · utils · typed WebSocket contract
-packages/db      Drizzle + pg · ESM · SKELETON ONLY
+packages/db      Drizzle + pg · ESM · schema, repositories, transactions
 ```
 
 Dependency direction is one-way and must stay that way:
 `db → shared`, `backend → {shared, db}`, `frontend → shared`. Nothing depends on
 an app, and `shared` depends on nothing in the workspace.
 
-`packages/db` is currently a skeleton — `createDatabase()` and an empty schema
-barrel. The agreed schema and transaction design, plus a blocker that must be
-resolved first, are in `packages/db/CLAUDE.md`.
+`packages/db` owns the Drizzle schema, repositories and the transaction layer.
+Repositories are plain classes with no Nest decorators; `apps/backend` bridges
+them into DI with a `useFactory`. Details, including why `@Transactional()` is
+written in legacy decorator form, are in `packages/db/CLAUDE.md`.
 
 ### Build ordering is load-bearing
 

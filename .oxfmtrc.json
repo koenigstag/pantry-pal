@@ -10,5 +10,11 @@
   "insertFinalNewline": true,
   "sortImports": {},
   "sortPackageJson": {},
-  "ignorePatterns": ["**/dist/**", "**/.turbo/**", "**/coverage/**", "pnpm-lock.yaml"]
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "pnpm-lock.yaml",
+    "**/migrations/**"
+  ]
 }

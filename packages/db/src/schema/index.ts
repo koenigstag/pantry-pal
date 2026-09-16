@@ -1,18 +1,15 @@
 /**
- * Drizzle table definitions.
+ * Drizzle table definitions, one file per aggregate, re-exported here so that
+ * `drizzle.config.ts` and `createDatabase()` both see the whole schema through
+ * a single import.
  *
- * Empty for now — this package is a skeleton. Tables land here one file per
- * aggregate, re-exported from this barrel so that both `drizzle.config.ts` and
- * `createDatabase()` see the whole schema through a single import.
- *
- * The agreed design (households/household_members tenancy, products + items
- * batches, a `units` lookup table, a generated `effective_expires_at`, soft
- * deletes and `pg_notify` change events) is recorded in this package's
- * CLAUDE.md, along with the one blocker that must be resolved first.
+ * Export order follows the foreign-key graph: `units` and `users` have no
+ * dependencies, everything else builds on `households`.
  */
-
-// isolatedModules (tsconfig.base.json) treats a file with no import or export as
-// a global script, and `createDatabase` does `import * as schema from './schema'`.
-// TypeScript's own guidance for this case is an empty export.
-// oxlint-disable-next-line unicorn/require-module-specifiers
-export {};
+export * from './units';
+export * from './users';
+export * from './households';
+export * from './locations';
+export * from './products';
+export * from './items';
+export * from './item-events';

@@ -11,6 +11,9 @@ out/
 # turbo
 .turbo/
 
+# Claude Code worktrees: full parallel checkouts, each with its own node_modules
+.claude/worktrees/
+
 # env — commit .env.example only, never real values
 .env
 .env.local
