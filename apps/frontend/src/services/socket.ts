@@ -7,6 +7,7 @@ import {
 } from '@pantry-pal/shared';
 import { io, type Socket } from 'socket.io-client';
 
+import { backendOrigin } from './backendOrigin';
 import { devUserEmail } from './identity';
 
 /**
@@ -17,13 +18,13 @@ import { devUserEmail } from './identity';
 export type PantrySocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 /**
- * Connects to the current origin; in development Vite proxies `/socket.io`
- * through to the backend (see `vite.config.ts`), so no CORS in the browser.
+ * Connects to `backendOrigin`: the page's own origin in development, where Vite
+ * proxies `/socket.io` through to the backend, and `VITE_BACKEND_URL` in a build.
  *
  * Identity travels in the handshake `auth` payload, because a browser cannot set
  * headers on a WebSocket. A rejected handshake surfaces as `connect_error`.
  */
-export function createPantrySocket(baseUrl = ''): PantrySocket {
+export function createPantrySocket(baseUrl = backendOrigin): PantrySocket {
   return io(`${baseUrl}${PANTRY_WS_NAMESPACE}`, {
     path: SOCKET_IO_PATH,
     transports: ['websocket'],

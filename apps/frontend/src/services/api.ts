@@ -16,6 +16,7 @@ import type {
   UpsertLocationsDto,
 } from '@pantry-pal/shared/dto';
 
+import { backendOrigin } from './backendOrigin';
 import { devUserEmail } from './identity';
 
 export class ApiError extends Error {
@@ -46,7 +47,7 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_PATH}${path}`, {
+  const response = await fetch(`${backendOrigin}${API_BASE_PATH}${path}`, {
     headers: { 'Content-Type': 'application/json', [DEV_USER_HEADER]: devUserEmail },
     ...init,
   });

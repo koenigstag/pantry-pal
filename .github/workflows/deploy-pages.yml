@@ -1,8 +1,9 @@
 # Builds the frontend and publishes it to GitHub Pages.
 #
-# Pages serves static files only, so the site has no backend: the shell renders,
-# and pages that need the API show their load error. Before the first run, set
-# Settings → Pages → Source to "GitHub Actions".
+# Pages serves static files only. The site calls the backend named by the
+# repository variable VITE_BACKEND_URL, whose CORS_ORIGIN must list the site's
+# origin; without the variable, pages that need the API show their load error.
+# Before the first run, set Settings → Pages → Source to "GitHub Actions".
 name: Deploy to GitHub Pages
 
 on:
@@ -48,10 +49,13 @@ jobs:
       # Builds shared first (`^build`). base_path is `/<repo>` for a project site
       # and empty for a user site or custom domain; vite.config.ts adds the
       # trailing slash. turbo.json declares BASE_PATH, or strict env mode drops it.
+      # VITE_BACKEND_URL must be a repository variable: an environment's variables
+      # reach only jobs that use the environment. Turborepo passes VITE_* through.
       - name: Build frontend
         run: pnpm exec turbo run build --filter=@pantry-pal/frontend
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
 
       # Pages has no SPA rewrites: it answers an unknown path with 404.html. A copy
       # of index.html boots the app on any deep link, and the router takes over.

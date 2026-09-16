@@ -115,10 +115,12 @@ Pushing to `main` builds the frontend and publishes it to GitHub Pages
 from the Actions tab. Once per repository, set **Settings → Pages → Source** to
 **GitHub Actions**.
 
-The site is the frontend alone, because Pages cannot run the backend: the shell
-and navigation work, and pages that need the API show their load error. It is
-served from `https://<owner>.github.io/<repo>/`, a path the workflow passes to
-the build as `BASE_PATH`.
+Pages serves only the frontend. It calls the backend at the address in the
+repository variable `VITE_BACKEND_URL` (**Settings → Secrets and variables →
+Actions → Variables**), whose `CORS_ORIGIN` must allow the site; without the
+variable, pages that need the API show their load error. The site is served from
+`https://<owner>.github.io/<repo>/`, a path the workflow passes to the build as
+`BASE_PATH`.
 
 ## Decisions worth knowing
 

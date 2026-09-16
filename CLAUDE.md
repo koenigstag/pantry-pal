@@ -161,9 +161,12 @@ variables reach browser code.
 
 `.github/workflows/deploy-pages.yml` publishes the frontend to GitHub Pages on
 every push to `main`, or when run by hand from the Actions tab. Pages serves
-static files only, so the site has **no backend**: the shell renders, and pages
-that need the API show their load error. The repository's Pages source must be
-set to _GitHub Actions_ once, in its settings.
+static files only: the site calls the backend named by the **repository
+variable** `VITE_BACKEND_URL` directly, with no proxy in between
+(`apps/frontend/src/services/backendOrigin.ts`). That backend's `CORS_ORIGIN`
+must list the site's origin. Without the variable, pages that need the API show
+their load error. The repository's Pages source must be set to _GitHub Actions_
+once, in its settings.
 
 - A project site is served under `/<repo>/`. The workflow passes that path as
   `BASE_PATH`, which sets Vite's `base`, and the router takes its `basename`

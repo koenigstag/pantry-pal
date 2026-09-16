@@ -315,5 +315,11 @@ constants from `@pantry-pal/shared` to guarantee the proxy paths and the
 client's request paths agree — which is why the shared package must be built
 before Vite starts.
 
+A built bundle has no proxy. `services/backendOrigin.ts` makes REST and the
+socket call `VITE_BACKEND_URL` directly outside development (the page's own
+origin when it is unset), so the backend's `CORS_ORIGIN` must list the built
+site's origin. The GitHub Pages workflow passes the repository variable of that
+name; a value in `.env.local` ends up in local builds too.
+
 Only `VITE_`-prefixed variables reach browser code; unprefixed ones
 (`PORT`, `BACKEND_PORT`) are read by the config at startup and stay server-side.
