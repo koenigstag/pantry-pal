@@ -469,7 +469,7 @@ export const de = {
     decrease: (name: string) => `Weniger „${name}“ kaufen`,
     remove: (name: string) => `„${name}“ von der Liste nehmen`,
     quantity: (name: string) => `Wie viel „${name}“ kaufen`,
-    markBought: (count: number) => plural(count, { other: '# als gekauft markieren' }),
+    markBought: (count: number) => plural(count, { other: '# gekauft' }),
     markingBought: 'Wird markiert…',
     markBoughtHint:
       'Gekaufte Artikel kommen zurück an ihre Lagerorte und verschwinden von der Liste.',

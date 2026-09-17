@@ -242,8 +242,8 @@ buy, and whether it is ticked off. Any member manages lists and entries.
   so a list picked while using an item up becomes its default, atomically.
 - **Adding** (`POST .../entries`) skips items already on the list and answers with
   the entries it created. One unknown item fails the whole request (404).
-- **Putting the shopping away** (`POST .../put-away`, "Mark as bought" in the
-  frontend) restocks each named entry's item (`ItemsService.restock`) and deletes
+- **Putting the shopping away** (`POST .../put-away`, the frontend's "Bought"
+  button) restocks each named entry's item (`ItemsService.restock`) and deletes
   the entries, all or nothing.
   - An item in stock gains the quantity.
   - One that ran out starts over as a new batch: active, just the bought quantity,

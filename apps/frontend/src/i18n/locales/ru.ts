@@ -502,7 +502,7 @@ export const ru = {
     decrease: (name: string) => `Купить меньше: «${name}»`,
     remove: (name: string) => `Убрать «${name}» из списка`,
     quantity: (name: string) => `Сколько купить: «${name}»`,
-    markBought: (count: number) => plural(count, { other: 'Отметить как купленное: #' }),
+    markBought: (count: number) => plural(count, { other: 'Куплено: #' }),
     markingBought: 'Отмечаем…',
     markBoughtHint: 'Купленное вернётся на свои места хранения и исчезнет из списка.',
     markedBought: (count: number) =>

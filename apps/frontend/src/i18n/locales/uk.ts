@@ -491,7 +491,7 @@ export const uk = {
     decrease: (name: string) => `Купити менше: «${name}»`,
     remove: (name: string) => `Прибрати «${name}» зі списку`,
     quantity: (name: string) => `Скільки купити: «${name}»`,
-    markBought: (count: number) => plural(count, { other: 'Позначити як куплене: #' }),
+    markBought: (count: number) => plural(count, { other: 'Куплено: #' }),
     markingBought: 'Позначаємо…',
     markBoughtHint: 'Куплене повернеться на свої місця зберігання й зникне зі списку.',
     markedBought: (count: number) =>

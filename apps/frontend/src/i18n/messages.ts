@@ -534,7 +534,7 @@ const en = {
     remove: (name: string) => `Take ${name} off the list`,
     quantity: (name: string) => `How many ${name} to buy`,
     /** Restocks the ticked items and takes them off the list, as the hint says. */
-    markBought: (count: number) => plural(count, { other: 'Mark # as bought' }),
+    markBought: (count: number) => plural(count, { other: 'Bought #' }),
     markingBought: 'Marking as bought…',
     markBoughtHint: 'Bought items go back to their storage spaces and leave the list.',
     /** The notice once the items are marked as bought. */

@@ -406,11 +406,12 @@ the entries are applied first, so an item that left the shelf is kept.
   refetches for another try. Archived lists sit in their own group below.
 - **Archived lists are frozen**, so only the editor shows them: not the tabs, the
   picker, or the item form's choices (`pantry.activeShoppingLists`).
-- **Mark as bought** sends the ticked entries shown to the put-away endpoint
-  (`PantryStore.putAwayShopping`), which restocks their items and takes them off
-  the list. The copy says what the user did, the code what the server does with
-  it, as with storage spaces and locations. A 409 means the list changed
-  meanwhile: the store refetches and says so.
+- **Bought** (the button under the ticked entries, "Bought 2") sends the ticked
+  entries shown to the put-away endpoint (`PantryStore.putAwayShopping`), which
+  restocks their items and takes them off the list. The copy says what the user
+  did, the code what the server does with it, as with storage spaces and
+  locations. A 409 means the list changed meanwhile: the store refetches and says
+  so.
 - **Sharing** (`shareList.ts`) builds the list's name and a line per entry still to
   buy, and hands it to `navigator.share`, which opens the device's share sheet with
   its messengers. Without it (Firefox on a desktop) the text is copied to the
