@@ -51,6 +51,12 @@ export const PANTRY_EVENT = {
   MemberAdded: 'pantry:member-added',
   MemberUpdated: 'pantry:member-updated',
   MemberRemoved: 'pantry:member-removed',
+  ShoppingListCreated: 'pantry:shopping-list-created',
+  ShoppingListUpdated: 'pantry:shopping-list-updated',
+  ShoppingListDeleted: 'pantry:shopping-list-deleted',
+  ShoppingListsUpserted: 'pantry:shopping-lists-upserted',
+  ShoppingListEntriesUpserted: 'pantry:shopping-list-entries-upserted',
+  ShoppingListEntriesDeleted: 'pantry:shopping-list-entries-deleted',
 } as const;
 export type PantryEventName = (typeof PANTRY_EVENT)[keyof typeof PANTRY_EVENT];
 
@@ -179,6 +185,37 @@ export const MAX_LOCATION_NAME_LENGTH = 40;
 export const MAX_LOCATION_ICON_LENGTH = 32;
 export const MAX_LOCATIONS_PER_HOUSEHOLD = 50;
 export const MAX_DEFAULT_LOCATION_CODE_LENGTH = 32;
+
+export const MAX_SHOPPING_LIST_NAME_LENGTH = 40;
+export const MAX_SHOPPING_LISTS_PER_HOUSEHOLD = 20;
+/**
+ * How many items one request may put on a list, or entries it may put away:
+ * more than a selection of cards holds, so the limit only turns away abuse.
+ */
+export const MAX_SHOPPING_LIST_BATCH = 200;
+
+/**
+ * The English name of the shopping list every household starts with. It is
+ * created with the household, named in its creator's language
+ * (`defaultShoppingListName`), and is an ordinary list from then on: it can be
+ * renamed, archived or deleted like any other.
+ */
+export const DEFAULT_SHOPPING_LIST_NAME = 'My shopping list';
+
+/**
+ * That name by BCP 47 tag, looked up as `pickTranslation` does: the exact tag,
+ * then its language. A regional key exists only where the wording differs.
+ * Migration `0006_shopping_lists` copied these for existing households, so a
+ * change here reaches new households only.
+ */
+export const DEFAULT_SHOPPING_LIST_TRANSLATIONS: Readonly<Record<string, string>> = {
+  uk: 'Мій список покупок',
+  ru: 'Мой список покупок',
+  de: 'Meine Einkaufsliste',
+  fr: 'Ma liste de courses',
+  'fr-CA': 'Ma liste d’épicerie',
+  es: 'Mi lista de la compra',
+};
 
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;

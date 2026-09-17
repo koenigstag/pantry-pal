@@ -1,5 +1,7 @@
 import type { PantryItem } from '@pantry-pal/shared';
 
+import type { ListPick } from '../shopping/AddToListSheet';
+
 /**
  * Router state on a card's link. It means the list is one history entry back,
  * so closing the details pops that entry and the back button does not reopen
@@ -20,4 +22,5 @@ export function wasOpenedFromList(state: unknown): boolean {
 /** What `StoragePage` hands the item-details route through `<Outlet context>`. */
 export interface StorageOutletContext {
   openRemoveSheet: (item: PantryItem) => void;
+  openListPicker: (pick: ListPick) => void;
 }

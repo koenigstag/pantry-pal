@@ -1,15 +1,17 @@
-import type { PantryItem } from '@pantry-pal/shared';
+import { ITEM_STATUS, type PantryItem } from '@pantry-pal/shared';
 import { FolderInput, ListPlus, Trash } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import type { ReactElement } from 'react';
 
 import { messages } from '../../i18n/messages';
-import { usePantryStore, useQuantities } from '../../stores/StoreContext';
+import { useNotices, usePantryStore, useQuantities } from '../../stores/StoreContext';
 import { Dialog } from '../../ui/Dialog';
 import { SheetButton } from '../../ui/SheetButton';
+import type { ListPick } from '../shopping/AddToListSheet';
 import { locationName } from './locationName';
 
-function CancelButton({ onClick }: { onClick: () => void }): ReactElement {
+/** The quiet last button of a sheet. */
+export function CancelButton({ onClick }: { onClick: () => void }): ReactElement {
   return (
     <button
       type="button"
@@ -21,28 +23,37 @@ function CancelButton({ onClick }: { onClick: () => void }): ReactElement {
   );
 }
 
-const noop = (): void => undefined;
-
 interface RemoveItemSheetProps {
   /** The item whose trash button was pressed; `null` keeps the sheet closed. */
   item: PantryItem | null;
   onClose: () => void;
+  /** Asks which shopping list a used-up item goes on, when it has no default one. */
+  onPickList: (pick: ListPick) => void;
 }
 
 /**
  * Asks how the last one of an item left the shelf.
  *
- * "I used it already" will mark the item consumed and put it on a shopping
- * list the user picks; it waits on the shopping-list endpoints. "I just want
- * to delete it" is the backend's delete, which records a correction rather
- * than waste.
+ * "I used it already" marks the item consumed, and the server puts it on its
+ * default shopping list. Without one, the user picks a list next, and that
+ * list becomes the default, in the same request. "I just want to delete it" is
+ * the backend's delete, which records a correction rather than waste, and
+ * takes the item off every list.
  */
 export const RemoveItemSheet = observer(function RemoveItemSheet({
   item,
   onClose,
+  onPickList,
 }: RemoveItemSheetProps): ReactElement {
   const pantry = usePantryStore();
   const quantities = useQuantities();
+  const notices = useNotices();
+
+  // An archived default is frozen: the item would go nowhere, so a list is picked instead.
+  const defaultList =
+    item === null || item.defaultShoppingListId === null
+      ? undefined
+      : pantry.activeShoppingLists.find((list) => list.id === item.defaultShoppingListId);
 
   function deleteItem(): void {
     if (item === null) return;
@@ -50,6 +61,20 @@ export const RemoveItemSheet = observer(function RemoveItemSheet({
     quantities.discard(item.id);
     onClose();
     void pantry.deleteItems([item.id]);
+  }
+
+  async function useUp(): Promise<void> {
+    if (item === null) return;
+    if (defaultList === undefined) {
+      onPickList({ kind: 'used-up', item });
+      return;
+    }
+
+    quantities.discard(item.id);
+    onClose();
+    const failure = await pantry.updateItem(item.id, { status: ITEM_STATUS.Consumed });
+    if (failure === null) notices.info(messages.addToList.usedUpAdded(item.name, defaultList.name));
+    else notices.error(failure);
   }
 
   return (
@@ -62,10 +87,12 @@ export const RemoveItemSheet = observer(function RemoveItemSheet({
       <div className="flex flex-col gap-2">
         <SheetButton
           icon={ListPlus}
-          label={messages.removeSheet.usedIt}
-          hint={messages.pending.shoppingLists}
-          unavailable
-          onClick={noop}
+          label={
+            defaultList === undefined
+              ? messages.removeSheet.usedIt
+              : messages.removeSheet.usedItOnList(defaultList.name)
+          }
+          onClick={() => void useUp()}
         />
         <SheetButton
           icon={Trash}

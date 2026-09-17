@@ -51,7 +51,7 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
   const pantry = usePantryStore();
   const quantities = useQuantities();
   const params = useStorageParams();
-  const { openRemoveSheet } = useOutletContext<StorageOutletContext>();
+  const { openRemoveSheet, openListPicker } = useOutletContext<StorageOutletContext>();
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const formId = useId();
@@ -256,6 +256,7 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
             isBusy={isBusy}
             onMarkOpened={() => void markOpened()}
             onRemove={openRemoveSheet}
+            onAddToList={() => openListPicker({ kind: 'add', itemIds: [item.id] })}
           />
         ) : (
           <ItemEditForm

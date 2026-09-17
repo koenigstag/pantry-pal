@@ -7,9 +7,9 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Twelve tables, the transaction layer, seed data, and repositories for users,
+Fourteen tables, the transaction layer, seed data, and repositories for users,
 refresh tokens, households, members, locations, items, item events, units,
-categories and the default storage spaces.
+categories, the default storage spaces, shopping lists and their entries.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -53,7 +53,8 @@ from Node's `--env-file-if-exists` flags instead. Neither needs dotenv.
 
 `pnpm db:seed` resets `TEST_HOUSEHOLD_ID` (`00000000-0000-4000-8000-000000000001`)
 and re-creates it in one transaction: two members with different unit systems,
-all eight locations, six products and 35 items covering every expiry state.
+all eight locations, the shopping list a new household starts with, six products
+and 35 items covering every expiry state.
 The fixture is `src/fixtures/test-household.ts`, published separately as
 `@pantry-pal/db/fixtures` so seed data never enters the main import graph;
 `scripts/seed-test-household.mjs` is only glue.
@@ -143,6 +144,24 @@ These are deliberate. Changing any of them affects the whole workspace.
   and refuses soft-deleting it (`locations_fallback_not_deleted`); renaming is
   refused by the backend, because a CHECK cannot see the old name. Households
   get it on creation, from the default flagged `is_fallback`.
+- **Shopping lists** (`shopping_lists`) are per-household and named, unique
+  ignoring case with archived lists included, so restoring one never collides.
+  **`shopping_list_entries`** holds an item and how many to buy, at most once per
+  list (`shopping_list_entries_list_item_idx`). The item is referenced, never
+  copied: putting the shopping away restocks that same row, even one used up
+  meanwhile. Both tables carry composite tenancy keys like `items`, which is why
+  `items` has the otherwise redundant `UNIQUE (household_id, id)`. A household
+  starts with one list, "My shopping list" in its creator's language, which the
+  backend creates with it; nothing marks that list afterwards.
+- **`items.default_shopping_list_id`** names the list an item goes on when it runs
+  out. Its key (`items_default_shopping_list_household_fk`) is `NO ACTION`: a list
+  that is still some item's default cannot be deleted, so `ShoppingListsService`
+  clears those defaults first and announces each item.
+  `ON DELETE SET NULL (default_shopping_list_id)` would clear them silently — no
+  broadcast — and a plain `SET NULL` would null `household_id` too.
+- **Lists are deleted outright**, unlike locations: no history points at one, and
+  its entries cascade. **`archived_at`** freezes a list instead of deleting it; the
+  column only records it, and the backend refuses writes to a frozen list.
 - **Quantity is how many, then what is inside one**, so `2 cans × 400 g` can be
   represented: `quantity` + `unit`, then `size_value` + `size_unit`.
 - **Things are counted, never weighed.** `items.unit` must be a count unit:
@@ -225,16 +244,20 @@ the enclosing transaction. Callbacks must not throw — the write is durable by
 then. The backend's realtime broadcasts go through it.
 
 Repositories lock rows explicitly where a service reads before it writes
-(`HouseholdsRepository.lock`, `LocationsRepository.lock`, `ItemsRepository.lock`),
+(`HouseholdsRepository.lock`, `LocationsRepository.lock`, `ItemsRepository.lock`
+and `lockMany`, `ShoppingListsRepository.lock`, `ShoppingListEntriesRepository.lockMany`),
 and every `update()` treats an empty patch as a no-op — Drizzle itself throws
 "No values to set" on an empty SET, `$onUpdate` columns notwithstanding.
+`lockMany` locks in id order, so two callers locking overlapping rows cannot
+deadlock on each other.
 
 ## Errors
 
 `findPostgresError(error)` walks the `cause` chain (Drizzle wraps driver errors
 in `DrizzleQueryError`) and returns the SQLSTATE, constraint, table and detail.
 It recognises the driver error by shape, so callers need no `pg` import.
-`PG_ERROR` names the codes worth translating.
+`PG_ERROR` names the codes worth translating, `40P01` (a deadlock, rolled back
+whole) among them.
 
 ## Migrations
 
@@ -290,6 +313,24 @@ whether a new table is a dropped one renamed, a prompt that needs a TTY, so the
 drop and the new tables were generated as two migrations and merged into one,
 the second one's snapshot becoming `0005`'s. `drizzle-kit generate` reporting no
 changes confirms that snapshot.
+
+`0006_shopping_lists` adds both shopping tables and `items.default_shopping_list_id`,
+then gives every existing household the list a new one starts with. It is
+hand-edited in two places, and says so:
+
+- It is hand-ordered: drizzle-kit emitted `items_household_id_id_unique` last,
+  after the entries' foreign key that references it, as it did in `0001`.
+- The backfill is hand-added. Each list is named for the `users.locale` of its
+  household's creator, from a `CASE` holding the names `defaultShoppingListName`
+  in `@pantry-pal/shared` gave then: the exact tag, then its language, then
+  English. A copy, so that changing the names later never changes a migration.
+
+Verified on PostgreSQL 18 over a database migrated to `0005`, with items in it,
+and with households whose creators use every supported language and one without
+a translation (`pt-BR`, which gets English). Also verified in a rolled-back
+transaction: the tenancy keys, the one-entry-per-item index, the quantity check,
+refusing to delete a list that is still a default, and deleting a household that
+holds lists, defaults and entries.
 
 ## Resolved: categories are a table
 

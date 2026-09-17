@@ -3,14 +3,16 @@ import {
   HouseholdMembersRepository,
   HouseholdsRepository,
   LocationsRepository,
+  ShoppingListsRepository,
   Transactional,
 } from '@pantry-pal/db';
-import { HOUSEHOLD_ROLE, type UserHousehold } from '@pantry-pal/shared';
+import { defaultShoppingListName, HOUSEHOLD_ROLE, type UserHousehold } from '@pantry-pal/shared';
 import type { CreateHouseholdDto, UpdateHouseholdDto } from '@pantry-pal/shared/dto';
 
 import type { AuthenticatedUser, Membership } from '../common/request-context';
 import { DefaultLocationsService } from '../default-locations/default-locations.service';
 import { ChangeFeed } from '../realtime/change-feed';
+import { toShoppingList } from '../shopping-lists/shopping-list.mapper';
 import { toHousehold, toHouseholdMember, toUserHousehold } from './household.mapper';
 
 @Injectable()
@@ -19,6 +21,7 @@ export class HouseholdsService {
     private readonly households: HouseholdsRepository,
     private readonly members: HouseholdMembersRepository,
     private readonly locations: LocationsRepository,
+    private readonly shoppingLists: ShoppingListsRepository,
     private readonly defaultLocations: DefaultLocationsService,
     private readonly changes: ChangeFeed,
   ) {}
@@ -42,6 +45,10 @@ export class HouseholdsService {
    * location among them. From then on they are the household's own: later
    * changes to the defaults do not reach it, and neither does a change of the
    * creator's language.
+   *
+   * The household also starts with a shopping list ("My shopping list"), named
+   * in the same language: an ordinary list, which can be renamed, archived or
+   * deleted.
    */
   @Transactional()
   async create(user: AuthenticatedUser, dto: CreateHouseholdDto): Promise<UserHousehold> {
@@ -64,11 +71,18 @@ export class HouseholdsService {
       })),
     );
 
+    const shoppingList = await this.shoppingLists.create(household.id, {
+      name: defaultShoppingListName(user.locale),
+      sortOrder: 0,
+    });
+
     const owner = await this.members.find(household.id, user.id);
     if (owner !== undefined) {
-      // Moves the creator's open sockets into the new household's room.
+      // Moves the creator's open sockets into the new household's room, so they
+      // hear about the shopping list announced next.
       this.changes.publish({ type: 'member.added', member: toHouseholdMember(owner) });
     }
+    this.changes.publish({ type: 'shopping-list.created', list: toShoppingList(shoppingList) });
 
     return toUserHousehold(household, HOUSEHOLD_ROLE.Owner);
   }

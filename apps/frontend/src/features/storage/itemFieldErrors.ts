@@ -36,6 +36,7 @@ export function itemFieldErrors(
     openedAt: t.date,
     periodAfterOpeningDays: t.periodAfterOpeningDays(MAX_PERIOD_AFTER_OPENING_DAYS),
     notes: t.notes(MAX_ITEM_NOTES_LENGTH),
+    defaultShoppingListId: t.defaultShoppingListId,
   };
 
   return Object.fromEntries(

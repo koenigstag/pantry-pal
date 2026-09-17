@@ -110,11 +110,6 @@ const en = {
     refreshFailed: 'Couldn’t refresh, so the last data received is shown.',
   },
 
-  /** Features whose backend endpoints are specified but not built yet. */
-  pending: {
-    shoppingLists: 'Shopping lists are coming soon.',
-  },
-
   categories: {
     /**
      * A category's name. `label` is the API's, shown for a code this catalog
@@ -193,8 +188,27 @@ const en = {
 
   removeSheet: {
     title: (name: string) => `Remove ${name}?`,
+    /** The item has no default shopping list: a list is picked next. */
     usedIt: 'I used it already; add it to shop list',
+    /** The item goes on its default shopping list by itself. */
+    usedItOnList: (list: string) => `I used it already; add it to ${list}`,
     justDelete: 'I just want to delete it',
+  },
+
+  /** Picking the shopping list items go on: from a selection, an item's details, or a used-up item. */
+  addToList: {
+    title: (count: number) => plural(count, { one: 'Add # item to', other: 'Add # items to' }),
+    /** An item just used up, whose list is remembered for next time. */
+    usedUpTitle: (name: string) => `Add ${name} to`,
+    usedUpHint: 'Next time it runs out, it goes there by itself.',
+    alreadyOn: 'Already on this list',
+    someAlreadyOn: (count: number) =>
+      plural(count, { one: '# of them is on it already', other: '# of them are on it already' }),
+    newList: 'New list',
+    added: (count: number, list: string) =>
+      `${plural(count, { one: '# item added', other: '# items added' })} to ${list}.`,
+    nothingAdded: (list: string) => `Already on ${list}.`,
+    usedUpAdded: (name: string, list: string) => `${name} is on ${list}.`,
   },
 
   deleteSheet: {
@@ -302,6 +316,11 @@ const en = {
     openedToday: 'Today',
     clearOpened: 'Clear opened date',
     periodAfterOpening: 'Use within (days after opening)',
+    shoppingList: 'Shopping list',
+    shoppingListHint: 'When it runs out, it goes on this list by itself.',
+    noShoppingList: 'None',
+    /** The item's default list in the picker, when it is archived. */
+    archivedList: (name: string) => `${name} (archived)`,
     notes: 'Notes',
     /** `fields` is a formatted list of the labels above. */
     conflict: (fields: string) =>
@@ -331,6 +350,7 @@ const en = {
     periodAfterOpeningDays: (max: number) =>
       `Enter a whole number of days from 1 to ${formatNumber(max)}.`,
     notes: (max: number) => `Keep notes to ${formatNumber(max)} characters.`,
+    defaultShoppingListId: 'Choose a shopping list.',
   },
 
   itemDetails: {
@@ -355,6 +375,15 @@ const en = {
     added: 'Added',
     updated: 'Last updated',
     remove: 'Remove item',
+    shopping: 'Shopping',
+    /** Where the item goes by itself when it runs out. */
+    defaultList: (list: string) => `When it runs out, it goes on ${list}.`,
+    noDefaultList: 'When it runs out, it goes on no list by itself.',
+    defaultListArchived: (list: string) =>
+      `When it runs out, it goes on no list while ${list} is archived.`,
+    /** `lists` is a formatted list of names. */
+    onLists: (lists: string) => `On ${lists} now.`,
+    addToList: 'Add to shopping list',
   },
 
   discardSheet: {
@@ -467,7 +496,89 @@ const en = {
 
   shopping: {
     title: 'Shopping',
-    description: 'Shopping lists are coming soon.',
+    lists: 'Shopping lists',
+    editLists: 'Edit shopping lists',
+    listName: 'List name',
+    /**
+     * Suggested for a new list when a household has none left. A household starts
+     * with one of this name, given by the server in its creator's language
+     * (`DEFAULT_SHOPPING_LIST_TRANSLATIONS`), so each catalog matches it.
+     */
+    defaultListName: 'My shopping list',
+    create: 'Create',
+    creating: 'Creating…',
+    nameRequired: (max: number) => `Enter a name of up to ${formatNumber(max)} characters.`,
+    nameTaken: 'Another shopping list already has this name.',
+    limitReached: (max: number) =>
+      `A household can have up to ${formatNumber(max)} shopping lists.`,
+    moreActions: 'More actions',
+    refresh: 'Refresh',
+    share: 'Share list',
+    nothingToShare: 'Nothing left to buy on this list.',
+    copied: 'List copied. Paste it into a message.',
+    shareFailed: 'Couldn’t share the list.',
+    /** A line of the text a list is shared as, under the list's name. */
+    shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
+    loadFailed: 'Couldn’t load the shopping lists.',
+    noLists: 'No shopping lists yet.',
+    createFirst: 'Create a shopping list',
+    emptyList: (list: string) => `Nothing on ${list} yet.`,
+    emptyHint: 'In Storage, select items or open one, then add it to a list.',
+    toBuy: (count: number) => plural(count, { one: '# to buy', other: '# to buy' }),
+    inCart: 'In the cart',
+    /** How many of the item are in storage now. */
+    left: (count: number) => plural(count, { one: '# left', other: '# left' }),
+    noneLeft: 'none left',
+    increase: (name: string) => `Buy one more ${name}`,
+    decrease: (name: string) => `Buy one fewer ${name}`,
+    remove: (name: string) => `Take ${name} off the list`,
+    quantity: (name: string) => `How many ${name} to buy`,
+    /** Restocks the ticked items and takes them off the list, as the hint says. */
+    markBought: (count: number) => plural(count, { other: 'Bought #' }),
+    markingBought: 'Marking as bought…',
+    markBoughtHint: 'Bought items go back to their storage spaces and leave the list.',
+    /** The notice once the items are marked as bought. */
+    markedBought: (count: number) =>
+      plural(count, {
+        one: '# item is back in storage.',
+        other: '# items are back in storage.',
+      }),
+    changedElsewhere:
+      'Someone changed this list meanwhile. Check it, then mark the items as bought again.',
+  },
+
+  /** Adding, renaming, archiving and deleting shopping lists, saved together. */
+  shoppingListEditor: {
+    title: 'Edit shopping lists',
+    name: 'Shopping list name',
+    newPlaceholder: 'New list name',
+    /** Stands in for a new row's name until one is typed. */
+    unnamed: 'New list',
+    add: 'Add list',
+    empty: 'No shopping lists yet.',
+    limitReached: (max: number) =>
+      `A household can have up to ${formatNumber(max)} shopping lists, archived ones included.`,
+    archive: (name: string) => `Archive ${name}`,
+    unarchive: (name: string) => `Restore ${name}`,
+    archivedHeading: 'Archived',
+    archivedHint: 'Hidden, and nothing is added to them until they are restored.',
+    remove: (name: string) => `Delete ${name}`,
+    /** Undoes a deletion not saved yet. */
+    restore: (name: string) => `Keep ${name}`,
+    deletedOnSave: (count: number) =>
+      count === 0
+        ? 'Deleted when you save.'
+        : plural(count, {
+            one: 'Deleted when you save, with the # item on it.',
+            other: 'Deleted when you save, with the # items on it.',
+          }),
+    nameRequired: 'Enter a name.',
+    nameTaken: 'Another shopping list already has this name.',
+    save: 'Save',
+    saving: 'Saving…',
+    saveFailed: 'Couldn’t save the shopping lists.',
+    changedElsewhere:
+      'Someone else changed the shopping lists while you were editing. Their changes are in the list now: check it and save again.',
   },
 
   planner: {

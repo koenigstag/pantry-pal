@@ -24,8 +24,9 @@ Dependencies run one way: `db → shared`, `backend → {shared, db}`,
 
 `packages/db` owns the PostgreSQL schema, migrations, repositories and the
 transaction layer; its design is recorded in `packages/db/CLAUDE.md`. The
-backend's API — households, members, locations, items, and an admin API for
-units and default locations — is described in `apps/backend/CLAUDE.md`.
+backend's API — households, members, locations, items, shopping lists, and an
+admin API for units and default locations — is described in
+`apps/backend/CLAUDE.md`.
 
 `packages/shared` is the point of the workspace. It holds:
 

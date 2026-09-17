@@ -5,9 +5,10 @@ import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { Navigate, Outlet } from 'react-router';
 
 import { messages } from '../../i18n/messages';
-import { useNotices, usePantryStore } from '../../stores/StoreContext';
+import { usePantryStore } from '../../stores/StoreContext';
 import type { MenuItem } from '../../ui/Menu';
 import { PageStatus } from '../shell/PageStatus';
+import { AddToListSheet, type ListPick } from '../shopping/AddToListSheet';
 import { AddItemDialog } from './AddItemDialog';
 import type { StorageOutletContext } from './itemDetailsNavigation';
 import { ItemGrid } from './ItemGrid';
@@ -25,6 +26,7 @@ type OpenSheet =
   | { kind: 'remove'; item: PantryItem }
   | { kind: 'delete'; itemIds: readonly string[] }
   | { kind: 'move'; itemIds: readonly string[] }
+  | { kind: 'pick-list'; pick: ListPick }
   | { kind: 'add' }
   | { kind: 'locations' };
 
@@ -44,7 +46,6 @@ const NOTHING_SELECTED: ReadonlySet<string> = new Set();
  */
 export const StoragePage = observer(function StoragePage(): ReactElement {
   const pantry = usePantryStore();
-  const notices = useNotices();
   const params = useStorageParams();
 
   const [query, setQuery] = useState('');
@@ -68,11 +69,12 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
     [locationId],
   );
   const openRemoveSheet = useCallback((item: PantryItem) => setSheet({ kind: 'remove', item }), []);
+  const openListPicker = useCallback((pick: ListPick) => setSheet({ kind: 'pick-list', pick }), []);
   const closeSheet = useCallback(() => setSheet(NO_SHEET), []);
   const clearSelection = useCallback(() => setSelection(null), []);
   const outletContext = useMemo<StorageOutletContext>(
-    () => ({ openRemoveSheet }),
-    [openRemoveSheet],
+    () => ({ openRemoveSheet, openListPicker }),
+    [openRemoveSheet, openListPicker],
   );
 
   if (pantry.household === null) {
@@ -181,7 +183,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
               canMove={pantry.locations.length > 1}
               onClear={clearSelection}
               onDelete={() => setSheet({ kind: 'delete', itemIds: [...selectedIds] })}
-              onAddToShoppingList={() => notices.info(messages.pending.shoppingLists)}
+              onAddToShoppingList={() => openListPicker({ kind: 'add', itemIds: [...selectedIds] })}
               onMove={() => setSheet({ kind: 'move', itemIds: [...selectedIds] })}
             />
           ) : (
@@ -220,7 +222,19 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
 
       <Outlet context={outletContext} />
 
-      <RemoveItemSheet item={sheet.kind === 'remove' ? sheet.item : null} onClose={closeSheet} />
+      <RemoveItemSheet
+        item={sheet.kind === 'remove' ? sheet.item : null}
+        onClose={closeSheet}
+        onPickList={openListPicker}
+      />
+      <AddToListSheet
+        pick={sheet.kind === 'pick-list' ? sheet.pick : null}
+        onClose={closeSheet}
+        // A selection's items are on a list now; an item's details have nothing to clear.
+        onDone={
+          sheet.kind === 'pick-list' && sheet.pick.kind === 'add' ? clearSelection : undefined
+        }
+      />
       <DeleteItemsSheet
         itemIds={sheet.kind === 'delete' ? sheet.itemIds : null}
         onClose={closeSheet}

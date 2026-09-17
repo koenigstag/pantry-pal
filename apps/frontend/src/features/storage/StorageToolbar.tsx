@@ -91,8 +91,6 @@ export function SelectionBar({
         <IconButton
           icon={ListPlus}
           label={messages.selection.addToShoppingList}
-          title={messages.pending.shoppingLists}
-          aria-disabled="true"
           onClick={onAddToShoppingList}
           className={button}
         />

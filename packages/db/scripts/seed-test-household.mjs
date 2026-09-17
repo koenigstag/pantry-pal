@@ -16,7 +16,7 @@ import { seedTestHousehold, TEST_HOUSEHOLD_NAME } from '@pantry-pal/db/fixtures'
 const handle = createDatabase(resolveConnectionString(process.env));
 
 try {
-  const { householdId, members, locations, products, items, expiry, events } =
+  const { householdId, members, locations, shoppingLists, products, items, expiry, events } =
     await seedTestHousehold(handle.db);
 
   console.log(`Seeded "${TEST_HOUSEHOLD_NAME}" (${householdId})`);
@@ -24,6 +24,7 @@ try {
     `  members    ${members.map((m) => `${m.email} (${m.role}, ${m.unitSystem})`).join(', ')}`,
   );
   console.log(`  locations  ${locations}`);
+  console.log(`  lists      ${shoppingLists}`);
   console.log(`  products   ${products}`);
   console.log(
     `  items      ${items.active} active · ${items.consumed} consumed · ` +

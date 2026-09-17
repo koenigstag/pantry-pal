@@ -4,20 +4,29 @@ import type {
   CurrentUser,
   PantryItem,
   PantryLocation,
+  ShoppingList,
+  ShoppingListEntriesChange,
+  ShoppingListEntry,
+  ShoppingLists,
   Unit,
   UserHousehold,
 } from '@pantry-pal/shared';
 import type {
+  AddShoppingListEntriesDto,
   ChangePasswordDto,
   CreateHouseholdDto,
   CreatePantryItemDto,
+  CreateShoppingListDto,
   DevSignInDto,
+  PutAwayShoppingListEntriesDto,
   SignInDto,
   SignUpDto,
   UpdateHouseholdDto,
   UpdateMeDto,
   UpdatePantryItemDto,
+  UpdateShoppingListEntryDto,
   UpsertLocationsDto,
+  UpsertShoppingListsDto,
 } from '@pantry-pal/shared/dto';
 
 import { messages } from '../i18n/messages';
@@ -50,6 +59,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const household = (householdId: string): string => `/households/${encodeURIComponent(householdId)}`;
+
+const shoppingList = (householdId: string, listId: string): string =>
+  `${household(householdId)}/shopping-lists/${encodeURIComponent(listId)}`;
 
 export const pantryApi = {
   me: (): Promise<CurrentUser> => request<CurrentUser>('/me'),
@@ -105,6 +117,65 @@ export const pantryApi = {
   removeItem: (householdId: string, id: string): Promise<void> =>
     request<void>(`${household(householdId)}/items/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    }),
+
+  /** Every list, every entry, and the items the entries name — used-up ones included. */
+  listShoppingLists: (householdId: string): Promise<ShoppingLists> =>
+    request<ShoppingLists>(`${household(householdId)}/shopping-lists`),
+
+  /** 409 when the household has a list of that name, or has as many lists as it may. */
+  createShoppingList: (householdId: string, dto: CreateShoppingListDto): Promise<ShoppingList> =>
+    request<ShoppingList>(`${household(householdId)}/shopping-lists`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    }),
+
+  /** The shopping lists editor's save: every list in its new order. 409 when the set was stale. */
+  upsertShoppingLists: (
+    householdId: string,
+    dto: UpsertShoppingListsDto,
+  ): Promise<ShoppingList[]> =>
+    request<ShoppingList[]>(`${household(householdId)}/shopping-lists`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    }),
+
+  /** Answers with the entries it created: items already on the list are left alone. */
+  addShoppingListEntries: (
+    householdId: string,
+    listId: string,
+    dto: AddShoppingListEntriesDto,
+  ): Promise<ShoppingListEntriesChange> =>
+    request<ShoppingListEntriesChange>(`${shoppingList(householdId, listId)}/entries`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    }),
+
+  updateShoppingListEntry: (
+    householdId: string,
+    listId: string,
+    entryId: string,
+    dto: UpdateShoppingListEntryDto,
+  ): Promise<ShoppingListEntry> =>
+    request<ShoppingListEntry>(
+      `${shoppingList(householdId, listId)}/entries/${encodeURIComponent(entryId)}`,
+      { method: 'PATCH', body: JSON.stringify(dto) },
+    ),
+
+  removeShoppingListEntry: (householdId: string, listId: string, entryId: string): Promise<void> =>
+    request<void>(`${shoppingList(householdId, listId)}/entries/${encodeURIComponent(entryId)}`, {
+      method: 'DELETE',
+    }),
+
+  /** Restocks the ticked-off entries and takes them off the list; 409 when the list changed. */
+  putAwayShoppingListEntries: (
+    householdId: string,
+    listId: string,
+    dto: PutAwayShoppingListEntriesDto,
+  ): Promise<PantryItem[]> =>
+    request<PantryItem[]>(`${shoppingList(householdId, listId)}/put-away`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
     }),
 };
 

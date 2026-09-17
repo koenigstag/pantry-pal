@@ -23,6 +23,8 @@ import {
   seedCategories,
   seedDefaultLocations,
   seedUnits,
+  ShoppingListEntriesRepository,
+  ShoppingListsRepository,
   UnitsRepository,
   UsersRepository,
   type Database,
@@ -41,6 +43,8 @@ const REPOSITORIES = [
   ItemsRepository,
   LocationsRepository,
   RefreshTokensRepository,
+  ShoppingListEntriesRepository,
+  ShoppingListsRepository,
   UnitsRepository,
   UsersRepository,
 ];

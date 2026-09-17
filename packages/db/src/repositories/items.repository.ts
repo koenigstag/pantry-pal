@@ -1,5 +1,5 @@
 import { ITEM_STATUS, type ItemStatus } from '@pantry-pal/shared';
-import { and, asc, count, eq, gt, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, gt, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../client';
 import { items, type ItemRow, type NewItemRow } from '../schema';
@@ -75,6 +75,34 @@ export class ItemsRepository {
     return row;
   }
 
+  /** Items by id, whatever their status. Soft-deleted ones and ids of other households are left out. */
+  findByIds(householdId: string, ids: readonly string[]): Promise<ItemRow[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+
+    return this.db.select().from(items).where(this.liveIn(householdId, ids)).orderBy(asc(items.id));
+  }
+
+  /**
+   * `findByIds`, row-locked until the transaction ends: `share` to keep items
+   * from being deleted while entries naming them are written, `update` to
+   * change them. Locked in id order, so two callers locking overlapping sets
+   * cannot deadlock on each other.
+   */
+  lockMany(
+    householdId: string,
+    ids: readonly string[],
+    strength: 'share' | 'update',
+  ): Promise<ItemRow[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+
+    return this.db
+      .select()
+      .from(items)
+      .where(this.liveIn(householdId, ids))
+      .orderBy(asc(items.id))
+      .for(strength);
+  }
+
   /**
    * Reads an item and row-locks it until the transaction ends, so a
    * read-compare-write (an update that records what changed) cannot interleave
@@ -139,6 +167,20 @@ export class ItemsRepository {
     return rows.length;
   }
 
+  /**
+   * Clears a shopping list from every item that has it as its default, soft-deleted
+   * and past items included — `items_default_shopping_list_household_fk` counts
+   * them all — and returns the rows it changed. `updated_at` moves, so a delta
+   * sync picks them up.
+   */
+  clearDefaultShoppingList(householdId: string, listId: string): Promise<ItemRow[]> {
+    return this.db
+      .update(items)
+      .set({ defaultShoppingListId: null })
+      .where(and(eq(items.householdId, householdId), eq(items.defaultShoppingListId, listId)))
+      .returning();
+  }
+
   /** Soft delete: the row survives so the change still shows up in a delta sync. */
   async softDelete(householdId: string, id: string): Promise<ItemRow | undefined> {
     const [row] = await this.db
@@ -178,6 +220,14 @@ export class ItemsRepository {
 
   private live(householdId: string, id: string) {
     return and(eq(items.householdId, householdId), eq(items.id, id), isNull(items.deletedAt));
+  }
+
+  private liveIn(householdId: string, ids: readonly string[]) {
+    return and(
+      eq(items.householdId, householdId),
+      inArray(items.id, [...ids]),
+      isNull(items.deletedAt),
+    );
   }
 
   private activeIn(householdId: string, locationId: string) {

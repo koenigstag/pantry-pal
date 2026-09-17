@@ -21,6 +21,14 @@ const CONSTRAINT_MESSAGES: Readonly<Record<string, string>> = {
   items_size_pair: 'sizeValue and sizeUnit must be given together',
   items_unit_count_fk: `unit must be a count unit such as "${COUNT_UNIT}", and a count unit in use can be neither deleted nor given another kind`,
   items_quantity_positive: 'quantity must not be negative',
+  items_default_shopping_list_household_fk:
+    "The shopping list does not exist in this household, or is still some item's default",
+  shopping_lists_household_name_idx:
+    'A shopping list with this name already exists in this household',
+  shopping_list_entries_list_household_fk: 'The shopping list does not exist in this household',
+  shopping_list_entries_item_household_fk: 'The item does not exist in this household',
+  shopping_list_entries_list_item_idx: 'The item is already on this shopping list',
+  shopping_list_entries_quantity_positive: 'quantity must be at least 1',
 };
 
 /**
@@ -58,6 +66,10 @@ export function translateDatabaseError(error: unknown): HttpException | undefine
     case PG_ERROR.DatetimeFieldOverflow:
     case PG_ERROR.InvalidTextRepresentation:
       return new BadRequestException(known ?? 'A value is invalid for its field');
+
+    // Rolled back whole, so nothing was written: the client can send it again.
+    case PG_ERROR.DeadlockDetected:
+      return new ConflictException('Another change to the same data got in the way. Try again.');
 
     default:
       return undefined;

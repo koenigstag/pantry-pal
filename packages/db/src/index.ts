@@ -11,6 +11,8 @@ export type {
   LocationRow,
   ProductRow,
   RefreshTokenRow,
+  ShoppingListEntryRow,
+  ShoppingListRow,
   UnitRow,
   UserRow,
 } from './schema';

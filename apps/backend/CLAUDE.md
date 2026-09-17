@@ -48,7 +48,8 @@ src/
   common/       request context: @CurrentUser, @CurrentMembership, Membership
   households/   households + members, MembershipService, HouseholdAccessGuard
   locations/    per-household locations: CRUD, reorder, soft delete
-  items/        per-household items and their event history
+  items/        per-household items and their event history; running out, restocking
+  shopping-lists/ lists and their entries: the editor's save, archiving, putting away
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
@@ -75,6 +76,11 @@ PUT                    /households/:householdId/locations/order       full order
 GET    PATCH  DELETE   /households/:householdId/locations/:locationId DELETE takes ?moveItemsTo=
 GET    POST            /households/:householdId/items                 GET takes ?status=&locationId=
 GET    PATCH  DELETE   /households/:householdId/items/:itemId
+GET    POST   PUT      /households/:householdId/shopping-lists        PUT: the editor's whole set
+PATCH  DELETE          /households/:householdId/shopping-lists/:listId
+POST                   /households/:householdId/shopping-lists/:listId/entries           itemIds, quantity
+PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:entryId  quantity, checked
+POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
@@ -213,6 +219,56 @@ the default storage spaces. Deleting a location — `DELETE ...?moveItemsTo=` or
 or to the fallback when that is omitted. The fallback itself can be reordered and
 re-iconed but never renamed or deleted (409); the database backs the delete rule
 with `locations_fallback_not_deleted`.
+
+## Shopping lists
+
+A list names items rather than copying them: an entry is an item, how many to
+buy, and whether it is ticked off. Any member manages lists and entries.
+
+- **Every household starts with a list**, "My shopping list", which
+  `HouseholdsService.create` creates with it. The name follows the creator's
+  language (`defaultShoppingListName` in shared): the exact tag, then its
+  language, then English.
+  - From then on it is an ordinary list, renamed, archived or deleted like any
+    other, so a household can end up with none.
+  - Creating a household announces the creator as a member first, which moves
+    their open sockets into its room, and then the list.
+- **Running out puts an item on its default list** (`items.default_shopping_list_id`),
+  in the same transaction. `ItemsService.update` adds one of it when a patch takes
+  it from in stock (active, quantity above 0) to not: consumed, discarded, or down
+  to 0. An item already on the list stays as it is. Deleting an item is a
+  correction, and takes it off every list instead.
+- **"I used it already"** sends `status` and `defaultShoppingListId` in one patch,
+  so a list picked while using an item up becomes its default, atomically.
+- **Adding** (`POST .../entries`) skips items already on the list and answers with
+  the entries it created. One unknown item fails the whole request (404).
+- **Putting the shopping away** (`POST .../put-away`, the frontend's "Bought"
+  button) restocks each named entry's item (`ItemsService.restock`) and deletes
+  the entries, all or nothing.
+  - An item in stock gains the quantity.
+  - One that ran out starts over as a new batch: active, just the bought quantity,
+    dates cleared, in its own location, or in the fallback if that was deleted.
+  - An entry not on the list, or no longer ticked off, is a 409: the client acted
+    on a stale list.
+- **The editor saves with one `PUT`**, like the locations editor: additions, renames,
+  archiving, deletions and order, announced as one `ShoppingListsUpserted` set.
+  The set must name every list, archived ones included (409 otherwise), and renames
+  go through placeholders so swapped names do not collide mid-statement.
+- **Deleting a list** clears it from the items that have it as their default, each
+  recorded in the item's history and announced, then deletes it with its entries.
+- **An archived list is frozen.**
+  - Every entry write to it is a 409.
+  - It cannot become an item's default (400).
+  - Items that run out skip it but keep it as their default, so restoring the
+    list brings everything back as it was.
+  - It can still be renamed, restored or deleted.
+- **Broadcasts carry the items with the entries** (`ShoppingListEntriesUpserted`): an
+  item used up is off the shelf, so it is not among the active items a client holds.
+  The socket snapshot includes the lists, their entries and those items.
+- **Locks follow one order** — household, items, lists, entries — in both
+  `ItemsService` and `ShoppingListsService`, so the two cannot deadlock on each
+  other. A deadlock that happens anyway (`40P01`) is rolled back whole and
+  translated to a 409, so the request can simply be sent again.
 
 ## Request flow
 

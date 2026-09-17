@@ -18,5 +18,7 @@ export * from './default-locations';
 export * from './households';
 export * from './locations';
 export * from './products';
+export * from './shopping-lists';
 export * from './items';
 export * from './item-events';
+export * from './shopping-list-entries';

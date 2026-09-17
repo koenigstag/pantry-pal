@@ -94,10 +94,6 @@ export const fr = {
     refreshFailed: 'Impossible d’actualiser\u00A0: les dernières données reçues sont affichées.',
   },
 
-  pending: {
-    shoppingLists: 'Les listes de courses arrivent bientôt.',
-  },
-
   categories: {
     name: (code: string, label: string): string => CATEGORY_NAMES.get(code) ?? label,
   },
@@ -164,7 +160,21 @@ export const fr = {
   removeSheet: {
     title: (name: string) => `Retirer ${q(name)}\u202F?`,
     usedIt: 'Déjà utilisé\u00A0: l’ajouter à la liste de courses',
+    usedItOnList: (list: string) => `Déjà utilisé\u00A0: l’ajouter à ${q(list)}`,
     justDelete: 'Simplement le supprimer',
+  },
+
+  addToList: {
+    title: (count: number) => articles(count, 'Ajouter ', ' à'),
+    usedUpTitle: (name: string) => `Ajouter ${q(name)} à`,
+    usedUpHint: 'La prochaine fois qu’il viendra à manquer, il y sera ajouté tout seul.',
+    alreadyOn: 'Déjà sur cette liste',
+    someAlreadyOn: (count: number) => plural(count, { other: 'Dont # déjà dessus' }),
+    newList: 'Nouvelle liste',
+    added: (count: number, list: string) =>
+      `${plural(count, { one: '# article ajouté', other: '# articles ajoutés' })} à ${q(list)}.`,
+    nothingAdded: (list: string) => `Déjà sur ${q(list)}.`,
+    usedUpAdded: (name: string, list: string) => `${q(name)} est sur ${q(list)}.`,
   },
 
   deleteSheet: {
@@ -258,6 +268,10 @@ export const fr = {
     openedToday: 'Aujourd’hui',
     clearOpened: 'Effacer la date d’ouverture',
     periodAfterOpening: 'À consommer dans les (jours après ouverture)',
+    shoppingList: 'Liste de courses',
+    shoppingListHint: 'Quand il vient à manquer, il s’ajoute tout seul à cette liste.',
+    noShoppingList: 'Aucune',
+    archivedList: (name: string) => `${q(name)} (archivée)`,
     notes: 'Notes',
     conflict: (fields: string) =>
       `Quelqu’un d’autre a modifié ${fields} pendant votre modification. L’enregistrement conserve vos valeurs.`,
@@ -281,6 +295,7 @@ export const fr = {
     periodAfterOpeningDays: (max: number) =>
       `Saisissez un nombre entier de jours de 1 à ${formatNumber(max)}.`,
     notes: (max: number) => `Les notes sont limitées à ${formatNumber(max)} caractères.`,
+    defaultShoppingListId: 'Choisissez une liste de courses.',
   },
 
   itemDetails: {
@@ -305,6 +320,13 @@ export const fr = {
     added: 'Ajouté le',
     updated: 'Modifié le',
     remove: 'Retirer l’article',
+    shopping: 'Courses',
+    defaultList: (list: string) => `Quand il viendra à manquer, il ira sur ${q(list)}.`,
+    noDefaultList: 'Quand il viendra à manquer, il n’ira sur aucune liste tout seul.',
+    defaultListArchived: (list: string) =>
+      `Quand il viendra à manquer, il n’ira sur aucune liste tant que ${q(list)} est archivée.`,
+    onLists: (lists: string) => `Actuellement sur\u00A0: ${lists}.`,
+    addToList: 'Ajouter à une liste de courses',
   },
 
   discardSheet: {
@@ -418,7 +440,78 @@ export const fr = {
 
   shopping: {
     title: 'Courses',
-    description: 'Les listes de courses arrivent bientôt.',
+    lists: 'Listes de courses',
+    editLists: 'Modifier les listes de courses',
+    listName: 'Nom de la liste',
+    defaultListName: 'Ma liste de courses',
+    create: 'Créer',
+    creating: 'Création…',
+    nameRequired: (max: number) => `Saisissez un nom de ${formatNumber(max)} caractères au plus.`,
+    nameTaken: 'Une autre liste de courses porte déjà ce nom.',
+    limitReached: (max: number) =>
+      `Un foyer peut avoir jusqu’à ${formatNumber(max)} listes de courses.`,
+    moreActions: 'Plus d’actions',
+    refresh: 'Actualiser',
+    share: 'Partager la liste',
+    nothingToShare: 'Il ne reste rien à acheter sur cette liste.',
+    copied: 'Liste copiée. Collez-la dans un message.',
+    shareFailed: 'Impossible de partager la liste.',
+    shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
+    loadFailed: 'Impossible de charger les listes de courses.',
+    noLists: 'Aucune liste de courses pour l’instant.',
+    createFirst: 'Créer une liste de courses',
+    emptyList: (list: string) => `Rien sur ${q(list)} pour l’instant.`,
+    emptyHint:
+      'Dans Réserves, sélectionnez des articles ou ouvrez-en un, puis ajoutez-le à une liste.',
+    toBuy: (count: number) => plural(count, { other: '# à acheter' }),
+    inCart: 'Dans le panier',
+    left: (count: number) => plural(count, { other: 'il en reste #' }),
+    noneLeft: 'il n’en reste plus',
+    increase: (name: string) => `Acheter plus de ${q(name)}`,
+    decrease: (name: string) => `Acheter moins de ${q(name)}`,
+    remove: (name: string) => `Retirer ${q(name)} de la liste`,
+    quantity: (name: string) => `Quantité de ${q(name)} à acheter`,
+    markBought: (count: number) => plural(count, { one: '# acheté', other: '# achetés' }),
+    markingBought: 'Marquage…',
+    markBoughtHint: 'Les articles achetés retournent à leur emplacement et quittent la liste.',
+    markedBought: (count: number) =>
+      plural(count, {
+        one: '# article est de retour dans les réserves.',
+        other: '# articles sont de retour dans les réserves.',
+      }),
+    changedElsewhere:
+      'Quelqu’un a modifié cette liste entre-temps. Vérifiez-la, puis marquez à nouveau les articles comme achetés.',
+  },
+
+  shoppingListEditor: {
+    title: 'Modifier les listes de courses',
+    name: 'Nom de la liste de courses',
+    newPlaceholder: 'Nom de la nouvelle liste',
+    unnamed: 'Nouvelle liste',
+    add: 'Ajouter une liste',
+    empty: 'Aucune liste de courses pour l’instant.',
+    limitReached: (max: number) =>
+      `Un foyer peut avoir jusqu’à ${formatNumber(max)} listes de courses, archivées comprises.`,
+    archive: (name: string) => `Archiver ${q(name)}`,
+    unarchive: (name: string) => `Restaurer ${q(name)}`,
+    archivedHeading: 'Archivées',
+    archivedHint: 'Masquées, et rien n’y est ajouté tant qu’elles ne sont pas restaurées.',
+    remove: (name: string) => `Supprimer ${q(name)}`,
+    restore: (name: string) => `Conserver ${q(name)}`,
+    deletedOnSave: (count: number) =>
+      count === 0
+        ? 'Supprimée à l’enregistrement.'
+        : plural(count, {
+            one: 'Supprimée à l’enregistrement, avec son article.',
+            other: 'Supprimée à l’enregistrement, avec ses # articles.',
+          }),
+    nameRequired: 'Saisissez un nom.',
+    nameTaken: 'Une autre liste de courses porte déjà ce nom.',
+    save: 'Enregistrer',
+    saving: 'Enregistrement…',
+    saveFailed: 'Impossible d’enregistrer les listes de courses.',
+    changedElsewhere:
+      'Quelqu’un d’autre a modifié les listes de courses pendant votre modification. Ses changements figurent maintenant dans la liste\u00A0: vérifiez-la et enregistrez à nouveau.',
   },
 
   planner: {

@@ -1,5 +1,5 @@
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@pantry-pal/shared';
-import { CalendarDays, LogOut, ShoppingCart } from 'lucide-react';
+import { CalendarDays, LogOut } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useId, useState, type ReactElement } from 'react';
 
@@ -14,16 +14,6 @@ import { canRenameHousehold } from './profile/details';
 import { DetailsForm } from './profile/DetailsForm';
 import { ComingSoonPage } from './shell/ComingSoonPage';
 import { PageStatus } from './shell/PageStatus';
-
-export function ShoppingPage(): ReactElement {
-  return (
-    <ComingSoonPage
-      title={messages.shopping.title}
-      description={messages.shopping.description}
-      icon={ShoppingCart}
-    />
-  );
-}
 
 export function PlannerPage(): ReactElement {
   return (

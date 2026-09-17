@@ -20,6 +20,7 @@ export function toPantryItem(row: ItemRow): PantryItem {
     effectiveExpiresAt: row.effectiveExpiresAt,
     notes: row.notes,
     status: row.status,
+    defaultShoppingListId: row.defaultShoppingListId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

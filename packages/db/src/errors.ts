@@ -11,6 +11,12 @@ export const PG_ERROR = {
   InvalidDatetimeFormat: '22007',
   DatetimeFieldOverflow: '22008',
   InvalidTextRepresentation: '22P02',
+  /**
+   * Two transactions each waited for a row the other had locked, and Postgres
+   * rolled this one back. Nothing was written, so the request can simply be
+   * sent again.
+   */
+  DeadlockDetected: '40P01',
 } as const;
 
 export type PgErrorCode = (typeof PG_ERROR)[keyof typeof PG_ERROR];
