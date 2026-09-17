@@ -491,17 +491,17 @@ export const uk = {
     decrease: (name: string) => `Купити менше: «${name}»`,
     remove: (name: string) => `Прибрати «${name}» зі списку`,
     quantity: (name: string) => `Скільки купити: «${name}»`,
-    putAway: (count: number) => items(count, 'Розкласти '),
-    puttingAway: 'Розкладаємо…',
-    putAwayHint: 'Відмічені предмети повернуться на свої місця зберігання.',
-    putAwayDone: (count: number) =>
+    markBought: (count: number) => plural(count, { other: 'Позначити як куплене: #' }),
+    markingBought: 'Позначаємо…',
+    markBoughtHint: 'Куплене повернеться на свої місця зберігання й зникне зі списку.',
+    markedBought: (count: number) =>
       plural(count, {
         one: '# предмет знову на місці.',
         few: '# предмети знову на місці.',
         many: '# предметів знову на місці.',
         other: '# предмета знову на місці.',
       }),
-    changedElsewhere: 'Хтось змінив цей список. Перевірте його й розкладіть покупки ще раз.',
+    changedElsewhere: 'Хтось змінив цей список. Перевірте його й позначте куплене ще раз.',
   },
 
   shoppingListEditor: {

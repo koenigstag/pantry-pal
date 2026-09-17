@@ -469,16 +469,17 @@ export const de = {
     decrease: (name: string) => `Weniger „${name}“ kaufen`,
     remove: (name: string) => `„${name}“ von der Liste nehmen`,
     quantity: (name: string) => `Wie viel „${name}“ kaufen`,
-    putAway: (count: number) => plural(count, { other: '# Artikel einräumen' }),
-    puttingAway: 'Wird eingeräumt…',
-    putAwayHint: 'Abgehakte Artikel kommen zurück an ihre Lagerorte.',
-    putAwayDone: (count: number) =>
+    markBought: (count: number) => plural(count, { other: '# als gekauft markieren' }),
+    markingBought: 'Wird markiert…',
+    markBoughtHint:
+      'Gekaufte Artikel kommen zurück an ihre Lagerorte und verschwinden von der Liste.',
+    markedBought: (count: number) =>
       plural(count, {
         one: '# Artikel ist wieder im Vorrat.',
         other: '# Artikel sind wieder im Vorrat.',
       }),
     changedElsewhere:
-      'Jemand hat diese Liste inzwischen geändert. Liste prüfen und dann erneut einräumen.',
+      'Jemand hat diese Liste inzwischen geändert. Liste prüfen und dann erneut als gekauft markieren.',
   },
 
   shoppingListEditor: {

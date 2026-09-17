@@ -471,16 +471,20 @@ export const fr = {
     decrease: (name: string) => `Acheter moins de ${q(name)}`,
     remove: (name: string) => `Retirer ${q(name)} de la liste`,
     quantity: (name: string) => `Quantité de ${q(name)} à acheter`,
-    putAway: (count: number) => articles(count, 'Ranger '),
-    puttingAway: 'Rangement…',
-    putAwayHint: 'Les articles cochés retournent à leur emplacement.',
-    putAwayDone: (count: number) =>
+    markBought: (count: number) =>
+      plural(count, {
+        one: 'Marquer # article comme acheté',
+        other: 'Marquer # articles comme achetés',
+      }),
+    markingBought: 'Marquage…',
+    markBoughtHint: 'Les articles achetés retournent à leur emplacement et quittent la liste.',
+    markedBought: (count: number) =>
       plural(count, {
         one: '# article est de retour dans les réserves.',
         other: '# articles sont de retour dans les réserves.',
       }),
     changedElsewhere:
-      'Quelqu’un a modifié cette liste entre-temps. Vérifiez-la, puis rangez à nouveau.',
+      'Quelqu’un a modifié cette liste entre-temps. Vérifiez-la, puis marquez à nouveau les articles comme achetés.',
   },
 
   shoppingListEditor: {

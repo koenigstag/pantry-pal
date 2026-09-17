@@ -120,7 +120,7 @@ export const frCA = {
     createFirst: 'Créer une liste d’épicerie',
     emptyHint:
       'Dans Garde-manger, sélectionnez des articles ou ouvrez-en un, puis ajoutez-le à une liste.',
-    putAwayDone: (count: number) =>
+    markedBought: (count: number) =>
       plural(count, {
         one: '# article est de retour au garde-manger.',
         other: '# articles sont de retour au garde-manger.',

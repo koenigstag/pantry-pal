@@ -57,7 +57,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
   const { listId } = useParams<{ listId: string }>();
 
   const [editor, setEditor] = useState<EditorState>(EDITOR_CLOSED);
-  const [isPuttingAway, setPuttingAway] = useState(false);
+  const [isMarkingBought, setMarkingBought] = useState(false);
 
   if (pantry.household === null) {
     return pantry.loadState === 'failed' ? (
@@ -121,17 +121,17 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
     if (outcome === 'failed') notices.error(messages.shopping.shareFailed);
   }
 
-  async function putAway(): Promise<void> {
-    if (list === undefined || inCart.length === 0 || isPuttingAway) return;
+  async function markBought(): Promise<void> {
+    if (list === undefined || inCart.length === 0 || isMarkingBought) return;
 
     const count = inCart.length;
-    setPuttingAway(true);
+    setMarkingBought(true);
     const failure = await pantry.putAwayShopping(
       list.id,
       inCart.map((entry) => entry.id),
     );
-    setPuttingAway(false);
-    if (failure === null) notices.info(messages.shopping.putAwayDone(count));
+    setMarkingBought(false);
+    if (failure === null) notices.info(messages.shopping.markedBought(count));
     else notices.error(failure);
   }
 
@@ -151,7 +151,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
   ];
 
   return (
-    // At least a screen tall (above the phone's tab bar), so the put-away bar sits at the
+    // At least a screen tall (above the phone's tab bar), so the mark-as-bought bar sits at the
     // bottom of a short list rather than right under it.
     <div className="flex min-h-[calc(100dvh-4rem-env(safe-area-inset-bottom))] flex-col md:min-h-dvh">
       <header className="bg-accent text-on-accent md:bg-transparent md:text-ink">
@@ -268,18 +268,18 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
         <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] border-t border-line bg-surface/95 px-4 py-3 backdrop-blur md:bottom-0 md:px-8">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
             <p className="hidden flex-1 text-sm text-ink-muted sm:block">
-              {messages.shopping.putAwayHint}
+              {messages.shopping.markBoughtHint}
             </p>
             <button
               type="button"
-              aria-disabled={isPuttingAway || undefined}
-              onClick={() => void putAway()}
+              aria-disabled={isMarkingBought || undefined}
+              onClick={() => void markBought()}
               className="focus-ring inline-flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover aria-disabled:opacity-60 sm:flex-none"
             >
               <PackageCheck aria-hidden="true" className="size-5" />
-              {isPuttingAway
-                ? messages.shopping.puttingAway
-                : messages.shopping.putAway(inCart.length)}
+              {isMarkingBought
+                ? messages.shopping.markingBought
+                : messages.shopping.markBought(inCart.length)}
             </button>
           </div>
         </div>

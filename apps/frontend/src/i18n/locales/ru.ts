@@ -502,17 +502,17 @@ export const ru = {
     decrease: (name: string) => `Купить меньше: «${name}»`,
     remove: (name: string) => `Убрать «${name}» из списка`,
     quantity: (name: string) => `Сколько купить: «${name}»`,
-    putAway: (count: number) => items(count, 'Разложить '),
-    puttingAway: 'Раскладываем…',
-    putAwayHint: 'Отмеченные предметы вернутся на свои места хранения.',
-    putAwayDone: (count: number) =>
+    markBought: (count: number) => plural(count, { other: 'Отметить как купленное: #' }),
+    markingBought: 'Отмечаем…',
+    markBoughtHint: 'Купленное вернётся на свои места хранения и исчезнет из списка.',
+    markedBought: (count: number) =>
       plural(count, {
         one: '# предмет снова на месте.',
         few: '# предмета снова на месте.',
         many: '# предметов снова на месте.',
         other: '# предмета снова на месте.',
       }),
-    changedElsewhere: 'Кто-то изменил этот список. Проверьте его и разложите покупки ещё раз.',
+    changedElsewhere: 'Кто-то изменил этот список. Проверьте его и отметьте купленное ещё раз.',
   },
 
   shoppingListEditor: {

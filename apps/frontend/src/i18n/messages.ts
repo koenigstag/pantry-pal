@@ -533,17 +533,18 @@ const en = {
     decrease: (name: string) => `Buy one fewer ${name}`,
     remove: (name: string) => `Take ${name} off the list`,
     quantity: (name: string) => `How many ${name} to buy`,
-    putAway: (count: number) =>
-      plural(count, { one: 'Put # item away', other: 'Put # items away' }),
-    puttingAway: 'Putting away…',
-    putAwayHint: 'Ticked items go back to their storage spaces.',
-    putAwayDone: (count: number) =>
+    /** Restocks the ticked items and takes them off the list, as the hint says. */
+    markBought: (count: number) => plural(count, { other: 'Mark # as bought' }),
+    markingBought: 'Marking as bought…',
+    markBoughtHint: 'Bought items go back to their storage spaces and leave the list.',
+    /** The notice once the items are marked as bought. */
+    markedBought: (count: number) =>
       plural(count, {
         one: '# item is back in storage.',
         other: '# items are back in storage.',
       }),
     changedElsewhere:
-      'Someone changed this list meanwhile. Check it, then put the shopping away again.',
+      'Someone changed this list meanwhile. Check it, then mark the items as bought again.',
   },
 
   /** Adding, renaming, archiving and deleting shopping lists, saved together. */
