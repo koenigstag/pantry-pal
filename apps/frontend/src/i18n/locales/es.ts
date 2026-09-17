@@ -341,6 +341,11 @@ export const es = {
     displayNameHint: 'Opcional. Lo ven las personas con las que compartes un hogar.',
     passwordHint: (min: number) =>
       plural(min, { one: 'Al menos # carácter.', other: 'Al menos # caracteres.' }),
+    continueWithGoogle: 'Continuar con Google',
+    continueWithEmail: 'Continuar con correo electrónico',
+    otherMethods: 'Otras formas de iniciar sesión',
+    continue: 'Continuar',
+    changeEmail: 'Cambiar el correo electrónico',
     signIn: 'Iniciar sesión',
     signingIn: 'Iniciando sesión…',
     signUp: 'Crear cuenta',
@@ -367,7 +372,6 @@ export const es = {
         `El nombre puede tener ${formatNumber(max)} caracteres como máximo.`,
     },
     dev: {
-      title: 'Desarrollo',
       hint: 'Inicia sesión con cualquier correo electrónico, sin contraseña, mientras el backend se ejecute con DEV_AUTH=true.',
       submit: 'Iniciar sesión sin contraseña',
       unavailable: 'El backend no se está ejecutando con DEV_AUTH=true.',

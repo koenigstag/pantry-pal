@@ -332,6 +332,11 @@ export const de = {
     displayNameHint: 'Optional. Sichtbar für alle, mit denen ein Haushalt geteilt wird.',
     passwordHint: (min: number) =>
       plural(min, { one: 'Mindestens # Zeichen.', other: 'Mindestens # Zeichen.' }),
+    continueWithGoogle: 'Weiter mit Google',
+    continueWithEmail: 'Weiter mit E-Mail',
+    otherMethods: 'Andere Anmeldemöglichkeiten',
+    continue: 'Weiter',
+    changeEmail: 'E-Mail ändern',
     signIn: 'Anmelden',
     signingIn: 'Anmeldung läuft…',
     signUp: 'Konto erstellen',
@@ -357,7 +362,6 @@ export const de = {
         `Der Name darf höchstens ${formatNumber(max)} Zeichen lang sein.`,
     },
     dev: {
-      title: 'Entwicklung',
       hint: 'Meldet eine beliebige E-Mail-Adresse ohne Passwort an, solange das Backend mit DEV_AUTH=true läuft.',
       submit: 'Ohne Passwort anmelden',
       unavailable: 'Das Backend läuft nicht mit DEV_AUTH=true.',

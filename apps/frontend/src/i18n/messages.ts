@@ -382,6 +382,11 @@ const en = {
     displayNameHint: 'Optional. The people you share a household with see it.',
     passwordHint: (min: number) =>
       plural(min, { one: 'At least # character.', other: 'At least # characters.' }),
+    continueWithGoogle: 'Continue with Google',
+    continueWithEmail: 'Continue with email',
+    otherMethods: 'Other ways to sign in',
+    continue: 'Continue',
+    changeEmail: 'Change email',
     signIn: 'Sign in',
     signingIn: 'Signing in…',
     signUp: 'Create account',
@@ -406,7 +411,6 @@ const en = {
       displayName: (max: number) => `Keep the name to ${formatNumber(max)} characters.`,
     },
     dev: {
-      title: 'Development',
       hint: 'Signs in as any email, without a password, while the backend runs with DEV_AUTH=true.',
       submit: 'Sign in without a password',
       unavailable: 'The backend isn’t running with DEV_AUTH=true.',

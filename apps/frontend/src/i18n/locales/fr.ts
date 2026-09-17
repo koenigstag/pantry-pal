@@ -332,6 +332,11 @@ export const fr = {
     displayNameHint: 'Facultatif. Visible par les personnes avec qui vous partagez un foyer.',
     passwordHint: (min: number) =>
       plural(min, { one: 'Au moins # caractère.', other: 'Au moins # caractères.' }),
+    continueWithGoogle: 'Continuer avec Google',
+    continueWithEmail: 'Continuer avec l’e-mail',
+    otherMethods: 'Autres moyens de connexion',
+    continue: 'Continuer',
+    changeEmail: 'Modifier l’e-mail',
     signIn: 'Se connecter',
     signingIn: 'Connexion…',
     signUp: 'Créer le compte',
@@ -356,7 +361,6 @@ export const fr = {
       displayName: (max: number) => `Le nom est limité à ${formatNumber(max)} caractères.`,
     },
     dev: {
-      title: 'Développement',
       hint: 'Connecte n’importe quelle adresse e-mail sans mot de passe, tant que le backend tourne avec DEV_AUTH=true.',
       submit: 'Se connecter sans mot de passe',
       unavailable: 'Le backend ne tourne pas avec DEV_AUTH=true.',

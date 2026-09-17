@@ -167,9 +167,24 @@ out as `Authorization: Bearer` and in the socket handshake; the refresh token
   remembering the page in router state (`from`); `GuestOnly` sends a signed-in
   visitor on to it. The sign-in pages validate with the shared DTOs and show
   catalog messages (`authFieldErrors`).
-- **Development builds** show a sign-in without a password under the form,
-  starting from `VITE_DEV_USER_EMAIL` (default: the seeded test household's
-  owner). It works only while the backend runs with `DEV_AUTH=true`.
+- **Sign-in has three steps:** how to sign in, the email, then the password. The
+  first offers Google (shown with `aria-disabled` until the backend supports it)
+  and email. One form holds both inputs throughout, and each step only hides the
+  ones it does not use, so a password manager can fill both at any step and the
+  later steps show what it filled:
+  - Hide with `opacity-0`, out of the layout, plus `inert` — never `hidden` or
+    `display: none`, which some managers refuse to fill.
+  - Read the values from the inputs, not from state. Autofill does not always
+    fire React's events, and Chrome withholds a filled password from scripts
+    until the user interacts with the page.
+  - On the password step the hidden email is read too: only a manager can change
+    it there, and it fills that account's password with it.
+  - A different email accepted on a later Continue clears the password, which
+    belonged to the previous account.
+- **Development builds** start the email step with `VITE_DEV_USER_EMAIL`
+  (default: the seeded test household's owner) and add Sign in without a
+  password to the password step. It works only while the backend runs with
+  `DEV_AUTH=true`.
 - **The Profile page** has Sign out, and the password form when the account has
   a password (`CurrentUser.hasPassword`). Changing it signs out the account's
   other devices; a wrong current password is a 403, which the form shows,

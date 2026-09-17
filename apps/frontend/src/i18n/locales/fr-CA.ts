@@ -78,6 +78,8 @@ export const frCA = {
   auth: {
     ...fr.auth,
     email: 'Courriel',
+    continueWithEmail: 'Continuer avec le courriel',
+    changeEmail: 'Modifier le courriel',
     noAccount: 'Pas encore de compte?',
     haveAccount: 'Vous avez déjà un compte?',
     invalidCredentials: 'Courriel ou mot de passe incorrect.',
