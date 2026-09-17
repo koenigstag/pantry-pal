@@ -25,4 +25,6 @@ export type DomainChange =
   | { readonly type: 'household.deleted'; readonly householdId: string }
   | { readonly type: 'member.added'; readonly member: HouseholdMember }
   | { readonly type: 'member.updated'; readonly member: HouseholdMember }
-  | { readonly type: 'member.removed'; readonly householdId: string; readonly userId: string };
+  | { readonly type: 'member.removed'; readonly householdId: string; readonly userId: string }
+  /** Signed out, or its refresh token was reused: close the sockets it opened. */
+  | { readonly type: 'session.revoked'; readonly userId: string; readonly sessionId: string };

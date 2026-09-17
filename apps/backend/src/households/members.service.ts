@@ -47,7 +47,7 @@ export class MembersService {
     const user = await this.users.findByEmail(dto.email);
     if (user === undefined) {
       throw new NotFoundException(
-        `No user with email ${dto.email}. They need to sign in once before they can be added.`,
+        `No user with email ${dto.email}. They need an account before they can be added.`,
       );
     }
     if ((await this.members.findRole(membership.householdId, user.id)) !== undefined) {

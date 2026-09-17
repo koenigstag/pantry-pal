@@ -9,6 +9,10 @@ import {
 import type { messages } from '../../i18n/messages';
 
 export const ROUTES = {
+  signIn: '/sign-in',
+  signUp: '/sign-up',
+  /** Sign-up's last step: the optional onboarding questions. */
+  welcome: '/welcome',
   storage: '/storage',
   shopping: '/shopping',
   planner: '/planner',

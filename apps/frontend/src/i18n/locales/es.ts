@@ -324,13 +324,102 @@ export const es = {
 
   profile: {
     title: 'Perfil',
-    name: 'Nombre',
     email: 'Correo electrónico',
     household: 'Hogar',
     language: 'Idioma',
     languageHint: 'La página se volverá a cargar en el idioma elegido.',
     languageFailed: 'No se ha podido cambiar el idioma.',
-    devIdentity: 'Inicio de sesión de desarrollo: la identidad viene de VITE_DEV_USER_EMAIL.',
+  },
+
+  details: {
+    title: 'Datos',
+    name: 'Nombre',
+    nameHint: 'Lo ven las personas con las que compartes un hogar.',
+    birthDate: 'Fecha de nacimiento',
+    birthDateHint: 'Solo tú puedes verla.',
+    clearBirthDate: 'Borrar la fecha de nacimiento',
+    units: 'Unidades',
+    unitSystems: {
+      metric: { name: 'Métrico', examples: 'g, kg, ml, l' },
+      imperial: { name: 'Imperial', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Nombre del hogar',
+    save: 'Guardar cambios',
+    saving: 'Guardando…',
+    saved: 'Datos guardados.',
+    fieldErrors: {
+      displayName: (max: number) => `Escribe un nombre de hasta ${formatNumber(max)} caracteres.`,
+      birthDate: (fromYear: string) => `Escribe una fecha entre ${fromYear} y hoy.`,
+      householdName: (max: number) => `Escribe un nombre de hasta ${formatNumber(max)} caracteres.`,
+    },
+  },
+
+  auth: {
+    signInTitle: 'Iniciar sesión',
+    signUpTitle: 'Crear una cuenta',
+    step: (current: number, total: number) =>
+      `Paso ${formatNumber(current)} de ${formatNumber(total)}`,
+    email: 'Correo electrónico',
+    password: 'Contraseña',
+    passwordHint: (min: number) =>
+      plural(min, { one: 'Al menos # carácter.', other: 'Al menos # caracteres.' }),
+    continueWithGoogle: 'Continuar con Google',
+    continueWithEmail: 'Continuar con correo electrónico',
+    otherMethods: 'Otras formas de iniciar sesión',
+    otherSignUpMethods: 'Otras formas de registrarte',
+    continue: 'Continuar',
+    changeEmail: 'Cambiar el correo electrónico',
+    signIn: 'Iniciar sesión',
+    signingIn: 'Iniciando sesión…',
+    signUp: 'Crear cuenta',
+    signingUp: 'Creando cuenta…',
+    noAccount: '¿Aún no tienes cuenta?',
+    toSignUp: 'Crea una',
+    haveAccount: '¿Ya tienes cuenta?',
+    toSignIn: 'Inicia sesión',
+    signOut: 'Cerrar sesión',
+    signingOut: 'Cerrando sesión…',
+    invalidCredentials: 'El correo electrónico o la contraseña no son correctos.',
+    emailTaken: 'Ya existe una cuenta con este correo electrónico.',
+    tooManyAttempts: 'Demasiados intentos. Espera un minuto y vuelve a intentarlo.',
+    offline:
+      'No se ha podido conectar con el servidor. Comprueba la conexión y vuelve a intentarlo.',
+    failed: 'Algo ha salido mal. Vuelve a intentarlo.',
+    sessionEnded: 'Tu sesión ha terminado. Vuelve a iniciar sesión para continuar.',
+    fieldErrors: {
+      email: 'Introduce una dirección de correo electrónico.',
+      passwordRequired: 'Introduce tu contraseña.',
+      password: (min: number, max: number) =>
+        `Usa entre ${formatNumber(min)} y ${formatNumber(max)} caracteres.`,
+    },
+    dev: {
+      hint: 'Inicia sesión con cualquier correo electrónico, sin contraseña, mientras el backend se ejecute con DEV_AUTH=true.',
+      submit: 'Iniciar sesión sin contraseña',
+      unavailable: 'El backend no se está ejecutando con DEV_AUTH=true.',
+    },
+  },
+
+  welcome: {
+    title: (app: string) => `Te damos la bienvenida a ${app}`,
+    intro: 'Unas preguntas opcionales. Puedes cambiar las respuestas más adelante en tu perfil.',
+    storageSpaces: 'Lugares de almacenamiento',
+    storageSpacesHint: (fallback: string) =>
+      `Desmarca los que no necesites. «${fallback}» siempre se queda: allí va lo que había en un lugar eliminado.`,
+    finish: 'Terminar',
+    finishing: 'Guardando…',
+    skip: 'Omitir por ahora',
+  },
+
+  changePassword: {
+    title: 'Contraseña',
+    current: 'Contraseña actual',
+    next: 'Nueva contraseña',
+    submit: 'Cambiar contraseña',
+    saving: 'Cambiando…',
+    changed: 'Contraseña cambiada. Se ha cerrado la sesión en tus otros dispositivos.',
+    incorrect: 'La contraseña actual no es correcta.',
+    sameAsCurrent: 'Elige una contraseña distinta de la actual.',
+    currentRequired: 'Introduce tu contraseña actual.',
   },
 
   shopping: {

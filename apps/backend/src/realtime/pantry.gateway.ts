@@ -9,8 +9,7 @@ import {
   type OnGatewayInit,
 } from '@nestjs/websockets';
 import {
-  DEV_USER_HANDSHAKE_KEY,
-  DEV_USER_HEADER,
+  ACCESS_TOKEN_HANDSHAKE_KEY,
   PANTRY_COMMAND,
   PANTRY_EVENT,
   PANTRY_WS_NAMESPACE,
@@ -37,6 +36,8 @@ import { WsExceptionFilter } from './ws-exception.filter';
 
 interface SocketData {
   user: AuthenticatedUser;
+  /** The session whose access token opened the socket. */
+  sessionId: string;
 }
 
 type PantryNamespace = Namespace<
@@ -57,6 +58,15 @@ const householdRoom = (householdId: string): string => `household:${householdId}
 
 /** Each user's sockets, across tabs and devices, so membership changes can move them all at once. */
 const userRoom = (userId: string): string => `user:${userId}`;
+
+/** The sockets one signed-in session opened, so signing out can close them. */
+const sessionRoom = (sessionId: string): string => `session:${sessionId}`;
+
+/** The token from an `Authorization: Bearer` header, which only non-browser clients can send. */
+function bearerToken(header: string | undefined): string | undefined {
+  const match = /^Bearer\s+(\S+)$/i.exec(header ?? '');
+  return match?.[1];
+}
 
 /**
  * The single subscriber to `ChangeFeed`, and the only place socket events are
@@ -119,8 +129,8 @@ export class PantryGateway
    */
   async handleConnection(client: PantrySocket): Promise<void> {
     try {
-      const { user } = client.data;
-      await client.join(userRoom(user.id));
+      const { user, sessionId } = client.data;
+      await client.join([userRoom(user.id), sessionRoom(sessionId)]);
 
       const households = await this.households.listForUser(user.id);
       if (households.length > 0) {
@@ -193,9 +203,12 @@ export class PantryGateway
     // Browsers cannot set headers on a WebSocket, hence the handshake `auth`
     // payload; the header is accepted for non-browser clients.
     const auth = socket.handshake.auth as Record<string, unknown>;
-    const claim = auth[DEV_USER_HANDSHAKE_KEY] ?? socket.handshake.headers[DEV_USER_HEADER];
+    const token =
+      auth[ACCESS_TOKEN_HANDSHAKE_KEY] ?? bearerToken(socket.handshake.headers.authorization);
 
-    socket.data.user = await this.identity.authenticate(claim);
+    const { user, sessionId } = await this.identity.verifyAccessToken(token);
+    socket.data.user = user;
+    socket.data.sessionId = sessionId;
   }
 
   /** Reaches the client as `connect_error`, with the HTTP-style body in `data`. */
@@ -297,6 +310,12 @@ export class PantryGateway
         server.in(userRoom(change.userId)).socketsLeave(room);
         break;
       }
+
+      case 'session.revoked':
+        // Access tokens are checked only at the handshake, so a revoked session's
+        // sockets would otherwise stay connected.
+        server.in(sessionRoom(change.sessionId)).disconnectSockets(true);
+        break;
     }
   }
 }

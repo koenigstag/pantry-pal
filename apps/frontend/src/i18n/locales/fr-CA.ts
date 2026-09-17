@@ -75,6 +75,25 @@ export const frCA = {
     email: 'Courriel',
   },
 
+  auth: {
+    ...fr.auth,
+    email: 'Courriel',
+    continueWithEmail: 'Continuer avec le courriel',
+    changeEmail: 'Modifier le courriel',
+    noAccount: 'Pas encore de compte?',
+    haveAccount: 'Vous avez déjà un compte?',
+    invalidCredentials: 'Courriel ou mot de passe incorrect.',
+    emailTaken: 'Un compte existe déjà avec ce courriel.',
+    fieldErrors: {
+      ...fr.auth.fieldErrors,
+      email: 'Saisissez une adresse courriel.',
+    },
+    dev: {
+      ...fr.auth.dev,
+      hint: 'Connecte n’importe quelle adresse courriel sans mot de passe, tant que le backend tourne avec DEV_AUTH=true.',
+    },
+  },
+
   shopping: {
     title: 'Épicerie',
     description: 'Les listes d’épicerie arrivent bientôt.',

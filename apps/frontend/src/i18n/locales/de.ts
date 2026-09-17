@@ -315,13 +315,103 @@ export const de = {
 
   profile: {
     title: 'Profil',
-    name: 'Name',
     email: 'E-Mail',
     household: 'Haushalt',
     language: 'Sprache',
     languageHint: 'Die Seite wird in der gewählten Sprache neu geladen.',
     languageFailed: 'Die Sprache konnte nicht geändert werden.',
-    devIdentity: 'Entwicklungsanmeldung: Die Identität kommt aus VITE_DEV_USER_EMAIL.',
+  },
+
+  details: {
+    title: 'Angaben',
+    name: 'Name',
+    nameHint: 'Sichtbar für alle, mit denen ein Haushalt geteilt wird.',
+    birthDate: 'Geburtsdatum',
+    birthDateHint: 'Für niemanden sonst sichtbar.',
+    clearBirthDate: 'Geburtsdatum löschen',
+    units: 'Einheiten',
+    unitSystems: {
+      metric: { name: 'Metrisch', examples: 'g, kg, ml, l' },
+      imperial: { name: 'Imperial', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Name des Haushalts',
+    save: 'Änderungen speichern',
+    saving: 'Wird gespeichert…',
+    saved: 'Angaben gespeichert.',
+    fieldErrors: {
+      displayName: (max: number) =>
+        `Einen Namen mit höchstens ${formatNumber(max)} Zeichen eingeben.`,
+      birthDate: (fromYear: string) => `Ein Datum zwischen ${fromYear} und heute eingeben.`,
+      householdName: (max: number) =>
+        `Einen Namen mit höchstens ${formatNumber(max)} Zeichen eingeben.`,
+    },
+  },
+
+  auth: {
+    signInTitle: 'Anmelden',
+    signUpTitle: 'Konto erstellen',
+    step: (current: number, total: number) =>
+      `Schritt ${formatNumber(current)} von ${formatNumber(total)}`,
+    email: 'E-Mail',
+    password: 'Passwort',
+    passwordHint: (min: number) =>
+      plural(min, { one: 'Mindestens # Zeichen.', other: 'Mindestens # Zeichen.' }),
+    continueWithGoogle: 'Weiter mit Google',
+    continueWithEmail: 'Weiter mit E-Mail',
+    otherMethods: 'Andere Anmeldemöglichkeiten',
+    otherSignUpMethods: 'Andere Registrierungsmöglichkeiten',
+    continue: 'Weiter',
+    changeEmail: 'E-Mail ändern',
+    signIn: 'Anmelden',
+    signingIn: 'Anmeldung läuft…',
+    signUp: 'Konto erstellen',
+    signingUp: 'Konto wird erstellt…',
+    noAccount: 'Noch kein Konto?',
+    toSignUp: 'Konto erstellen',
+    haveAccount: 'Schon ein Konto?',
+    toSignIn: 'Anmelden',
+    signOut: 'Abmelden',
+    signingOut: 'Abmeldung läuft…',
+    invalidCredentials: 'E-Mail oder Passwort ist falsch.',
+    emailTaken: 'Zu dieser E-Mail-Adresse gibt es bereits ein Konto.',
+    tooManyAttempts: 'Zu viele Versuche. Eine Minute warten und dann erneut versuchen.',
+    offline: 'Der Server ist nicht erreichbar. Verbindung prüfen und dann erneut versuchen.',
+    failed: 'Etwas ist schiefgelaufen. Erneut versuchen.',
+    sessionEnded: 'Die Sitzung ist beendet. Zum Fortfahren erneut anmelden.',
+    fieldErrors: {
+      email: 'E-Mail-Adresse eingeben.',
+      passwordRequired: 'Passwort eingeben.',
+      password: (min: number, max: number) =>
+        `${formatNumber(min)} bis ${formatNumber(max)} Zeichen verwenden.`,
+    },
+    dev: {
+      hint: 'Meldet eine beliebige E-Mail-Adresse ohne Passwort an, solange das Backend mit DEV_AUTH=true läuft.',
+      submit: 'Ohne Passwort anmelden',
+      unavailable: 'Das Backend läuft nicht mit DEV_AUTH=true.',
+    },
+  },
+
+  welcome: {
+    title: (app: string) => `Willkommen bei ${app}`,
+    intro: 'Ein paar optionale Fragen. Die Antworten lassen sich später im Profil ändern.',
+    storageSpaces: 'Lagerorte',
+    storageSpacesHint: (fallback: string) =>
+      `Nicht benötigte abwählen. „${fallback}“ bleibt immer: Dorthin kommt alles aus einem entfernten Lagerort.`,
+    finish: 'Fertig',
+    finishing: 'Wird gespeichert…',
+    skip: 'Überspringen',
+  },
+
+  changePassword: {
+    title: 'Passwort',
+    current: 'Aktuelles Passwort',
+    next: 'Neues Passwort',
+    submit: 'Passwort ändern',
+    saving: 'Wird geändert…',
+    changed: 'Passwort geändert. Alle anderen Geräte wurden abgemeldet.',
+    incorrect: 'Das aktuelle Passwort ist falsch.',
+    sameAsCurrent: 'Ein anderes Passwort als das aktuelle wählen.',
+    currentRequired: 'Aktuelles Passwort eingeben.',
   },
 
   shopping: {

@@ -28,11 +28,13 @@ transport, whose upgrade Socket.IO does not check against its `cors` origins.
 
 ```
 src/main.tsx, router.tsx   entry; React Router data router
+src/features/auth/         sign-in, sign-up and onboarding pages, route gates, language picker, password form
+src/features/profile/      the account's details: fields shared by onboarding and Profile
 src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), PageStatus
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/pages.tsx     Shopping and Planner placeholders, Profile
-src/stores/                PantryStore (server state), QuantityUpdates (overlay), NoticeStore
-src/services/              api (REST), socket, identity (development sign-in)
+src/stores/                AuthStore, PantryStore (server state), QuantityUpdates (overlay), NoticeStore
+src/services/              http (fetch), session (tokens), api (REST), socket
 src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, cn
 src/i18n/                  message catalog and Intl formatters
 ```
@@ -127,15 +129,93 @@ for a user with none. The socket delivers events for every household the user
 belongs to, so each handler ignores payloads for any other household. Items
 that stop being active (consumed, discarded) leave the list.
 
-**Identity is a development stand-in.** `services/identity.ts` sends
-`VITE_DEV_USER_EMAIL` (default: the seeded test household's owner) as the
-`x-dev-user-email` header and in the socket handshake `auth`. Real sign-in
-replaces that one module.
-
-`StoreProvider` constructs the root store in a `useState` lazy initialiser
-because `new RootStore()` opens a socket — it must not run on every render.
+`SessionStoreProvider` constructs `SessionStores` in a `useState` lazy
+initialiser because it creates a socket — it must not run on every render.
 StrictMode's double-mount in development causes one connect/disconnect/connect
-cycle and doubled bootstrap requests; the resulting console warning is expected.
+cycle; the resulting console warning is expected. `load()` joins a bootstrap
+already running, so the double mount does not fetch twice, nor create two
+households for a new account.
+
+## Authentication
+
+**Tokens live in localStorage**, under `pantry-pal:session`, so every tab shares
+one session: `services/session.ts` owns them. The access token (15 minutes) goes
+out as `Authorization: Bearer` and in the socket handshake; the refresh token
+(30 days, single-use) buys a new pair at `POST /auth/refresh`.
+
+- **Refreshing is serialised.** The server takes a refresh token spent twice for a
+  stolen one and ends the session, so `refreshAccessToken` runs under a Web Lock
+  and re-reads storage inside it: a tab that waited uses the pair another tab
+  just stored. Within a tab, concurrent callers share one refresh. Signing out
+  takes the same lock.
+- **When to refresh:** `accessToken()` refreshes a token within 30 seconds of
+  expiring before sending it, and `api.ts` refreshes and retries once when a
+  request is refused with 401. A refresh the server refuses clears the session;
+  anything else, such as no network, keeps it.
+- **The socket's `auth` is a function**, so each attempt sends the current token.
+  After a 401 handshake, or when the server closes the socket because the
+  session ended, `socket.ts` refreshes and connects again. If the session is
+  over, the refresh signs the tab out instead.
+- **Every tab follows the session.** `AuthStore` subscribes to it, `storage`
+  events included, so signing in or out anywhere changes every tab.
+  `endedElsewhere` distinguishes a session that ended (expired, or signed out in
+  another tab) from this tab's own sign-out, and the sign-in page says so.
+- **Stores are per session.** `RootStore` (notices, auth) lives as long as the
+  page; `SessionStores` (pantry, quantities) are created by
+  `SessionStoreProvider` inside `RequireSession` and disposed when it unmounts,
+  so signing out drops the pantry and closes its socket.
+- **Routes:** `RequireSession` sends a signed-out visitor to `/sign-in`,
+  remembering the page in router state (`from`); `GuestOnly` sends a signed-in
+  visitor on to it. The sign-in pages validate with the shared DTOs and show
+  catalog messages (`authFieldErrors`).
+- **Both start with the provider:** `ProviderChoice` offers Google (shown with
+  `aria-disabled` until the backend supports it) and email, so a provider is
+  added in one place.
+- **Sign-in has three steps:** how to sign in, the email, then the password. One
+  form holds both inputs throughout, and each step only hides the ones it does
+  not use, so a password manager can fill both at any step and the later steps
+  show what it filled:
+  - Hide with `opacity-0`, out of the layout, plus `inert` — never `hidden` or
+    `display: none`, which some managers refuse to fill.
+  - Read the values from the inputs, not from state. Autofill does not always
+    fire React's events, and Chrome withholds a filled password from scripts
+    until the user interacts with the page.
+  - On the password step the hidden email is read too: only a manager can change
+    it there, and it fills that account's password with it.
+  - A different email accepted on a later Continue clears the password, which
+    belonged to the previous account.
+- **Sign-up has three steps too** (`SIGN_UP_STEPS`), shown as a bar above the
+  title: how to sign up, the account, then the onboarding questions.
+  - The account step asks only the email and a new password, and creates the
+    account. A Google sign-up will confirm the name and email the provider gives
+    instead; it is not built.
+  - Creating the account there, not after the questions, means a password
+    manager saves the password with the form that holds it, a taken email is
+    reported beside the field, and leaving mid-onboarding keeps a working account.
+  - `AuthStore.signUp` sets `isOnboarding` in the same action that stores the
+    session, so `GuestOnly` sends this tab to `/welcome` rather than onward,
+    passing `from` along. Other tabs just see a session and skip it. Signing out
+    clears the flag.
+  - `WelcomePage` (`/welcome`) is signed in, outside the app shell, without the
+    language picker. The pantry loads beneath it and creates the household. It
+    asks the name, date of birth, units and household name (owners only), all
+    prefilled, and which of the new household's storage spaces to keep: only
+    while the household holds nothing, and never the fallback. Finish saves
+    what changed; Skip saves nothing; both go on to `from`.
+- **Development builds** start the email step with `VITE_DEV_USER_EMAIL`
+  (default: the seeded test household's owner) and add Sign in without a
+  password to the password step. It works only while the backend runs with
+  `DEV_AUTH=true`.
+- **The Profile page** shows the email, and the household's name to a member.
+  `DetailsForm` edits the onboarding questions' answers with the same
+  `DetailsFields`: Save is enabled once something changed and sends only that,
+  one `PATCH /me` plus a `PATCH` of the household for an owner's new name
+  (`PantryStore.saveDetails`). The date of birth may not be after today in the
+  user's own calendar, a rule the DTO cannot state. Below come the language,
+  the password form when the account has a password (`CurrentUser.hasPassword`),
+  and Sign out. Changing the password signs out the account's other devices; a
+  wrong current password is a 403, which the form shows, never a 401, which
+  would look like an expired token.
 
 ### The locations editor
 
@@ -265,11 +345,19 @@ language, then region: `fr-CA` is French as written in Canada.
   name it did not write. Write no-break spaces as `\u00A0` escapes: a raw one is
   invisible in an editor.
 - **The language is fixed per page load.** `i18n/locale.ts` reads `LOCALE` once,
-  from a localStorage copy of the account's `users.locale`, and the catalog and
-  every `Intl` formatter use it. `switchLocale(tag)` stores a different language
-  and reloads: the Profile page calls it after `PATCH /me` saves the choice, and
-  the store calls it when `GET /me` reports one that differs from the copy, as on
-  a new device. With storage blocked it cannot remember, so it does not reload.
+  and the catalog and every `Intl` formatter use it. It comes from a
+  localStorage copy, else the browser's preferred languages
+  (`navigator.languages`, on a first visit), else `DEFAULT_LOCALE`.
+  `switchLocale(tag)` stores a language and reloads if the page shows another:
+  the Profile page calls it after `PATCH /me` saves the choice, and the store
+  calls it with the language `GET /me` reports, so the account's `users.locale`
+  outranks the copy, as on a new device. With storage blocked it cannot
+  remember, so it does not reload.
+- **Signed out, the language is this browser's.** `LanguagePicker`, at the foot
+  of the sign-in and sign-up pages, changes only the copy. Sign-up and the
+  development sign-in send `LOCALE`, so a new account keeps the language it was
+  made in and nothing reloads. Signing in to an existing account switches to
+  that account's language.
 - **User data keeps its language.** Item names and the storage spaces a
   household named stay as typed. What the UI names is translated: seeded
   categories (`messages.categories.name`), count-unit nouns, metric unit
@@ -314,6 +402,12 @@ sees a single origin and never hits CORS in development. It imports path
 constants from `@pantry-pal/shared` to guarantee the proxy paths and the
 client's request paths agree — which is why the shared package must be built
 before Vite starts.
+
+A built bundle has no proxy. `services/backendOrigin.ts` makes REST and the
+socket call `VITE_BACKEND_URL` directly outside development (the page's own
+origin when it is unset), so the backend's `CORS_ORIGIN` must list the built
+site's origin. The GitHub Pages workflow passes the repository variable of that
+name; a value in `.env.local` ends up in local builds too.
 
 Only `VITE_`-prefixed variables reach browser code; unprefixed ones
 (`PORT`, `BACKEND_PORT`) are read by the config at startup and stay server-side.

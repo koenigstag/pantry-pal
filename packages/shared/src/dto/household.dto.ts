@@ -21,7 +21,7 @@ export class UpdateHouseholdDto {
 
 /**
  * Adds an existing user by email. There is no invitation flow yet, so the user
- * must have signed in at least once.
+ * must already have an account.
  */
 export class AddHouseholdMemberDto {
   @NormalizeEmail()

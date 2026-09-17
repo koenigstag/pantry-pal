@@ -341,13 +341,106 @@ export const ru = {
 
   profile: {
     title: 'Профиль',
-    name: 'Имя',
     email: 'Эл. почта',
     household: 'Домохозяйство',
     language: 'Язык',
     languageHint: 'Страница перезагрузится на выбранном языке.',
     languageFailed: 'Не удалось сменить язык.',
-    devIdentity: 'Вход для разработки: пользователя задаёт VITE_DEV_USER_EMAIL.',
+  },
+
+  details: {
+    title: 'Данные',
+    name: 'Имя',
+    nameHint: 'Его видят люди, с которыми у вас общее домохозяйство.',
+    birthDate: 'Дата рождения',
+    birthDateHint: 'Её видите только вы.',
+    clearBirthDate: 'Очистить дату рождения',
+    units: 'Единицы измерения',
+    unitSystems: {
+      metric: { name: 'Метрическая', examples: 'г, кг, мл, л' },
+      imperial: { name: 'Имперская', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Название домохозяйства',
+    save: 'Сохранить изменения',
+    saving: 'Сохранение…',
+    saved: 'Данные сохранены.',
+    fieldErrors: {
+      displayName: (max: number) => `Введите имя длиной до ${formatNumber(max)} символов.`,
+      birthDate: (fromYear: string) => `Введите дату с ${fromYear} года по сегодняшний день.`,
+      householdName: (max: number) => `Введите название длиной до ${formatNumber(max)} символов.`,
+    },
+  },
+
+  auth: {
+    signInTitle: 'Вход',
+    signUpTitle: 'Создание учётной записи',
+    step: (current: number, total: number) =>
+      `Шаг ${formatNumber(current)} из ${formatNumber(total)}`,
+    email: 'Эл. почта',
+    password: 'Пароль',
+    passwordHint: (min: number) =>
+      plural(min, {
+        one: 'Не менее # символа.',
+        few: 'Не менее # символов.',
+        many: 'Не менее # символов.',
+        other: 'Не менее # символа.',
+      }),
+    continueWithGoogle: 'Продолжить с Google',
+    continueWithEmail: 'Продолжить с эл. почтой',
+    otherMethods: 'Другие способы входа',
+    otherSignUpMethods: 'Другие способы регистрации',
+    continue: 'Продолжить',
+    changeEmail: 'Изменить эл. почту',
+    signIn: 'Войти',
+    signingIn: 'Вход…',
+    signUp: 'Создать учётную запись',
+    signingUp: 'Создание учётной записи…',
+    noAccount: 'Ещё нет учётной записи?',
+    toSignUp: 'Создайте её',
+    haveAccount: 'Уже есть учётная запись?',
+    toSignIn: 'Войдите',
+    signOut: 'Выйти',
+    signingOut: 'Выход…',
+    invalidCredentials: 'Неверная эл. почта или пароль.',
+    emailTaken: 'Учётная запись с этой эл. почтой уже существует.',
+    tooManyAttempts: 'Слишком много попыток. Подождите минуту и попробуйте снова.',
+    offline: 'Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.',
+    failed: 'Что-то пошло не так. Попробуйте снова.',
+    sessionEnded: 'Сеанс завершён. Войдите снова, чтобы продолжить.',
+    fieldErrors: {
+      email: 'Введите адрес эл. почты.',
+      passwordRequired: 'Введите пароль.',
+      password: (min: number, max: number) =>
+        `Пароль должен содержать от ${formatNumber(min)} до ${formatNumber(max)} символов.`,
+    },
+    dev: {
+      hint: 'Вход под любой эл. почтой без пароля, пока бэкенд работает с DEV_AUTH=true.',
+      submit: 'Войти без пароля',
+      unavailable: 'Бэкенд работает без DEV_AUTH=true.',
+    },
+  },
+
+  welcome: {
+    title: (app: string) => `Добро пожаловать в ${app}`,
+    intro: 'Несколько необязательных вопросов. Ответы можно изменить позже в профиле.',
+    storageSpaces: 'Места хранения',
+    storageSpacesHint: (fallback: string) =>
+      `Снимите отметки с ненужных. «${fallback}» остаётся всегда: туда переходят вещи из удалённого места.`,
+    finish: 'Готово',
+    finishing: 'Сохранение…',
+    skip: 'Пропустить',
+  },
+
+  changePassword: {
+    title: 'Пароль',
+    current: 'Текущий пароль',
+    next: 'Новый пароль',
+    submit: 'Сменить пароль',
+    saving: 'Смена…',
+    changed: 'Пароль изменён. На других устройствах выполнен выход.',
+    incorrect: 'Текущий пароль неверен.',
+    sameAsCurrent: 'Выберите пароль, отличный от текущего.',
+    currentRequired: 'Введите текущий пароль.',
   },
 
   shopping: {

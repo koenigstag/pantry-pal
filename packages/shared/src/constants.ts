@@ -21,13 +21,11 @@ export const PANTRY_WS_NAMESPACE = '/pantry';
 export const SOCKET_IO_PATH = '/socket.io';
 
 /**
- * Development-only identity. With `DEV_AUTH=true` the backend trusts this header
- * (and the same key in the Socket.IO handshake `auth` payload) to name the
- * caller. It is a stand-in for real authentication and refuses to start in
- * production.
+ * The Socket.IO handshake `auth` key that carries the access token. Browsers
+ * cannot set headers on a WebSocket, so the token cannot travel as
+ * `Authorization: Bearer` there.
  */
-export const DEV_USER_HEADER = 'x-dev-user-email';
-export const DEV_USER_HANDSHAKE_KEY = 'devUserEmail';
+export const ACCESS_TOKEN_HANDSHAKE_KEY = 'token';
 
 /** Admin routes authenticate with this header rather than a user identity. */
 export const ADMIN_API_KEY_HEADER = 'x-admin-api-key';
@@ -189,6 +187,12 @@ export const MAX_PERIOD_AFTER_OPENING_DAYS = 3650;
 
 export const MAX_HOUSEHOLD_NAME_LENGTH = 80;
 export const MAX_EMAIL_LENGTH = 254;
+export const MAX_DISPLAY_NAME_LENGTH = 80;
+/** The earliest date of birth accepted, `YYYY-MM-DD`: anything older is a typo. */
+export const MIN_BIRTH_DATE = '1900-01-01';
+/** The maximum only turns away absurd input: long passphrases are welcome. */
+export const MIN_PASSWORD_LENGTH = 8;
+export const MAX_PASSWORD_LENGTH = 128;
 
 export const MAX_LOCATION_NAME_LENGTH = 40;
 export const MAX_LOCATION_ICON_LENGTH = 32;

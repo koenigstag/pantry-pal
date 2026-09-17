@@ -1,9 +1,10 @@
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type SupportedLocale } from '@pantry-pal/shared';
 
 /**
- * The browser's copy of the account's language. The account (`users.locale`)
- * is the truth; the copy lets a reload start in the right language before
- * `GET /me` has answered.
+ * The browser's copy of the language: the signed-in account's, or one picked on
+ * the signed-out pages. Once someone signs in, the account (`users.locale`) is
+ * the truth; the copy lets a reload start in the right language before `GET /me`
+ * has answered.
  */
 const STORAGE_KEY = 'pantry-pal:locale';
 
@@ -34,6 +35,21 @@ export function supportedLocale(tag: string | null | undefined): SupportedLocale
   );
 }
 
+/** The first of `tags`, in the browser's order of preference, that the UI speaks. */
+export function preferredLocale(tags: readonly string[]): SupportedLocale | null {
+  for (const tag of tags) {
+    const locale = supportedLocale(tag);
+    if (locale !== null) return locale;
+  }
+  return null;
+}
+
+/** What the browser asks for, most wanted first. */
+function browserLanguages(): readonly string[] {
+  if (typeof navigator === 'undefined') return [];
+  return navigator.languages.length > 0 ? navigator.languages : [navigator.language];
+}
+
 function readCopy(): string | null {
   try {
     return localStorage.getItem(STORAGE_KEY);
@@ -53,20 +69,25 @@ function writeCopy(locale: SupportedLocale): boolean {
 }
 
 /**
- * The language of this page load. The message catalog and every formatter read
- * it once, at start-up, so a different language means a reload.
+ * The language of this page load: the stored copy, else the browser's preferred
+ * languages (a first visit), else the default. The message catalog and every
+ * formatter read it once, at start-up, so a different language means a reload.
  */
-export const LOCALE: SupportedLocale = supportedLocale(readCopy()) ?? DEFAULT_LOCALE;
+export const LOCALE: SupportedLocale =
+  supportedLocale(readCopy()) ?? preferredLocale(browserLanguages()) ?? DEFAULT_LOCALE;
 
 /**
- * Makes `tag` the page's language: remembers it and reloads, unless it already
- * is. An unsupported tag means the default language.
+ * Makes `tag` the page's language: remembers it, and reloads unless the page
+ * already shows it. An unsupported tag means the default language.
+ *
+ * It is remembered even when the page shows it already: without a copy, that
+ * language was only the browser's preference, which can change before the next
+ * load.
  *
  * Nothing reloads while the choice cannot be remembered, since the reload would
  * start in the old language and ask for another one, forever.
  */
 export function switchLocale(tag: string): void {
   const locale = supportedLocale(tag) ?? DEFAULT_LOCALE;
-  if (locale === LOCALE) return;
-  if (writeCopy(locale)) window.location.reload();
+  if (writeCopy(locale) && locale !== LOCALE) window.location.reload();
 }

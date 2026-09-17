@@ -336,13 +336,106 @@ export const uk = {
 
   profile: {
     title: 'Профіль',
-    name: 'Ім’я',
     email: 'Ел. пошта',
     household: 'Домогосподарство',
     language: 'Мова',
     languageHint: 'Сторінка перезавантажиться обраною мовою.',
     languageFailed: 'Не вдалося змінити мову.',
-    devIdentity: 'Вхід для розробки: користувача задає VITE_DEV_USER_EMAIL.',
+  },
+
+  details: {
+    title: 'Дані',
+    name: 'Ім’я',
+    nameHint: 'Його бачать люди, з якими ви ділите домогосподарство.',
+    birthDate: 'Дата народження',
+    birthDateHint: 'Її бачите лише ви.',
+    clearBirthDate: 'Очистити дату народження',
+    units: 'Одиниці виміру',
+    unitSystems: {
+      metric: { name: 'Метрична', examples: 'г, кг, мл, л' },
+      imperial: { name: 'Імперська', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Назва домогосподарства',
+    save: 'Зберегти зміни',
+    saving: 'Збереження…',
+    saved: 'Дані збережено.',
+    fieldErrors: {
+      displayName: (max: number) => `Введіть ім’я до ${formatNumber(max)} символів.`,
+      birthDate: (fromYear: string) => `Введіть дату від ${fromYear} року до сьогодні.`,
+      householdName: (max: number) => `Введіть назву до ${formatNumber(max)} символів.`,
+    },
+  },
+
+  auth: {
+    signInTitle: 'Вхід',
+    signUpTitle: 'Створення облікового запису',
+    step: (current: number, total: number) =>
+      `Крок ${formatNumber(current)} з ${formatNumber(total)}`,
+    email: 'Ел. пошта',
+    password: 'Пароль',
+    passwordHint: (min: number) =>
+      plural(min, {
+        one: 'Щонайменше # символ.',
+        few: 'Щонайменше # символи.',
+        many: 'Щонайменше # символів.',
+        other: 'Щонайменше # символу.',
+      }),
+    continueWithGoogle: 'Продовжити з Google',
+    continueWithEmail: 'Продовжити з ел. поштою',
+    otherMethods: 'Інші способи входу',
+    otherSignUpMethods: 'Інші способи реєстрації',
+    continue: 'Продовжити',
+    changeEmail: 'Змінити ел. пошту',
+    signIn: 'Увійти',
+    signingIn: 'Вхід…',
+    signUp: 'Створити обліковий запис',
+    signingUp: 'Створення облікового запису…',
+    noAccount: 'Ще немає облікового запису?',
+    toSignUp: 'Створіть його',
+    haveAccount: 'Уже маєте обліковий запис?',
+    toSignIn: 'Увійдіть',
+    signOut: 'Вийти',
+    signingOut: 'Вихід…',
+    invalidCredentials: 'Неправильна ел. пошта або пароль.',
+    emailTaken: 'Обліковий запис із цією ел. поштою вже існує.',
+    tooManyAttempts: 'Забагато спроб. Зачекайте хвилину й спробуйте знову.',
+    offline: 'Не вдалося зв’язатися із сервером. Перевірте з’єднання й спробуйте знову.',
+    failed: 'Щось пішло не так. Спробуйте знову.',
+    sessionEnded: 'Сеанс завершено. Увійдіть знову, щоб продовжити.',
+    fieldErrors: {
+      email: 'Введіть адресу ел. пошти.',
+      passwordRequired: 'Введіть пароль.',
+      password: (min: number, max: number) =>
+        `Пароль має містити від ${formatNumber(min)} до ${formatNumber(max)} символів.`,
+    },
+    dev: {
+      hint: 'Вхід під будь-якою ел. поштою без пароля, поки бекенд працює з DEV_AUTH=true.',
+      submit: 'Увійти без пароля',
+      unavailable: 'Бекенд працює без DEV_AUTH=true.',
+    },
+  },
+
+  welcome: {
+    title: (app: string) => `Вітаємо в ${app}`,
+    intro: 'Кілька необов’язкових запитань. Відповіді можна змінити пізніше в профілі.',
+    storageSpaces: 'Місця зберігання',
+    storageSpacesHint: (fallback: string) =>
+      `Зніміть позначки з тих, що не потрібні. «${fallback}» залишається завжди: туди переходять речі з вилученого місця.`,
+    finish: 'Готово',
+    finishing: 'Збереження…',
+    skip: 'Пропустити',
+  },
+
+  changePassword: {
+    title: 'Пароль',
+    current: 'Поточний пароль',
+    next: 'Новий пароль',
+    submit: 'Змінити пароль',
+    saving: 'Зміна…',
+    changed: 'Пароль змінено. На інших пристроях виконано вихід.',
+    incorrect: 'Поточний пароль неправильний.',
+    sameAsCurrent: 'Виберіть пароль, відмінний від поточного.',
+    currentRequired: 'Введіть поточний пароль.',
   },
 
   shopping: {

@@ -4,30 +4,34 @@ import {
   ForbiddenException,
   Injectable,
   UnauthorizedException,
-  type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { ADMIN_API_KEY_HEADER, DEV_USER_HEADER } from '@pantry-pal/shared';
+import { AuthGuard } from '@nestjs/passport';
+import { ADMIN_API_KEY_HEADER } from '@pantry-pal/shared';
 
 import type { PantryRequest } from '../common/request-context';
 import { ACCESS, ACCESS_METADATA, type Access } from './access.decorators';
-import { IdentityService } from './identity.service';
+import { JWT_STRATEGY } from './jwt.strategy';
+import { describeAccessTokenError } from './session-tokens';
 
 /**
  * Registered globally, so every HTTP route authenticates unless it opts out
  * with `@Public()`. Forgetting a decorator fails closed.
+ *
+ * A user route needs an access token, which Passport's JWT strategy verifies.
  */
 @Injectable()
-export class AccessGuard implements CanActivate {
+export class AccessGuard extends AuthGuard(JWT_STRATEGY) {
   constructor(
     private readonly reflector: Reflector,
-    private readonly identity: IdentityService,
     private readonly config: ConfigService,
-  ) {}
+  ) {
+    super();
+  }
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  override async canActivate(context: ExecutionContext): Promise<boolean> {
     // Sockets authenticate once, in the gateway's handshake middleware.
     if (context.getType() !== 'http') return true;
 
@@ -47,9 +51,18 @@ export class AccessGuard implements CanActivate {
         return true;
 
       case ACCESS.User:
-        request.user = await this.identity.authenticate(request.headers[DEV_USER_HEADER]);
-        return true;
+        return (await super.canActivate(context)) as boolean;
     }
+  }
+
+  /**
+   * Passport's verdict. `error` is what `JwtStrategy.validate` threw; `info` is
+   * why no token verified: missing, expired or malformed.
+   */
+  override handleRequest<TUser>(error: unknown, user: unknown, info: unknown): TUser {
+    if (error) throw error;
+    if (!user) throw new UnauthorizedException(describeAccessTokenError(info));
+    return user as TUser;
   }
 
   private assertAdminKey(presented: string | string[] | undefined): void {

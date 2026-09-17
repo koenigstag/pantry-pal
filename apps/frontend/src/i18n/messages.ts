@@ -365,13 +365,104 @@ const en = {
 
   profile: {
     title: 'Profile',
-    name: 'Name',
     email: 'Email',
     household: 'Household',
     language: 'Language',
     languageHint: 'The page reloads in the language you pick.',
     languageFailed: 'Couldn’t change the language.',
-    devIdentity: 'Development sign-in: the identity comes from VITE_DEV_USER_EMAIL.',
+  },
+
+  /** The account's details: asked when signing up, changed on the Profile page. */
+  details: {
+    title: 'Details',
+    name: 'Name',
+    nameHint: 'The people you share a household with see it.',
+    birthDate: 'Date of birth',
+    birthDateHint: 'Only you can see it.',
+    clearBirthDate: 'Clear the date of birth',
+    units: 'Units',
+    unitSystems: {
+      metric: { name: 'Metric', examples: 'g, kg, ml, l' },
+      imperial: { name: 'Imperial', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Household name',
+    save: 'Save changes',
+    saving: 'Saving…',
+    saved: 'Details saved.',
+    fieldErrors: {
+      displayName: (max: number) => `Enter a name of up to ${formatNumber(max)} characters.`,
+      /** The year as written, never grouped like a number. */
+      birthDate: (fromYear: string) => `Enter a date from ${fromYear} to today.`,
+      householdName: (max: number) => `Enter a name of up to ${formatNumber(max)} characters.`,
+    },
+  },
+
+  auth: {
+    signInTitle: 'Sign in',
+    signUpTitle: 'Create an account',
+    step: (current: number, total: number) =>
+      `Step ${formatNumber(current)} of ${formatNumber(total)}`,
+    email: 'Email',
+    password: 'Password',
+    passwordHint: (min: number) =>
+      plural(min, { one: 'At least # character.', other: 'At least # characters.' }),
+    continueWithGoogle: 'Continue with Google',
+    continueWithEmail: 'Continue with email',
+    otherMethods: 'Other ways to sign in',
+    otherSignUpMethods: 'Other ways to sign up',
+    continue: 'Continue',
+    changeEmail: 'Change email',
+    signIn: 'Sign in',
+    signingIn: 'Signing in…',
+    signUp: 'Create account',
+    signingUp: 'Creating account…',
+    noAccount: 'No account yet?',
+    toSignUp: 'Create one',
+    haveAccount: 'Already have an account?',
+    toSignIn: 'Sign in',
+    signOut: 'Sign out',
+    signingOut: 'Signing out…',
+    invalidCredentials: 'Incorrect email or password.',
+    emailTaken: 'An account with this email already exists.',
+    tooManyAttempts: 'Too many attempts. Wait a minute, then try again.',
+    offline: 'Couldn’t reach the server. Check your connection, then try again.',
+    failed: 'Something went wrong. Try again.',
+    sessionEnded: 'Your session has ended. Sign in again to continue.',
+    fieldErrors: {
+      email: 'Enter an email address.',
+      passwordRequired: 'Enter your password.',
+      password: (min: number, max: number) =>
+        `Use ${formatNumber(min)} to ${formatNumber(max)} characters.`,
+    },
+    dev: {
+      hint: 'Signs in as any email, without a password, while the backend runs with DEV_AUTH=true.',
+      submit: 'Sign in without a password',
+      unavailable: 'The backend isn’t running with DEV_AUTH=true.',
+    },
+  },
+
+  /** Sign-up's last step: optional questions, once the account exists. */
+  welcome: {
+    title: (app: string) => `Welcome to ${app}`,
+    intro: 'A few optional questions. You can change the answers later on your Profile.',
+    storageSpaces: 'Storage spaces',
+    storageSpacesHint: (fallback: string) =>
+      `Untick the ones you don’t need. “${fallback}” always stays: things from a removed space go there.`,
+    finish: 'Finish',
+    finishing: 'Saving…',
+    skip: 'Skip for now',
+  },
+
+  changePassword: {
+    title: 'Password',
+    current: 'Current password',
+    next: 'New password',
+    submit: 'Change password',
+    saving: 'Changing…',
+    changed: 'Password changed. Your other devices were signed out.',
+    incorrect: 'The current password is incorrect.',
+    sameAsCurrent: 'Choose a password different from the current one.',
+    currentRequired: 'Enter your current password.',
   },
 
   shopping: {

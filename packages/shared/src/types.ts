@@ -34,6 +34,34 @@ export interface CurrentUser {
   timezone: string;
   /** A BCP 47 tag, such as `en-GB`: the UI language when it is one of `SUPPORTED_LOCALES`. */
   locale: string;
+  /**
+   * `YYYY-MM-DD`, or `null` until the user gives it. Only the user sees it:
+   * household members get a `HouseholdMember`, which leaves it out.
+   */
+  birthDate: string | null;
+  /**
+   * Whether the account signs in with a password. Accounts made by the
+   * development sign-in have none until an administrator sets one, so they have
+   * no password to change either.
+   */
+  hasPassword: boolean;
+}
+
+/**
+ * What sign-up, sign-in and refresh answer with.
+ *
+ * The access token is a short-lived JWT, sent as `Authorization: Bearer` and in
+ * the socket handshake. The refresh token is a JWT too, signed with a different
+ * secret, but clients should treat both as opaque. The refresh token is single-use:
+ * each refresh replaces it, and presenting a replaced one ends the session.
+ */
+export interface AuthSession {
+  user: CurrentUser;
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  refreshToken: string;
+  /** Pushed out by every refresh, so a session in use does not expire. */
+  refreshTokenExpiresAt: string;
 }
 
 /** A row of the `units` lookup table. */

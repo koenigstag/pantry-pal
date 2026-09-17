@@ -315,13 +315,105 @@ export const fr = {
 
   profile: {
     title: 'Profil',
-    name: 'Nom',
     email: 'E-mail',
     household: 'Foyer',
     language: 'Langue',
     languageHint: 'La page se recharge dans la langue choisie.',
     languageFailed: 'Impossible de changer la langue.',
-    devIdentity: 'Connexion de développement\u00A0: l’identité vient de VITE_DEV_USER_EMAIL.',
+  },
+
+  details: {
+    title: 'Informations',
+    name: 'Nom',
+    nameHint: 'Visible par les personnes avec qui vous partagez un foyer.',
+    birthDate: 'Date de naissance',
+    birthDateHint: 'Personne d’autre ne la voit.',
+    clearBirthDate: 'Effacer la date de naissance',
+    units: 'Unités',
+    unitSystems: {
+      metric: { name: 'Métrique', examples: 'g, kg, ml, l' },
+      imperial: { name: 'Impérial', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Nom du foyer',
+    save: 'Enregistrer les modifications',
+    saving: 'Enregistrement…',
+    saved: 'Informations enregistrées.',
+    fieldErrors: {
+      displayName: (max: number) =>
+        `Saisissez un nom de ${formatNumber(max)} caractères au maximum.`,
+      birthDate: (fromYear: string) =>
+        `Saisissez une date comprise entre ${fromYear} et aujourd’hui.`,
+      householdName: (max: number) =>
+        `Saisissez un nom de ${formatNumber(max)} caractères au maximum.`,
+    },
+  },
+
+  auth: {
+    signInTitle: 'Connexion',
+    signUpTitle: 'Créer un compte',
+    step: (current: number, total: number) =>
+      `Étape ${formatNumber(current)} sur ${formatNumber(total)}`,
+    email: 'E-mail',
+    password: 'Mot de passe',
+    passwordHint: (min: number) =>
+      plural(min, { one: 'Au moins # caractère.', other: 'Au moins # caractères.' }),
+    continueWithGoogle: 'Continuer avec Google',
+    continueWithEmail: 'Continuer avec l’e-mail',
+    otherMethods: 'Autres moyens de connexion',
+    otherSignUpMethods: 'Autres moyens d’inscription',
+    continue: 'Continuer',
+    changeEmail: 'Modifier l’e-mail',
+    signIn: 'Se connecter',
+    signingIn: 'Connexion…',
+    signUp: 'Créer le compte',
+    signingUp: 'Création du compte…',
+    noAccount: 'Pas encore de compte ?',
+    toSignUp: 'Créez-en un',
+    haveAccount: 'Vous avez déjà un compte ?',
+    toSignIn: 'Connectez-vous',
+    signOut: 'Se déconnecter',
+    signingOut: 'Déconnexion…',
+    invalidCredentials: 'E-mail ou mot de passe incorrect.',
+    emailTaken: 'Un compte existe déjà avec cet e-mail.',
+    tooManyAttempts: 'Trop de tentatives. Attendez une minute, puis réessayez.',
+    offline: 'Impossible de joindre le serveur. Vérifiez votre connexion, puis réessayez.',
+    failed: 'Une erreur s’est produite. Réessayez.',
+    sessionEnded: 'Votre session a pris fin. Reconnectez-vous pour continuer.',
+    fieldErrors: {
+      email: 'Saisissez une adresse e-mail.',
+      passwordRequired: 'Saisissez votre mot de passe.',
+      password: (min: number, max: number) =>
+        `Utilisez de ${formatNumber(min)} à ${formatNumber(max)} caractères.`,
+    },
+    dev: {
+      hint: 'Connecte n’importe quelle adresse e-mail sans mot de passe, tant que le backend tourne avec DEV_AUTH=true.',
+      submit: 'Se connecter sans mot de passe',
+      unavailable: 'Le backend ne tourne pas avec DEV_AUTH=true.',
+    },
+  },
+
+  welcome: {
+    title: (app: string) => `Bienvenue dans ${app}`,
+    intro:
+      'Quelques questions facultatives. Vous pourrez modifier vos réponses plus tard dans votre profil.',
+    storageSpaces: 'Emplacements',
+    storageSpacesHint: (fallback: string) =>
+      `Décochez ceux dont vous n’avez pas besoin. ${q(fallback)} reste toujours et reçoit le contenu d’un emplacement supprimé.`,
+    finish: 'Terminer',
+    finishing: 'Enregistrement…',
+    skip: 'Passer',
+  },
+
+  changePassword: {
+    title: 'Mot de passe',
+    current: 'Mot de passe actuel',
+    next: 'Nouveau mot de passe',
+    submit: 'Changer le mot de passe',
+    saving: 'Modification…',
+    changed: 'Mot de passe modifié. Vos autres appareils ont été déconnectés.',
+    incorrect: 'Le mot de passe actuel est incorrect.',
+    sameAsCurrent: 'Choisissez un mot de passe différent de l’actuel.',
+    currentRequired: 'Saisissez votre mot de passe actuel.',
   },
 
   shopping: {

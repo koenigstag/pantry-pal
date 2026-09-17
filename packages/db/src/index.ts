@@ -9,6 +9,7 @@ export type {
   ItemRow,
   LocationRow,
   ProductRow,
+  RefreshTokenRow,
   UnitRow,
   UserRow,
 } from './schema';

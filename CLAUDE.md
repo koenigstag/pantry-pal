@@ -70,11 +70,12 @@ change and let the gateway broadcast it.
 ### Households scope everything
 
 Every domain row belongs to a household, and every household route checks the
-caller's membership before a service runs. Identity is currently a development
-stand-in — the `x-dev-user-email` header, honoured only with `DEV_AUTH=true` —
-behind a seam real authentication will replace. Global reference data (units,
-categories, default locations) is managed through `/admin`, authenticated by an
-API key.
+caller's membership before a service runs. Callers sign in with email and
+password and authenticate with a short-lived JWT access token, renewed through a
+rotating refresh token; the browser keeps both in localStorage, shared by every
+tab. With `DEV_AUTH=true` a development sign-in needs no password. Global
+reference data (units, categories, default locations) and password resets go
+through `/admin`, authenticated by an API key.
 Details in `apps/backend/CLAUDE.md`.
 
 ### The frontend applies one optimistic update, and only one
@@ -161,9 +162,12 @@ variables reach browser code.
 
 `.github/workflows/deploy-pages.yml` publishes the frontend to GitHub Pages on
 every push to `main`, or when run by hand from the Actions tab. Pages serves
-static files only, so the site has **no backend**: the shell renders, and pages
-that need the API show their load error. The repository's Pages source must be
-set to _GitHub Actions_ once, in its settings.
+static files only: the site calls the backend named by the **repository
+variable** `VITE_BACKEND_URL` directly, with no proxy in between
+(`apps/frontend/src/services/backendOrigin.ts`). That backend's `CORS_ORIGIN`
+must list the site's origin. Without the variable, pages that need the API show
+their load error. The repository's Pages source must be set to _GitHub Actions_
+once, in its settings.
 
 - A project site is served under `/<repo>/`. The workflow passes that path as
   `BASE_PATH`, which sets Vite's `base`, and the router takes its `basename`

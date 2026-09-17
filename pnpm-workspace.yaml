@@ -10,6 +10,9 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@nestjs/cli@12.0.3'
   - '@nestjs/schematics@12.0.3'
+  # The first release whose peer range admits Nest 12. Published from
+  # nestjs/throttler by GitHub Actions, with SLSA provenance.
+  - '@nestjs/throttler@6.6.0'
   - '@types/node@22.20.3'
 
 engineStrict: true

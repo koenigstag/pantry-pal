@@ -1,6 +1,6 @@
 import { UNIT_SYSTEM_PREFERENCES, type UnitSystemPreference } from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
-import { check, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, date, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { inList } from './_sql';
 
@@ -22,6 +22,12 @@ export const users = pgTable(
     unitSystem: text('unit_system').$type<UnitSystemPreference>().notNull().default('metric'),
     timezone: text('timezone').notNull().default('UTC'),
     locale: text('locale').notNull().default('en-GB'),
+    /**
+     * Optional, and private to the user: member lists never select it. Its range
+     * (not before 1900, not after today) is checked by the DTO, since a CHECK
+     * cannot compare with today.
+     */
+    birthDate: date('birth_date'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -58,3 +64,4 @@ export const refreshTokens = pgTable(
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type RefreshTokenRow = typeof refreshTokens.$inferSelect;
+export type NewRefreshTokenRow = typeof refreshTokens.$inferInsert;
