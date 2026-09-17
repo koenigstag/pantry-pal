@@ -7,9 +7,9 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Thirteen tables, the transaction layer, seed data, and repositories for users,
+Fourteen tables, the transaction layer, seed data, and repositories for users,
 refresh tokens, households, members, locations, items, item events, units,
-categories, app settings, shopping lists and their entries.
+categories, the default storage spaces, shopping lists and their entries.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -109,10 +109,20 @@ These are deliberate. Changing any of them affects the whole workspace.
   redundant `UNIQUE (household_id, id)` on `locations` as its target.
 - **`products` (catalog, barcode) + `items` (a physical batch with its own
   expiry).** One product, many batches.
-- **`locations`** is per-household, copied on creation from the
-  `default-locations` setting (code default: Kitchen / Fridge / Freezer /
-  Pantry / Spices / Bathroom / Medicines / Other). Location (_where_) and
-  category (_what_) are separate axes — do not collapse them.
+- **`locations`** is per-household, copied on creation from
+  `default_locations` (seeded: Kitchen / Fridge / Freezer / Pantry / Spices /
+  Bathroom / Medicines / Other). Location (_where_) and category (_what_) are
+  separate axes — do not collapse them.
+- **`default_locations` + `default_location_translations`** hold the storage
+  spaces a new household starts with, by `code`, and their names by locale. A
+  household's copies are named for its creator's `users.locale`: the exact tag,
+  then its language, then the English `name`; nothing references the defaults
+  afterwards. `locale` is checked for its form only, `^[a-z]{2,3}(-[A-Z]{2})?$`,
+  and the admin DTO accepts `TRANSLATION_LOCALES` from `@pantry-pal/shared`: a
+  CHECK generated from that list would need a migration for every new language.
+  Names are unique ignoring case, among the defaults and per locale among the
+  translations, since a household's names are. At most one default is the
+  fallback (`default_locations_fallback_idx`); the admin DTO requires exactly one.
 - **`categories` is a lookup table**, like `units`: `items.category` and
   `products.default_category` reference `categories(code)` (`RESTRICT`), so
   adding a category is an INSERT through the admin API. `CATEGORY_SEED` is the
@@ -132,8 +142,7 @@ These are deliberate. Changing any of them affects the whole workspace.
   The database allows one per household (`locations_household_fallback_idx`)
   and refuses soft-deleting it (`locations_fallback_not_deleted`); renaming is
   refused by the backend, because a CHECK cannot see the old name. Households
-  get it on creation through `withFallbackLocation` in `@pantry-pal/shared`,
-  which marks a default named "Other" or appends one.
+  get it on creation, from the default flagged `is_fallback`.
 - **Shopping lists** (`shopping_lists`) are per-household and named, unique
   ignoring case with archived lists included, so restoring one never collides.
   **`shopping_list_entries`** holds an item and how many to buy, at most once per
@@ -150,10 +159,6 @@ These are deliberate. Changing any of them affects the whole workspace.
 - **Lists are deleted outright**, unlike locations: no history points at one, and
   its entries cascade. **`archived_at`** freezes a list instead of deleting it; the
   column only records it, and the backend refuses writes to a frozen list.
-- **`app_settings`** is key → jsonb for global, admin-managed values. Untyped
-  here on purpose: keys, value types and defaults live in `@pantry-pal/shared`
-  (`APP_SETTING`), and the backend validates every read and write. A missing row
-  means "use the default", so it needs no seed.
 - **Quantity is how many, then what is inside one**, so `2 cans × 400 g` can be
   represented: `quantity` + `unit`, then `size_value` + `size_unit`.
 - **Things are counted, never weighed.** `items.unit` must be a count unit:
@@ -192,9 +197,9 @@ constraint generated from the shared constants, or a lookup table.
 
 ### Value sets live in `@pantry-pal/shared`
 
-`HOUSEHOLD_ROLE`, `ITEM_STATUS`, `ITEM_EVENT_TYPE`, `UNIT_KINDS`, `UNIT_SYSTEMS`,
-`UNIT_SYSTEM_PREFERENCES` and `DEFAULT_LOCATIONS` are defined in
-`shared/src/constants.ts` and imported by the schema, never redefined here. The
+`HOUSEHOLD_ROLE`, `ITEM_STATUS`, `ITEM_EVENT_TYPE`, `UNIT_KINDS`, `UNIT_SYSTEMS`
+and `UNIT_SYSTEM_PREFERENCES` are defined in `shared/src/constants.ts` and
+imported by the schema, never redefined here. The
 request DTOs and the frontend need the same lists the CHECK constraints are
 generated from, and neither can depend on this package.
 
@@ -213,7 +218,7 @@ arrives as one — from JSON bodies, WS payloads and Drizzle's `text()` columns 
 so an enum forces `as` casts at every boundary. The runtime array is also needed
 to generate the SQL CHECK constraints, and `enum` is not erasable syntax
 (`isolatedModules` is set workspace-wide). Plain `as const` arrays are fine
-where no named access is wanted (`UNIT_KINDS`, `DEFAULT_LOCATIONS`).
+where no named access is wanted (`UNIT_KINDS`, `UNIT_SYSTEMS`).
 
 ## Transaction design
 
@@ -298,7 +303,15 @@ Both were verified on a database migrated to `0001` and seeded before them.
 generated it. It has no CHECK: the range ends today, which a CHECK cannot
 compare with, so the DTO checks it.
 
-`0005_shopping_lists` adds both shopping tables and `items.default_shopping_list_id`.
+`0005_default_locations` creates the default storage space tables, inserts
+`DEFAULT_LOCATION_SEED` as it stood then, and drops `app_settings`, whose only
+key the tables replace. It is hand-assembled, and says so: drizzle-kit asks
+whether a new table is a dropped one renamed, a prompt that needs a TTY, so the
+drop and the new tables were generated as two migrations and merged into one,
+the second one's snapshot becoming `0005`'s. `drizzle-kit generate` reporting no
+changes confirms that snapshot.
+
+`0006_shopping_lists` adds both shopping tables and `items.default_shopping_list_id`.
 It is hand-ordered, and says so: drizzle-kit emitted `items_household_id_id_unique`
 last, after the entries' foreign key that references it, as it did in `0001`.
 Verified on PostgreSQL 18 over a database migrated to `0004` with items in it, and

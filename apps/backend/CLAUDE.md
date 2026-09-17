@@ -52,8 +52,8 @@ src/
   shopping-lists/ lists and their entries: the editor's save, archiving, putting away
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
-  settings/     typed access to app_settings, with code defaults
-  admin/        /admin/units, /admin/categories, /admin/settings, /admin/users (passwords)
+  default-locations/  the storage spaces a new household starts with, and their translations
+  admin/        /admin/units, /admin/categories, /admin/default-locations, /admin/users (passwords)
   realtime/     ChangeFeed, PantryGateway, Socket.IO adapter, WS exception filter
 ```
 
@@ -83,7 +83,7 @@ PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:
 POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
-GET                    /admin/settings           GET PUT   DELETE /admin/settings/:key
+GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
 PUT                    /admin/users/:email/password                   sets it, ends every session; no email
 ```
 
@@ -213,8 +213,8 @@ Household-scoped service methods take a `Membership`, never a bare household id,
 so they cannot be reached without the check. Owners manage the household and its
 members; any member manages locations and items.
 
-**Every household has a fallback location**, "Other", created with it
-(`withFallbackLocation`). Deleting a location — `DELETE ...?moveItemsTo=` or a
+**Every household has a fallback location**, "Other", created with it among
+the default storage spaces. Deleting a location — `DELETE ...?moveItemsTo=` or a
 `removed` entry of the editor's `PUT` — moves its active items to `moveItemsTo`,
 or to the fallback when that is omitted. The fallback itself can be reordered and
 re-iconed but never renamed or deleted (409); the database backs the delete rule
@@ -357,17 +357,26 @@ same transaction (the share lock makes it wait for in-flight item writes), excep
 for `other`, whose items keep theirs. Like other reference-data changes it is
 not broadcast; `updated_at` moves, so clients see it on their next refetch.
 
-## Admin settings
+## Default storage spaces
 
-`/admin/settings/:key` is generic over `APP_SETTING` in `@pantry-pal/shared`.
-`SETTINGS_REGISTRY` maps each key to its validation DTO; the mapped type makes a
-missing entry a compile error. The PUT body is `unknown` so the global pipe
-skips it, and `SettingsService` validates with a `ValidationPipe` configured
-like the global one — same rules, same 400 shape. Stored values are validated
-again on read; an invalid row logs a warning and falls back to the default.
+A new household copies the rows of `default_locations`, in order, with the
+fallback among them. Each copy is named in the creator's language
+(`users.locale`) from `default_location_translations`: the exact tag (`fr-CA`),
+then its language (`fr`), then the default's English `name`. The copies are the
+household's own from then on: changing the defaults, or the creator's language,
+never renames them.
 
-A household copies the `default-locations` setting in force when it is
-created. Later changes to the setting never reach existing households.
+`/admin/default-locations` reads the list and replaces it whole
+(`DefaultLocationsService.replace`, one transaction), since the order and the one
+fallback belong to the list rather than to a row. `ReplaceDefaultLocationsDto`
+refuses a repeated code, a name repeated ignoring case, anything but exactly one
+fallback, a translation key that is not a supported locale or its language, and
+two spaces sharing a name in any supported locale, since a household's names
+are unique ignoring case. Changes are not broadcast: no client shows the
+defaults.
+
+There is no `/admin/settings` any more. `default-locations` was its only key,
+and migration `0005_default_locations` dropped the `app_settings` table with it.
 
 ## Socket.IO configuration
 

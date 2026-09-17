@@ -91,6 +91,27 @@ export interface Category {
   isEdible: boolean;
 }
 
+/**
+ * A storage space every new household starts with, as the admin API shows it.
+ * The household gets a copy named in its creator's language, and owns it from
+ * then on: changing a default never reaches an existing household.
+ */
+export interface DefaultLocation {
+  /** Stable: translations reference it. Lowercase words joined by hyphens: `spices`. */
+  code: string;
+  /** English: the name wherever no translation applies. */
+  name: string;
+  icon: string | null;
+  /** The new household's fallback location. Exactly one default is. */
+  isFallback: boolean;
+  /**
+   * Names by BCP 47 tag. A household takes its creator's exact tag, else that
+   * tag's language, else `name` — so most keys are languages (`fr`), and a
+   * regional key (`fr-CA`) exists only where the wording differs.
+   */
+  translations: Record<string, string>;
+}
+
 export interface Household {
   id: string;
   name: string;

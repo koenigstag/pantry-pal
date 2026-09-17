@@ -12,7 +12,6 @@ import { ItemsModule } from './items/items.module';
 import { LocationsModule } from './locations/locations.module';
 import { ChangeFeedModule } from './realtime/change-feed';
 import { RealtimeModule } from './realtime/realtime.module';
-import { SettingsModule } from './settings/settings.module';
 import { ShoppingListsModule } from './shopping-lists/shopping-lists.module';
 import { UnitsModule } from './units/units.module';
 
@@ -28,7 +27,6 @@ import { UnitsModule } from './units/units.module';
     DatabaseModule,
     ChangeFeedModule,
     AuthModule,
-    SettingsModule,
     UnitsModule,
     CategoriesModule,
     HouseholdsModule,

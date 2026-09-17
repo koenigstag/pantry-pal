@@ -80,15 +80,14 @@ Add new events by extending the const object _and_ the interface together. Every
 payload identifies its household, and every command names one: a socket follows
 all of its user's households at once.
 
-## Settings
+## Translations in the database
 
-`src/settings.ts` defines the admin-managed global settings: `APP_SETTING`
-keys, each value's type in `AppSettingValues`, and `APP_SETTING_DEFAULTS`. The
-defaults are what a key means while no override is stored. Values are always
-objects, never bare arrays, so a DTO class can validate them and a field can be
-added later without a new key. Adding a key also needs a validation DTO in
-`src/dto/settings.dto.ts` and an entry in the backend's `SETTINGS_REGISTRY` —
-the registry's mapped type makes forgetting that a compile error.
+Text the frontend's catalogs cannot hold, such as the names of the default
+storage spaces, lives in database translation tables, keyed by a BCP 47 tag.
+`src/utils/locale.ts` has the rule every reader applies: `pickTranslation` looks
+up the exact tag (`fr-CA`), then its language (`fr`), then the base text. Stored
+tags are `TRANSLATION_LOCALES`, the supported locales and their languages, so
+most rows are languages and a regional row exists only where the wording differs.
 
 ## Conventions
 
@@ -102,8 +101,9 @@ the registry's mapped type makes forgetting that a compile error.
   `@IsIn([...X])` and the compile-time union can never disagree.
   `@pantry-pal/db` generates its CHECK constraints from the same lists, so they
   live here rather than there.
-- There is no unit or category list here. Both are rows in the database
-  (`GET /units`, `GET /categories`), so their codes are validated as strings and
+- There is no unit, category or default storage space list here. All three are
+  rows in the database (`GET /units`, `GET /categories`,
+  `/admin/default-locations`), so their codes are validated as strings and
   checked for existence by the server. Only `COUNT_UNIT` and `DEFAULT_CATEGORY`
   are fixed, as the codes that can never be deleted.
 - Expiry maths reads `effectiveExpiresAt`, never `expiresAt` — the database
