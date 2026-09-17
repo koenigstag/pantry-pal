@@ -359,7 +359,9 @@ language, then region: `fr-CA` is French as written in Canada.
   made in and nothing reloads. Signing in to an existing account switches to
   that account's language.
 - **User data keeps its language.** Item names and the storage spaces a
-  household named stay as typed. What the UI names is translated: seeded
+  household named stay as typed. A new household's storage spaces arrive
+  already named in its creator's language, by the backend, and are user data
+  from then on. What the UI names is translated: seeded
   categories (`messages.categories.name`), count-unit nouns, metric unit
   symbols, and the fallback storage space, which nobody can rename
   (`locationName`). Codes the catalogs lack show the API's label.

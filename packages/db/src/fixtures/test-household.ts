@@ -2,7 +2,6 @@ import {
   createId,
   daysUntil,
   DEFAULT_CATEGORY,
-  DEFAULT_LOCATIONS,
   EXPIRY_WARNING_DAYS,
   HOUSEHOLD_ROLE,
   ITEM_EVENT_TYPE,
@@ -24,7 +23,13 @@ import {
   type NewItemEventRow,
   type NewItemRow,
 } from '../schema';
-import { CATEGORY_SEED, seedCategories, seedDefaultLocations, seedUnits } from '../seed';
+import {
+  CATEGORY_SEED,
+  DEFAULT_LOCATION_SEED,
+  seedCategories,
+  seedHouseholdLocations,
+  seedUnits,
+} from '../seed';
 
 /**
  * A realistic household for local development: every default location in use,
@@ -122,7 +127,7 @@ const PRODUCTS = {
 
 interface ItemFixture {
   name: string;
-  location: (typeof DEFAULT_LOCATIONS)[number];
+  location: (typeof DEFAULT_LOCATION_SEED)[number]['name'];
   /** A category code from `CATEGORY_SEED`. */
   category: string;
   /** Only for the default category, where each item decides; others copy their category's. */
@@ -670,7 +675,7 @@ export function seedTestHousehold(
       })),
     );
 
-    const locationRows = await seedDefaultLocations(tx, TEST_HOUSEHOLD_ID);
+    const locationRows = await seedHouseholdLocations(tx, TEST_HOUSEHOLD_ID);
     const locationIdByName = new Map(locationRows.map((row) => [row.name, row.id]));
 
     const productRows = await tx

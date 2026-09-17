@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { SettingsModule } from '../settings/settings.module';
+import { DefaultLocationsModule } from '../default-locations/default-locations.module';
 import { HouseholdAccessGuard } from './household-access.guard';
 import { HouseholdsController } from './households.controller';
 import { HouseholdsService } from './households.service';
@@ -14,7 +14,7 @@ import { MembershipService } from './membership.service';
  * importing this module.
  */
 @Module({
-  imports: [SettingsModule],
+  imports: [DefaultLocationsModule],
   controllers: [HouseholdsController, MembersController],
   providers: [HouseholdsService, MembersService, MembershipService, HouseholdAccessGuard],
   exports: [HouseholdsService, MembershipService, HouseholdAccessGuard],

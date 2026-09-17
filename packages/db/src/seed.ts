@@ -1,7 +1,9 @@
-import { DEFAULT_CATEGORY, DEFAULT_LOCATIONS, withFallbackLocation } from '@pantry-pal/shared';
+import { DEFAULT_CATEGORY, FALLBACK_LOCATION_NAME } from '@pantry-pal/shared';
 
 import {
   categories,
+  defaultLocations,
+  defaultLocationTranslations,
   locations,
   units,
   type CategoryRow,
@@ -121,26 +123,162 @@ export async function seedCategories(db: Executor): Promise<void> {
     .onConflictDoNothing({ target: categories.code });
 }
 
+interface DefaultLocationSeed {
+  readonly code: string;
+  /** English, so it needs no translation row. */
+  readonly name: string;
+  readonly isFallback: boolean;
+  /** By language: every language the UI speaks, apart from English. */
+  readonly translations: Readonly<Record<string, string>>;
+}
+
 /**
- * Gives a household the default starting places, "Other" among them as its
- * fallback. The rest are ordinary rows, so the user can rename, reorder, delete
- * or add to them straight away.
+ * The default storage spaces, in a new household's order, with their names in
+ * every language the frontend speaks. The rows are languages, not regions: no
+ * name here reads differently in Quebec than in France.
+ *
+ * The fallback's names are the frontend catalog's (`storage.fallbackLocation`),
+ * which shows its own word for a household's fallback anyway.
+ *
+ * Location (_where_ a thing is) is a separate axis from category (_what_ it is).
+ * A jar of paprika is location "Spices", category "spices"; ibuprofen is
+ * location "Medicines", category "medicine".
+ *
+ * Migration `0005_default_locations` inserts this list as it stood then; update
+ * it too while it is unreleased, and add a migration once it is.
+ */
+export const DEFAULT_LOCATION_SEED = [
+  {
+    code: 'kitchen',
+    name: 'Kitchen',
+    isFallback: false,
+    translations: { uk: 'Кухня', ru: 'Кухня', de: 'Küche', fr: 'Cuisine', es: 'Cocina' },
+  },
+  {
+    code: 'fridge',
+    name: 'Fridge',
+    isFallback: false,
+    translations: {
+      uk: 'Холодильник',
+      ru: 'Холодильник',
+      de: 'Kühlschrank',
+      fr: 'Réfrigérateur',
+      es: 'Frigorífico',
+    },
+  },
+  {
+    code: 'freezer',
+    name: 'Freezer',
+    isFallback: false,
+    translations: {
+      uk: 'Морозилка',
+      ru: 'Морозилка',
+      de: 'Gefrierschrank',
+      fr: 'Congélateur',
+      es: 'Congelador',
+    },
+  },
+  {
+    code: 'pantry',
+    name: 'Pantry',
+    isFallback: false,
+    translations: {
+      uk: 'Комора',
+      ru: 'Кладовая',
+      de: 'Vorratskammer',
+      fr: 'Garde-manger',
+      es: 'Despensa',
+    },
+  },
+  {
+    code: 'spices',
+    name: 'Spices',
+    isFallback: false,
+    translations: { uk: 'Спеції', ru: 'Специи', de: 'Gewürze', fr: 'Épices', es: 'Especias' },
+  },
+  {
+    code: 'bathroom',
+    name: 'Bathroom',
+    isFallback: false,
+    translations: {
+      uk: 'Ванна кімната',
+      ru: 'Ванная',
+      de: 'Badezimmer',
+      fr: 'Salle de bain',
+      es: 'Baño',
+    },
+  },
+  {
+    code: 'medicines',
+    name: 'Medicines',
+    isFallback: false,
+    translations: {
+      uk: 'Ліки',
+      ru: 'Лекарства',
+      de: 'Medikamente',
+      fr: 'Médicaments',
+      es: 'Medicamentos',
+    },
+  },
+  {
+    // Last, like the `other` category: the catch-all for anything unplaced.
+    code: 'other',
+    name: FALLBACK_LOCATION_NAME,
+    isFallback: true,
+    translations: { uk: 'Інше', ru: 'Другое', de: 'Sonstiges', fr: 'Autre', es: 'Otros' },
+  },
+] as const satisfies readonly DefaultLocationSeed[];
+
+/** Positions are 10 apart, like categories', so an admin can slot one between two. */
+const defaultLocationSortOrder = (index: number): number => (index + 1) * 10;
+
+/**
+ * Idempotent, like `seedCategories`: existing rows are left alone. The backend
+ * runs it only while the table is empty, so a default an admin removed stays
+ * removed.
+ */
+export async function seedDefaultLocations(db: Executor): Promise<void> {
+  await db
+    .insert(defaultLocations)
+    .values(
+      DEFAULT_LOCATION_SEED.map(({ code, name, isFallback }, index) => ({
+        code,
+        name,
+        icon: null,
+        sortOrder: defaultLocationSortOrder(index),
+        isFallback,
+      })),
+    )
+    .onConflictDoNothing();
+
+  await db
+    .insert(defaultLocationTranslations)
+    .values(
+      DEFAULT_LOCATION_SEED.flatMap(({ code, translations }) =>
+        Object.entries(translations).map(([locale, name]) => ({ code, locale, name })),
+      ),
+    )
+    .onConflictDoNothing();
+}
+
+/**
+ * Gives a household the default storage spaces as seeded, in English, "Other"
+ * among them as its fallback. They are ordinary rows, so the user can rename,
+ * reorder, delete or add to them straight away.
  *
  * Re-running it on an existing household only adds defaults introduced since:
  * the unique index on `(household_id, lower(name))` turns every existing name
  * into a no-op. It would also re-add a default the user deleted, so backfill
  * deliberately rather than on every boot.
  */
-export function seedDefaultLocations(db: Executor, householdId: string): Promise<LocationRow[]> {
-  const defaults = withFallbackLocation(DEFAULT_LOCATIONS.map((name) => ({ name, icon: null })));
-
+export function seedHouseholdLocations(db: Executor, householdId: string): Promise<LocationRow[]> {
   return db
     .insert(locations)
     .values(
-      defaults.map(({ name, icon, isFallback }, index) => ({
+      DEFAULT_LOCATION_SEED.map(({ name, isFallback }, index) => ({
         householdId,
         name,
-        icon,
+        icon: null,
         isFallback,
         sortOrder: index,
       })),

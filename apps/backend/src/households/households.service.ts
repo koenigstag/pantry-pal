@@ -5,17 +5,12 @@ import {
   LocationsRepository,
   Transactional,
 } from '@pantry-pal/db';
-import {
-  APP_SETTING,
-  HOUSEHOLD_ROLE,
-  withFallbackLocation,
-  type UserHousehold,
-} from '@pantry-pal/shared';
+import { HOUSEHOLD_ROLE, type UserHousehold } from '@pantry-pal/shared';
 import type { CreateHouseholdDto, UpdateHouseholdDto } from '@pantry-pal/shared/dto';
 
 import type { AuthenticatedUser, Membership } from '../common/request-context';
+import { DefaultLocationsService } from '../default-locations/default-locations.service';
 import { ChangeFeed } from '../realtime/change-feed';
-import { SettingsService } from '../settings/settings.service';
 import { toHousehold, toHouseholdMember, toUserHousehold } from './household.mapper';
 
 @Injectable()
@@ -24,7 +19,7 @@ export class HouseholdsService {
     private readonly households: HouseholdsRepository,
     private readonly members: HouseholdMembersRepository,
     private readonly locations: LocationsRepository,
-    private readonly settings: SettingsService,
+    private readonly defaultLocations: DefaultLocationsService,
     private readonly changes: ChangeFeed,
   ) {}
 
@@ -42,9 +37,11 @@ export class HouseholdsService {
   }
 
   /**
-   * The creator becomes the owner, and the default locations in force right now
-   * are copied in, with the fallback location among them. Later changes to the
-   * defaults do not reach this household.
+   * The creator becomes the owner, and the default storage spaces in force right
+   * now are copied in, named in the creator's language, with the fallback
+   * location among them. From then on they are the household's own: later
+   * changes to the defaults do not reach it, and neither does a change of the
+   * creator's language.
    */
   @Transactional()
   async create(user: AuthenticatedUser, dto: CreateHouseholdDto): Promise<UserHousehold> {
@@ -56,10 +53,10 @@ export class HouseholdsService {
       role: HOUSEHOLD_ROLE.Owner,
     });
 
-    const defaults = await this.settings.get(APP_SETTING.DefaultLocations);
+    const defaults = await this.defaultLocations.forNewHousehold(user.locale);
     await this.locations.createMany(
       household.id,
-      withFallbackLocation(defaults.locations).map(({ name, icon, isFallback }, index) => ({
+      defaults.map(({ name, icon, isFallback }, index) => ({
         name,
         icon,
         isFallback,

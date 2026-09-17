@@ -144,32 +144,13 @@ export const ITEM_EVENT_TYPE = {
 export const ITEM_EVENT_TYPES = Object.values(ITEM_EVENT_TYPE);
 
 /**
- * The name of every household's fallback location: the one that can be neither
- * renamed nor deleted, and where a deleted location's items go when nobody says
- * otherwise. A household gets it on creation (see `withFallbackLocation`).
+ * The English name of every household's fallback location: the one that can be
+ * neither renamed nor deleted, and where a deleted location's items go when
+ * nobody says otherwise. A household gets it on creation, among the default
+ * storage spaces (`default_locations` in `@pantry-pal/db`), named in its
+ * creator's language.
  */
 export const FALLBACK_LOCATION_NAME = 'Other';
-
-/**
- * The code-level fallback for the `default-locations` setting (see
- * `APP_SETTING_DEFAULTS`). An admin can override it at runtime; a new household
- * copies whichever is in force.
- *
- * Location (_where_ a thing is) is a separate axis from category (_what_ it is).
- * A jar of paprika is location "Spices", category "spices"; ibuprofen is
- * location "Medicines", category "medicine".
- */
-export const DEFAULT_LOCATIONS = [
-  'Kitchen',
-  'Fridge',
-  'Freezer',
-  'Pantry',
-  'Spices',
-  'Bathroom',
-  'Medicines',
-  /** Last, like the `other` category: the catch-all for anything unplaced. */
-  FALLBACK_LOCATION_NAME,
-] as const;
 
 /** An item within this many days of its expiry date counts as "expiring soon". */
 export const EXPIRY_WARNING_DAYS = 3;
@@ -197,6 +178,7 @@ export const MAX_PASSWORD_LENGTH = 128;
 export const MAX_LOCATION_NAME_LENGTH = 40;
 export const MAX_LOCATION_ICON_LENGTH = 32;
 export const MAX_LOCATIONS_PER_HOUSEHOLD = 50;
+export const MAX_DEFAULT_LOCATION_CODE_LENGTH = 32;
 
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;

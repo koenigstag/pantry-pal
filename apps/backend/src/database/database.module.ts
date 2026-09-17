@@ -10,10 +10,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import {
-  AppSettingsRepository,
   CategoriesRepository,
   createDatabase,
   createTransactionalDatabase,
+  DefaultLocationsRepository,
   HouseholdMembersRepository,
   HouseholdsRepository,
   ItemEventsRepository,
@@ -21,6 +21,7 @@ import {
   LocationsRepository,
   RefreshTokensRepository,
   seedCategories,
+  seedDefaultLocations,
   seedUnits,
   UnitsRepository,
   UsersRepository,
@@ -32,8 +33,8 @@ import { DatabaseExceptionFilter } from './database-exception.filter';
 import { DATABASE, DATABASE_HANDLE } from './database.tokens';
 
 const REPOSITORIES = [
-  AppSettingsRepository,
   CategoriesRepository,
+  DefaultLocationsRepository,
   HouseholdMembersRepository,
   HouseholdsRepository,
   ItemEventsRepository,
@@ -87,16 +88,17 @@ export class DatabaseModule implements OnModuleInit, OnApplicationShutdown {
     @Inject(DATABASE_HANDLE) private readonly handle: DatabaseHandle,
     private readonly units: UnitsRepository,
     private readonly categories: CategoriesRepository,
+    private readonly defaultLocations: DefaultLocationsRepository,
   ) {}
 
   /**
    * Doubles as the startup connectivity check: an unreachable database fails
    * the boot here instead of on the first request.
    *
-   * Units and categories are seeded only into an empty table. Seeding on every
-   * boot would resurrect rows an admin deliberately deleted. (Migration
-   * `0002_categories` already inserts the categories; this covers a schema
-   * created with `db:push`.)
+   * Units, categories and default storage spaces are seeded only into an empty
+   * table. Seeding on every boot would resurrect rows an admin deliberately
+   * deleted. (Migrations `0002_categories` and `0005_default_locations` already
+   * insert theirs; this covers a schema created with `db:push`.)
    */
   async onModuleInit(): Promise<void> {
     if ((await this.units.count()) === 0) {
@@ -106,6 +108,10 @@ export class DatabaseModule implements OnModuleInit, OnApplicationShutdown {
     if ((await this.categories.count()) === 0) {
       await seedCategories(this.handle.db);
       this.logger.log('Seeded the empty categories table');
+    }
+    if ((await this.defaultLocations.count()) === 0) {
+      await seedDefaultLocations(this.handle.db);
+      this.logger.log('Seeded the empty default storage spaces');
     }
   }
 
