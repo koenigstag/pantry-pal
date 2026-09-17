@@ -2,7 +2,7 @@ import type { PantryItem } from '@pantry-pal/shared';
 import type { ReactElement } from 'react';
 import type { To } from 'react-router';
 
-import { ItemCard } from './ItemCard';
+import { AddItemCard, ItemCard } from './ItemCard';
 
 interface ItemGridProps {
   items: readonly PantryItem[];
@@ -10,6 +10,8 @@ interface ItemGridProps {
   detailsLink: (itemId: string) => To;
   onToggleSelected: (itemId: string) => void;
   onRemove: (item: PantryItem) => void;
+  /** Given, the grid ends with a card that calls it to add an item. */
+  onAdd?: () => void;
 }
 
 /**
@@ -25,6 +27,7 @@ export function ItemGrid({
   detailsLink,
   onToggleSelected,
   onRemove,
+  onAdd,
 }: ItemGridProps): ReactElement {
   return (
     <div className="@container">
@@ -40,6 +43,11 @@ export function ItemGrid({
             />
           </li>
         ))}
+        {onAdd !== undefined && (
+          <li>
+            <AddItemCard onAdd={onAdd} />
+          </li>
+        )}
       </ul>
     </div>
   );

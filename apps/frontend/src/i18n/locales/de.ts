@@ -115,7 +115,6 @@ export const de = {
     refresh: 'Aktualisieren',
     itemCount: (count: number) => plural(count, { other: '# Artikel' }),
     matchCount: (count: number) => plural(count, { other: '# Treffer' }),
-    emptyLocation: (location: string) => `In „${location}“ ist noch nichts.`,
     noMatches: (query: string, location: string) => `In „${location}“ passt nichts zu „${query}“.`,
     noLocations: 'Dieser Haushalt hat noch keine Lagerorte.',
     fallbackLocation: 'Sonstiges',

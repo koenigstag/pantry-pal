@@ -112,7 +112,6 @@ export const fr = {
     refresh: 'Actualiser',
     itemCount: (count: number) => articles(count, ''),
     matchCount: (count: number) => plural(count, { one: '# résultat', other: '# résultats' }),
-    emptyLocation: (location: string) => `Rien dans ${q(location)} pour l’instant.`,
     noMatches: (query: string, location: string) =>
       `Rien dans ${q(location)} ne correspond à ${q(query)}.`,
     noLocations: 'Ce foyer n’a pas encore d’emplacement.',

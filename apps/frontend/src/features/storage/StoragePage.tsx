@@ -203,11 +203,9 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
           )}
         </div>
 
-        {visibleItems.length === 0 ? (
+        {isSearching && visibleItems.length === 0 ? (
           <p className="py-16 text-center text-ink-muted">
-            {isSearching
-              ? messages.storage.noMatches(query.trim(), locationName(location))
-              : messages.storage.emptyLocation(locationName(location))}
+            {messages.storage.noMatches(query.trim(), locationName(location))}
           </p>
         ) : (
           <ItemGrid
@@ -216,6 +214,9 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
             detailsLink={params.itemLink}
             onToggleSelected={toggleSelected}
             onRemove={openRemoveSheet}
+            // An empty space shows only this card. Search results don't: a new item
+            // would not be among them.
+            onAdd={isSearching ? undefined : () => setSheet({ kind: 'add' })}
           />
         )}
       </section>

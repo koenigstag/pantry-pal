@@ -133,7 +133,6 @@ export const uk = {
     itemCount: (count: number) => items(count, ''),
     matchCount: (count: number) =>
       plural(count, { one: '# збіг', few: '# збіги', many: '# збігів', other: '# збігу' }),
-    emptyLocation: (location: string) => `Місце зберігання «${location}» поки порожнє.`,
     noMatches: (query: string, location: string) =>
       `У місці зберігання «${location}» немає збігів із «${query}».`,
     noLocations: 'У цьому домогосподарстві ще немає місць зберігання.',

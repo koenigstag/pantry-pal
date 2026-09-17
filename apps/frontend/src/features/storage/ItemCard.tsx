@@ -1,5 +1,5 @@
 import { daysUntil, getExpiryStatus, type PantryItem } from '@pantry-pal/shared';
-import { Clock, Package, TriangleAlert } from 'lucide-react';
+import { Clock, Package, Plus, TriangleAlert } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useId, type ReactElement } from 'react';
 import { Link, type To } from 'react-router';
@@ -91,6 +91,36 @@ export const ItemCard = observer(function ItemCard({
     </article>
   );
 });
+
+/**
+ * The card after a storage space's items: opens Add item, which starts in that
+ * space.
+ *
+ * Its rows mirror `ItemCard`'s: the badge row, the photo, the name, then the
+ * height of one amount line and a stepper. So it is as tall as an item even on a
+ * row of its own. Change the two together.
+ */
+export function AddItemCard({ onAdd }: { onAdd: () => void }): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      className="group focus-ring flex h-full w-full cursor-pointer flex-col rounded-xl border border-dashed border-line p-2 text-start text-sm leading-snug font-medium text-ink-muted transition-colors hover:border-accent hover:text-accent"
+    >
+      <span aria-hidden="true" className="min-h-7" />
+      <span
+        aria-hidden="true"
+        className="mt-1 mb-2 flex aspect-square items-center justify-center rounded-lg bg-sunken transition-colors group-hover:bg-accent-soft"
+      >
+        <Plus className="size-1/3" strokeWidth={1.25} />
+      </span>
+      {/* Where an item's name goes. */}
+      {messages.storage.addItem}
+      {/* An amount line (pt-0.5 and 1rem) and a stepper (pt-2 and a size-8 button). */}
+      <span aria-hidden="true" className="mt-auto h-14.5 shrink-0" />
+    </button>
+  );
+}
 
 /** Days left until `effectiveExpiresAt`, which beats the printed date once an item is opened. */
 function ExpiryBadge({ item }: { item: PantryItem }): ReactElement | null {

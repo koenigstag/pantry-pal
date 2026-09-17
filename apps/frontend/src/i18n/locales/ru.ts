@@ -138,7 +138,6 @@ export const ru = {
         many: '# совпадений',
         other: '# совпадения',
       }),
-    emptyLocation: (location: string) => `Место хранения «${location}» пока пустое.`,
     noMatches: (query: string, location: string) =>
       `В месте хранения «${location}» нет совпадений с «${query}».`,
     noLocations: 'В этом домохозяйстве ещё нет мест хранения.',

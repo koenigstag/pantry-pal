@@ -120,7 +120,6 @@ export const es = {
     itemCount: (count: number) => articles(count, ''),
     matchCount: (count: number) =>
       plural(count, { one: '# coincidencia', other: '# coincidencias' }),
-    emptyLocation: (location: string) => `Todavía no hay nada en «${location}».`,
     noMatches: (query: string, location: string) =>
       `Nada en «${location}» coincide con «${query}».`,
     noLocations: 'Este hogar todavía no tiene lugares de almacenamiento.',

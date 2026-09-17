@@ -132,7 +132,6 @@ const en = {
     refresh: 'Refresh',
     itemCount: (count: number) => plural(count, { one: '# item', other: '# items' }),
     matchCount: (count: number) => plural(count, { one: '# match', other: '# matches' }),
-    emptyLocation: (location: string) => `Nothing in ${location} yet.`,
     noMatches: (query: string, location: string) => `Nothing in ${location} matches “${query}”.`,
     noLocations: 'This household has no storage spaces yet.',
     /** The fallback storage space: nobody can rename it, so its name is translated. */
