@@ -10,7 +10,7 @@ interface ItemGridProps {
   detailsLink: (itemId: string) => To;
   onToggleSelected: (itemId: string) => void;
   onRemove: (item: PantryItem) => void;
-  /** Given, the grid ends with a card that calls it to add an item. */
+  /** Given, the grid ends with a plus card that calls it to add an item. */
   onAdd?: () => void;
 }
 

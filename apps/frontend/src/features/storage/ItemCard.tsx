@@ -24,8 +24,9 @@ interface ItemCardProps {
 }
 
 /**
- * One item: expiry and selection on top, a photo placeholder, the name, its
- * amount, and a quantity stepper. Anywhere else on the card opens its details.
+ * One item: a photo placeholder reaching the border, with expiry and selection
+ * over its top corners, then the name, its amount, and a quantity stepper, padded.
+ * Anywhere else on the card opens its details.
  *
  * The whole-card target is the name's link stretched over the card by an
  * `::after` overlay, so the checkbox and the stepper are not nested inside a
@@ -49,11 +50,20 @@ export const ItemCard = observer(function ItemCard({
     <article
       aria-labelledby={nameId}
       className={cn(
-        'relative flex h-full flex-col rounded-xl border bg-surface p-2 transition-shadow',
+        'relative flex h-full flex-col rounded-xl border bg-surface transition-shadow',
         selected ? 'border-accent ring-2 ring-accent' : 'border-line shadow-xs hover:shadow-sm',
       )}
     >
-      <div className="flex min-h-7 items-center gap-1">
+      {/* The photo reaches the border; its top corners follow the card's, inside the border. */}
+      <div
+        aria-hidden="true"
+        className="flex aspect-square items-center justify-center rounded-t-[calc(var(--radius-xl)-1px)] bg-sunken text-ink-muted"
+      >
+        <Package className="size-1/3" strokeWidth={1.25} />
+      </div>
+
+      {/* Over the photo's top corners, where the card's padding used to put them. */}
+      <div className="absolute inset-x-0 top-0 flex min-h-7 items-center gap-1 p-2">
         <ExpiryBadge item={item} />
         <label className="relative z-10 -me-1 ms-auto flex size-7 shrink-0 cursor-pointer items-center justify-center">
           <input
@@ -66,58 +76,53 @@ export const ItemCard = observer(function ItemCard({
         </label>
       </div>
 
-      <div
-        aria-hidden="true"
-        className="mt-1 flex aspect-square items-center justify-center rounded-lg bg-sunken text-ink-muted"
-      >
-        <Package className="size-1/3" strokeWidth={1.25} />
+      <div className="flex flex-1 flex-col px-2 pb-2">
+        <h3 id={nameId} className="mt-2 line-clamp-2 text-sm leading-snug font-medium break-words">
+          <Link
+            to={detailsLink(item.id)}
+            state={OPENED_FROM_LIST}
+            className="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent"
+          >
+            {item.name}
+          </Link>
+        </h3>
+
+        {/* mt-auto: the amount and the stepper sit at the bottom, level across a row however long the names. */}
+        {/* Two lines rather than an ellipsis, which would hide the size: `2 blisters` / `× 10 pills`. */}
+        <p className="mt-auto line-clamp-2 pt-0.5 text-xs break-words text-ink-muted">{amount}</p>
+
+        <QuantityStepper item={item} onRemove={onRemove} className="relative z-10 pt-2" />
       </div>
-
-      <h3 id={nameId} className="mt-2 line-clamp-2 text-sm leading-snug font-medium break-words">
-        <Link
-          to={detailsLink(item.id)}
-          state={OPENED_FROM_LIST}
-          className="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent"
-        >
-          {item.name}
-        </Link>
-      </h3>
-
-      {/* mt-auto: the amount and the stepper sit at the bottom, level across a row however long the names. */}
-      {/* Two lines rather than an ellipsis, which would hide the size: `2 blisters` / `× 10 pills`. */}
-      <p className="mt-auto line-clamp-2 pt-0.5 text-xs break-words text-ink-muted">{amount}</p>
-
-      <QuantityStepper item={item} onRemove={onRemove} className="relative z-10 pt-2" />
     </article>
   );
 });
 
 /**
- * The card after a storage space's items: opens Add item, which starts in that
- * space.
+ * The card after a storage space's items, filled like an item's photo, with a
+ * plus: opens Add item, which starts in that space.
  *
- * Its rows mirror `ItemCard`'s: the badge row, the photo, the name, then the
- * height of one amount line and a stepper. So it is as tall as an item even on a
- * row of its own. Change the two together.
+ * It has `ItemCard`'s border and holds its rows, empty: the photo, then the padded
+ * text block with one line of name, an amount line and a stepper. So it is as
+ * tall as an item even on a row of its own. Change the two together.
  */
 export function AddItemCard({ onAdd }: { onAdd: () => void }): ReactElement {
   return (
     <button
       type="button"
       onClick={onAdd}
-      className="group focus-ring flex h-full w-full cursor-pointer flex-col rounded-xl border border-dashed border-line p-2 text-start text-sm leading-snug font-medium text-ink-muted transition-colors hover:border-accent hover:text-accent"
+      aria-label={messages.storage.addItem}
+      title={messages.storage.addItem}
+      className="focus-ring relative flex h-full w-full cursor-pointer flex-col rounded-xl border border-line bg-sunken text-ink-muted transition-colors hover:bg-accent-soft hover:text-accent"
     >
-      <span aria-hidden="true" className="min-h-7" />
-      <span
-        aria-hidden="true"
-        className="mt-1 mb-2 flex aspect-square items-center justify-center rounded-lg bg-sunken transition-colors group-hover:bg-accent-soft"
-      >
-        <Plus className="size-1/3" strokeWidth={1.25} />
+      <span className="aspect-square" />
+      <span className="flex flex-1 flex-col px-2 pb-2">
+        <span className="mt-2 h-[1lh] text-sm leading-snug" />
+        {/* An amount line (pt-0.5 and 1rem) and a stepper (pt-2 and a size-8 button). */}
+        <span className="mt-auto h-14.5 shrink-0" />
       </span>
-      {/* Where an item's name goes. */}
-      {messages.storage.addItem}
-      {/* An amount line (pt-0.5 and 1rem) and a stepper (pt-2 and a size-8 button). */}
-      <span aria-hidden="true" className="mt-auto h-14.5 shrink-0" />
+      <span className="absolute inset-0 flex items-center justify-center">
+        <Plus aria-hidden="true" className="h-auto w-1/3" strokeWidth={1.25} />
+      </span>
     </button>
   );
 }

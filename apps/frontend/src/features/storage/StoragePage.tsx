@@ -214,7 +214,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
             detailsLink={params.itemLink}
             onToggleSelected={toggleSelected}
             onRemove={openRemoveSheet}
-            // An empty space shows only this card. Search results don't: a new item
+            // An empty space shows only the plus card. Search results don't: a new item
             // would not be among them.
             onAdd={isSearching ? undefined : () => setSheet({ kind: 'add' })}
           />

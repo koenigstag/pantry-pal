@@ -73,10 +73,10 @@ src/i18n/                  message catalog and Intl formatters
   validates `toCreate(draft)` against `CreatePantryItemDto` plus `ruleErrors`,
   lets the quantity step no lower than 1, and asks before discarding a form
   with anything typed into it.
-- It opens from the ⋮ menu and from the dashed Add item card (`AddItemCard`)
-  after the last item of every storage space, which is all an empty space shows.
-  Either way the form starts in the space on screen. Search results leave the
-  card out, since a new item would not be among them.
+- It opens from the ⋮ menu and from the plus card after the last item of every
+  storage space (`AddItemCard`), filled like an item's photo, which is all an
+  empty space shows. Either way the form starts in the space on screen. Search
+  results leave the card out, since a new item would not be among them.
 - Field errors come from the catalog (`itemFieldErrors`), one message per field
   saying what it accepts, rather than class-validator's English. Rules a DTO
   cannot state (size value and unit together, no future opened date) live in
