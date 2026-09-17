@@ -1,9 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   CategoriesRepository,
   ItemEventsRepository,
   ItemsRepository,
   LocationsRepository,
+  ShoppingListEntriesRepository,
+  ShoppingListsRepository,
   Transactional,
   UnitsRepository,
   type ItemRow,
@@ -15,6 +22,7 @@ import {
   DEFAULT_CATEGORY,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
+  MAX_ITEM_QUANTITY,
   QUANTITY_UNIT_KIND,
   type ItemEventType,
   type PantryItem,
@@ -28,14 +36,28 @@ import {
 
 import type { Membership } from '../common/request-context';
 import { ChangeFeed } from '../realtime/change-feed';
+import { toShoppingListEntry } from '../shopping-lists/shopping-list.mapper';
 import { toPantryItem } from './item.mapper';
 
 type ItemField = keyof UpdateItemInput;
 type Changes = Partial<Record<ItemField, { from: unknown; to: unknown }>>;
 
+/** How many of an item go on its default shopping list when it runs out. */
+const RAN_OUT_QUANTITY = 1;
+
+/** On the shelf with some left. Running out is leaving this state. */
+const inStock = (row: ItemRow): boolean => row.status === ITEM_STATUS.Active && row.quantity > 0;
+
 /**
  * Any member may manage items. Every write records an `item_events` row in the
  * same transaction and publishes the change once that transaction commits.
+ *
+ * An item that runs out — used up, thrown out, or stepped down to zero — goes
+ * on its default shopping list in the same transaction. Deleting one, a
+ * correction, takes it off every list instead.
+ *
+ * Locks are taken items first, then shopping lists, then list entries: the
+ * order `ShoppingListsService` keeps too, so the two cannot deadlock.
  */
 @Injectable()
 export class ItemsService {
@@ -45,6 +67,8 @@ export class ItemsService {
     private readonly locations: LocationsRepository,
     private readonly units: UnitsRepository,
     private readonly categories: CategoriesRepository,
+    private readonly shoppingLists: ShoppingListsRepository,
+    private readonly shoppingEntries: ShoppingListEntriesRepository,
     private readonly changes: ChangeFeed,
   ) {}
 
@@ -71,11 +95,15 @@ export class ItemsService {
     const { householdId } = membership;
     const sizeValue = dto.sizeValue ?? null;
     const sizeUnit = dto.sizeUnit ?? null;
+    const defaultShoppingListId = dto.defaultShoppingListId ?? null;
 
     assertSizePair(sizeValue, sizeUnit);
     await this.assertUnits(dto.unit, sizeUnit);
     const isEdible = await this.resolveEdible(dto.category, dto.isEdible);
     await this.lockLocation(householdId, dto.locationId);
+    if (defaultShoppingListId !== null) {
+      await this.lockShoppingList(householdId, defaultShoppingListId);
+    }
 
     const row = await this.items.create(householdId, {
       name: dto.name,
@@ -90,6 +118,7 @@ export class ItemsService {
       openedAt: dto.openedAt ?? null,
       periodAfterOpeningDays: dto.periodAfterOpeningDays ?? null,
       notes: dto.notes ?? null,
+      defaultShoppingListId,
     });
 
     await this.events.record({
@@ -108,6 +137,9 @@ export class ItemsService {
   /**
    * Applies only the fields present in `dto`, and records what actually
    * changed. A patch that changes nothing writes nothing and announces nothing.
+   *
+   * A patch that runs the item out puts it on its default shopping list — the
+   * one the same patch names, if it names one.
    */
   @Transactional()
   async update(membership: Membership, id: string, dto: UpdatePantryItemDto): Promise<PantryItem> {
@@ -140,6 +172,7 @@ export class ItemsService {
       periodAfterOpeningDays: dto.periodAfterOpeningDays,
       notes: dto.notes,
       status: dto.status,
+      defaultShoppingListId: dto.defaultShoppingListId,
     };
 
     const changes = diff(before, patch);
@@ -153,6 +186,52 @@ export class ItemsService {
     if (changes.locationId !== undefined && patch.locationId !== undefined) {
       await this.lockLocation(householdId, patch.locationId);
     }
+    if (
+      changes.defaultShoppingListId !== undefined &&
+      typeof patch.defaultShoppingListId === 'string'
+    ) {
+      await this.lockShoppingList(householdId, patch.defaultShoppingListId);
+    }
+
+    const after = await this.items.update(householdId, id, patch);
+    if (after === undefined) throw new NotFoundException('Item not found');
+
+    await this.events.record(eventFor(membership, before, after, changes));
+
+    const item = toPantryItem(after);
+    this.changes.publish({ type: 'item.updated', item });
+
+    if (inStock(before) && !inStock(after)) await this.putOnDefaultList(after, item);
+    return item;
+  }
+
+  /**
+   * Brings `quantity` of an item home, as putting the shopping away does.
+   *
+   * An item still in stock gains them, up to the quantity limit. One that ran
+   * out starts over as a new batch: active again, holding just these, with the
+   * old batch's dates cleared, and in the fallback location if its own was
+   * deleted meanwhile. Recorded and announced like any update.
+   */
+  @Transactional()
+  async restock(membership: Membership, id: string, quantity: number): Promise<PantryItem> {
+    const { householdId } = membership;
+
+    const before = await this.items.lock(householdId, id);
+    if (before === undefined) throw new NotFoundException('Item not found');
+
+    const patch: UpdateItemInput = inStock(before)
+      ? { quantity: Math.min(before.quantity + quantity, MAX_ITEM_QUANTITY) }
+      : {
+          status: ITEM_STATUS.Active,
+          quantity,
+          expiresAt: null,
+          openedAt: null,
+          locationId: await this.shelfFor(before),
+        };
+
+    const changes = diff(before, patch);
+    if (Object.keys(changes).length === 0) return toPantryItem(before);
 
     const after = await this.items.update(householdId, id, patch);
     if (after === undefined) throw new NotFoundException('Item not found');
@@ -167,6 +246,7 @@ export class ItemsService {
   /**
    * Soft delete, for mistakes. Using an item up or throwing it away is a status
    * change (`consumed` / `discarded`), which is what waste statistics count.
+   * A deleted item leaves every shopping list it was on.
    */
   @Transactional()
   async remove(membership: Membership, id: string): Promise<void> {
@@ -181,8 +261,86 @@ export class ItemsService {
       userId: membership.userId,
       type: ITEM_EVENT_TYPE.Deleted,
     });
+    const entries = await this.shoppingEntries.deleteForItem(householdId, id);
 
     this.changes.publish({ type: 'item.deleted', householdId, id });
+    if (entries.length > 0) {
+      this.changes.publish({
+        type: 'shopping-list-entries.deleted',
+        householdId,
+        ids: entries.map((entry) => entry.id),
+      });
+    }
+  }
+
+  /**
+   * Puts an item that just ran out on its default shopping list, if it has one.
+   * Already on that list, it stays as it is: quantity, tick and all.
+   */
+  private async putOnDefaultList(after: ItemRow, item: PantryItem): Promise<void> {
+    const { householdId, defaultShoppingListId: listId } = after;
+    if (listId === null) return;
+
+    // Shared, as when the default was set. The list cannot be gone — its delete
+    // clears this item's default first, and waits for the item's lock to do so.
+    // An archived list is frozen: the item keeps it as its default, and goes nowhere.
+    const list = await this.shoppingLists.lock(householdId, listId, 'share');
+    if (list === undefined || list.archivedAt !== null) return;
+
+    const entries = await this.shoppingEntries.addMissing(
+      householdId,
+      listId,
+      [after.id],
+      RAN_OUT_QUANTITY,
+    );
+    if (entries.length === 0) return;
+
+    this.changes.publish({
+      type: 'shopping-list-entries.upserted',
+      householdId,
+      entries: entries.map(toShoppingListEntry),
+      items: [item],
+    });
+  }
+
+  /**
+   * Where an item that ran out goes back on the shelf: the location it was in,
+   * share-locked like any location an item is filed under, or the household's
+   * fallback location if that one has been deleted since.
+   */
+  private async shelfFor(item: ItemRow): Promise<string> {
+    const own = await this.locations.lock(item.householdId, item.locationId, 'share');
+    if (own !== undefined) return own.id;
+
+    const fallback = await this.locations.lockFallback(item.householdId);
+    if (fallback === undefined) {
+      // Only a household created without one: every new household gets it.
+      throw new ConflictException(
+        `"${item.name}" was in a location that has since been deleted, and the household has ` +
+          'no fallback location to put it back in.',
+      );
+    }
+    return fallback.id;
+  }
+
+  /**
+   * Share-locks the shopping list an item is about to name as its default, so a
+   * concurrent delete of that list waits for this write. A list that does not
+   * exist, or belongs to another household, is reported as missing; an archived
+   * one is frozen, so nothing may start going on it.
+   */
+  private async lockShoppingList(householdId: string, listId: string): Promise<void> {
+    const list = await this.shoppingLists.lock(householdId, listId, 'share');
+    if (list === undefined) {
+      throw new BadRequestException(
+        'defaultShoppingListId does not name a shopping list in this household',
+      );
+    }
+    if (list.archivedAt !== null) {
+      throw new BadRequestException(
+        `defaultShoppingListId names "${list.name}", which is archived: restore it first`,
+      );
+    }
   }
 
   /**

@@ -13,6 +13,7 @@ import { LocationsModule } from './locations/locations.module';
 import { ChangeFeedModule } from './realtime/change-feed';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SettingsModule } from './settings/settings.module';
+import { ShoppingListsModule } from './shopping-lists/shopping-lists.module';
 import { UnitsModule } from './units/units.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { UnitsModule } from './units/units.module';
     HouseholdsModule,
     LocationsModule,
     ItemsModule,
+    ShoppingListsModule,
     AdminModule,
     RealtimeModule,
   ],

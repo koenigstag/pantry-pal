@@ -114,10 +114,6 @@ export const ru = {
     refreshFailed: 'Не удалось обновить, поэтому показаны последние полученные данные.',
   },
 
-  pending: {
-    shoppingLists: 'Списки покупок скоро появятся.',
-  },
-
   categories: {
     name: (code: string, label: string): string => CATEGORY_NAMES.get(code) ?? label,
   },
@@ -190,7 +186,26 @@ export const ru = {
   removeSheet: {
     title: (name: string) => `Убрать «${name}»?`,
     usedIt: 'Уже использовано — добавить в список покупок',
+    usedItOnList: (list: string) => `Уже использовано — добавить в «${list}»`,
     justDelete: 'Просто удалить',
+  },
+
+  addToList: {
+    title: (count: number) => items(count, 'Куда добавить ', '?'),
+    usedUpTitle: (name: string) => `Куда добавить «${name}»?`,
+    usedUpHint: 'Когда закончится в следующий раз, его добавят туда автоматически.',
+    alreadyOn: 'Уже в этом списке',
+    someAlreadyOn: (count: number) => plural(count, { other: 'Уже в нём: #' }),
+    newList: 'Новый список',
+    added: (count: number, list: string) =>
+      `${plural(count, {
+        one: 'Добавлен # предмет',
+        few: 'Добавлено # предмета',
+        many: 'Добавлено # предметов',
+        other: 'Добавлено # предмета',
+      })} в «${list}».`,
+    nothingAdded: (list: string) => `Уже в «${list}».`,
+    usedUpAdded: (name: string, list: string) => `«${name}» — в списке «${list}».`,
   },
 
   deleteSheet: {
@@ -279,6 +294,10 @@ export const ru = {
     openedToday: 'Сегодня',
     clearOpened: 'Очистить дату вскрытия',
     periodAfterOpening: 'Использовать в течение (дней после вскрытия)',
+    shoppingList: 'Список покупок',
+    shoppingListHint: 'Когда закончится, попадёт в этот список автоматически.',
+    noShoppingList: 'Нет',
+    archivedList: (name: string) => `«${name}» (в архиве)`,
     notes: 'Заметки',
     conflict: (fields: string) =>
       `Кто-то другой изменил поля (${fields}), пока вы редактировали. При сохранении останутся ваши значения.`,
@@ -302,6 +321,7 @@ export const ru = {
     periodAfterOpeningDays: (max: number) =>
       `Введите целое число дней от 1 до ${formatNumber(max)}.`,
     notes: (max: number) => `Заметки могут содержать до ${formatNumber(max)} символов.`,
+    defaultShoppingListId: 'Выберите список покупок.',
   },
 
   itemDetails: {
@@ -331,6 +351,13 @@ export const ru = {
     added: 'Добавлено',
     updated: 'Обновлено',
     remove: 'Убрать предмет',
+    shopping: 'Покупки',
+    defaultList: (list: string) => `Когда закончится, попадёт в список «${list}».`,
+    noDefaultList: 'Когда закончится, сам ни в какой список не попадёт.',
+    defaultListArchived: (list: string) =>
+      `Когда закончится, ни в какой список не попадёт, пока «${list}» в архиве.`,
+    onLists: (lists: string) => `Сейчас в списках: ${lists}.`,
+    addToList: 'Добавить в список покупок',
   },
 
   discardSheet: {
@@ -445,7 +472,78 @@ export const ru = {
 
   shopping: {
     title: 'Покупки',
-    description: 'Списки покупок скоро появятся.',
+    lists: 'Списки покупок',
+    editLists: 'Редактировать списки покупок',
+    listName: 'Название списка',
+    defaultListName: 'Продукты',
+    create: 'Создать',
+    creating: 'Создание…',
+    nameRequired: (max: number) => `Введите название длиной до ${formatNumber(max)} символов.`,
+    nameTaken: 'Список покупок с таким названием уже есть.',
+    limitReached: (max: number) =>
+      `В домохозяйстве может быть до ${formatNumber(max)} списков покупок.`,
+    moreActions: 'Другие действия',
+    refresh: 'Обновить',
+    share: 'Поделиться списком',
+    nothingToShare: 'В этом списке больше нечего покупать.',
+    copied: 'Список скопирован. Вставьте его в сообщение.',
+    shareFailed: 'Не удалось поделиться списком.',
+    shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
+    loadFailed: 'Не удалось загрузить списки покупок.',
+    noLists: 'Списков покупок пока нет.',
+    createFirst: 'Создать список покупок',
+    emptyList: (list: string) => `В списке «${list}» пока ничего нет.`,
+    emptyHint: 'В разделе «Хранение» выберите предметы или откройте один и добавьте его в список.',
+    toBuy: (count: number) => plural(count, { other: 'Купить: #' }),
+    inCart: 'В корзине',
+    left: (count: number) => plural(count, { other: 'осталось: #' }),
+    noneLeft: 'не осталось',
+    increase: (name: string) => `Купить больше: «${name}»`,
+    decrease: (name: string) => `Купить меньше: «${name}»`,
+    remove: (name: string) => `Убрать «${name}» из списка`,
+    quantity: (name: string) => `Сколько купить: «${name}»`,
+    putAway: (count: number) => items(count, 'Разложить '),
+    puttingAway: 'Раскладываем…',
+    putAwayHint: 'Отмеченные предметы вернутся на свои места хранения.',
+    putAwayDone: (count: number) =>
+      plural(count, {
+        one: '# предмет снова на месте.',
+        few: '# предмета снова на месте.',
+        many: '# предметов снова на месте.',
+        other: '# предмета снова на месте.',
+      }),
+    changedElsewhere: 'Кто-то изменил этот список. Проверьте его и разложите покупки ещё раз.',
+  },
+
+  shoppingListEditor: {
+    title: 'Редактировать списки покупок',
+    name: 'Название списка покупок',
+    newPlaceholder: 'Название нового списка',
+    unnamed: 'Новый список',
+    add: 'Добавить список',
+    empty: 'Списков покупок пока нет.',
+    limitReached: (max: number) =>
+      `В домохозяйстве может быть до ${formatNumber(max)} списков покупок вместе с архивными.`,
+    archive: (name: string) => `Архивировать «${name}»`,
+    unarchive: (name: string) => `Восстановить «${name}»`,
+    archivedHeading: 'Архив',
+    archivedHint: 'Скрыты, и в них ничего не добавляется, пока их не восстановят.',
+    remove: (name: string) => `Удалить «${name}»`,
+    restore: (name: string) => `Оставить «${name}»`,
+    deletedOnSave: (count: number) =>
+      count === 0
+        ? 'Будет удалён при сохранении.'
+        : plural(count, {
+            one: 'Будет удалён при сохранении вместе с # предметом.',
+            other: 'Будет удалён при сохранении вместе с # предметами.',
+          }),
+    nameRequired: 'Введите название.',
+    nameTaken: 'Другой список покупок уже называется так.',
+    save: 'Сохранить',
+    saving: 'Сохранение…',
+    saveFailed: 'Не удалось сохранить списки покупок.',
+    changedElsewhere:
+      'Кто-то другой изменил списки покупок, пока вы редактировали. Их изменения уже в списке: проверьте его и сохраните снова.',
   },
 
   planner: {

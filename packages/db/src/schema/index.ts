@@ -17,5 +17,7 @@ export * from './app-settings';
 export * from './households';
 export * from './locations';
 export * from './products';
+export * from './shopping-lists';
 export * from './items';
 export * from './item-events';
+export * from './shopping-list-entries';

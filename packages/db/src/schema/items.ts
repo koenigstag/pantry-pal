@@ -17,6 +17,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -26,6 +27,7 @@ import { categories } from './categories';
 import { households } from './households';
 import { locations } from './locations';
 import { products } from './products';
+import { shoppingLists } from './shopping-lists';
 import { units } from './units';
 
 /** The batch half of product + batch: one physical package, with its own expiry. */
@@ -92,6 +94,12 @@ export const items = pgTable(
 
     notes: text('notes'),
     status: text('status').$type<ItemStatus>().notNull().default(ITEM_STATUS.Active),
+    /**
+     * The shopping list the item goes on by itself when it runs out: used up,
+     * thrown out, or down to zero. Must belong to the same household: see
+     * `items_default_shopping_list_household_fk`.
+     */
+    defaultShoppingListId: uuid('default_shopping_list_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -138,6 +146,26 @@ export const items = pgTable(
       foreignColumns: [categories.code],
     }).onDelete('restrict'),
 
+    /**
+     * Tenancy again, for the default shopping list; not checked while the column
+     * is null. A list that is still some item's default cannot be deleted, so
+     * `ShoppingListsService` clears those defaults first and announces each
+     * item. `ON DELETE SET NULL (default_shopping_list_id)` would clear them
+     * too, but silently: no broadcast, and no `updated_at` for a delta sync.
+     */
+    foreignKey({
+      name: 'items_default_shopping_list_household_fk',
+      columns: [t.householdId, t.defaultShoppingListId],
+      foreignColumns: [shoppingLists.householdId, shoppingLists.id],
+    }).onDelete('no action'),
+
+    /**
+     * Redundant as a uniqueness rule, but the target of
+     * `shopping_list_entries_item_household_fk`, which keeps a list's entries
+     * within its household.
+     */
+    unique('items_household_id_id_unique').on(t.householdId, t.id),
+
     check('items_status_check', sql`status in (${inList(ITEM_STATUSES)})`),
     check('items_quantity_positive', sql`quantity >= 0`),
     check('items_unit_kind_count', sql`unit_kind = ${literal(QUANTITY_UNIT_KIND)}`),
@@ -156,6 +184,10 @@ export const items = pgTable(
     index('items_product_idx')
       .on(t.householdId, t.productId)
       .where(sql`deleted_at is null`),
+    /** Clearing a deleted list from the items that went on it, and the key's own check. */
+    index('items_default_shopping_list_idx')
+      .on(t.householdId, t.defaultShoppingListId)
+      .where(sql`default_shopping_list_id is not null`),
   ],
 );
 

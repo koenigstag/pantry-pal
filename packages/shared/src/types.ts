@@ -170,11 +170,68 @@ export interface PantryItem {
   effectiveExpiresAt: string | null;
   notes: string | null;
   status: ItemStatus;
+  /**
+   * The shopping list the item goes on by itself when it runs out — used up,
+   * thrown out, or down to zero — or `null` for none.
+   */
+  defaultShoppingListId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export type ExpiryStatus = 'fresh' | 'expiring-soon' | 'expired' | 'unknown';
+
+/** A named list of things a household means to buy. */
+export interface ShoppingList {
+  id: string;
+  householdId: string;
+  name: string;
+  /** Ascending: the order lists are shown in. A new list appends. */
+  sortOrder: number;
+  /**
+   * When the list was archived, or `null` while it is in use. An archived list
+   * is frozen: nothing is added to it or changed on it — not even by an item
+   * running out that has it as its default — until it is restored, and clients
+   * show it only where lists are managed.
+   */
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * An item on a shopping list, and how many to buy. It names the item rather
+ * than copying it, so putting the shopping away restocks that same item — even
+ * one used up meanwhile. An item is on a list at most once.
+ */
+export interface ShoppingListEntry {
+  id: string;
+  householdId: string;
+  listId: string;
+  itemId: string;
+  /** How many to buy, counted in the item's own unit. */
+  quantity: number;
+  /** When it was ticked off while shopping; `null` while it is still to buy. */
+  checkedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Entries a write created or changed, with the items they name. */
+export interface ShoppingListEntriesChange {
+  entries: ShoppingListEntry[];
+  /**
+   * The items the entries name, whatever their status. An item used up or
+   * thrown out is off the shelf, so it is not among the active items a client
+   * holds, and the entry would have nothing to show without it.
+   */
+  items: PantryItem[];
+}
+
+/** A household's shopping lists, in display order, with everything on them. */
+export interface ShoppingLists extends ShoppingListEntriesChange {
+  lists: ShoppingList[];
+}
 
 /* Socket payloads. */
 
@@ -183,6 +240,7 @@ export interface PantrySnapshotPayload {
   /** Active items only, most urgent first. */
   items: PantryItem[];
   locations: PantryLocation[];
+  shopping: ShoppingLists;
   serverTime: string;
 }
 
@@ -236,4 +294,39 @@ export interface HouseholdMemberPayload {
 export interface HouseholdMemberRemovedPayload {
   householdId: string;
   userId: string;
+}
+
+export interface ShoppingListPayload {
+  list: ShoppingList;
+}
+
+/**
+ * A list was deleted, and every entry on it with it. Items that went on it by
+ * default are announced separately, as item updates.
+ */
+export interface ShoppingListDeletedPayload {
+  householdId: string;
+  id: string;
+}
+
+/**
+ * The shopping lists editor saved: additions, renames, archiving and deletions
+ * arrive as one list. A list missing from it was deleted, with its entries;
+ * items that went on it by default are announced separately, as item updates.
+ */
+export interface ShoppingListsUpsertedPayload {
+  householdId: string;
+  /** Every list, archived ones included, in display order. Replaces the client's lists. */
+  lists: ShoppingList[];
+}
+
+/** Entries added to lists, or changed: the quantity, or ticked off. */
+export interface ShoppingListEntriesUpsertedPayload extends ShoppingListEntriesChange {
+  householdId: string;
+}
+
+/** Entries taken off their lists: removed, put away, or their item deleted. */
+export interface ShoppingListEntriesDeletedPayload {
+  householdId: string;
+  ids: string[];
 }

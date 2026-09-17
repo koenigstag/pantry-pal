@@ -32,7 +32,8 @@ src/features/auth/         sign-in, sign-up and onboarding pages, route gates, l
 src/features/profile/      the account's details: fields shared by onboarding and Profile
 src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), PageStatus
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
-src/features/pages.tsx     Shopping and Planner placeholders, Profile
+src/features/shopping/     the Shopping page, the list picker, the lists editor, sharing as text
+src/features/pages.tsx     Planner placeholder, Profile
 src/stores/                AuthStore, PantryStore (server state), QuantityUpdates (overlay), NoticeStore
 src/services/              http (fetch), session (tokens), api (REST), socket
 src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, cn
@@ -49,6 +50,9 @@ src/i18n/                  message catalog and Intl formatters
   (`useStorageParams`). The location is a path segment, so each tab is a link
   and the back button walks through them. The sort is a query parameter changed
   with `replace`, and defaults stay out of the URL.
+- Shopping URL state is `/shopping/:listId`, a tab per list in use like the
+  storage spaces'; `/shopping` alone, or an archived or deleted list's URL,
+  redirects to the first list in use.
 - An item's details are a child route, `/storage/:locationId/items/:itemId`,
   rendered by `ItemDetailsDialog` into `StoragePage`'s `<Outlet>` over the list.
   The back button closes them. The card's link carries `OPENED_FROM_LIST` state,
@@ -364,15 +368,51 @@ language, then region: `fr-CA` is French as written in Canada.
   symbols, and the fallback storage space, which nobody can rename
   (`locationName`). Codes the catalogs lack show the API's label.
 
+### Shopping lists
+
+A list names items, so an entry shows the item it names: an active one from
+`pantry.items`, and one used up or thrown out from `pantry.offShelfItems`, which
+holds exactly the non-active items some entry names. `acceptItem` moves an item
+between the two as its status changes. Entry broadcasts carry their items, and
+the entries are applied first, so an item that left the shelf is kept.
+
+- **Loading.** The lists load beside the bootstrap (`refreshShopping`), like
+  categories, so a backend without them breaks only the Shopping page, and the
+  snapshot replaces them. A refetch that returns after a snapshot is dropped; one
+  that returns after a broadcast may predate it, so it asks again, three times at
+  most. Ids of deleted lists and entries are remembered, so a late copy never
+  brings one back.
+- **Nothing is optimistic.** Ticking, stepping how many to buy and removing wait
+  for the server; while one runs, the row's controls ignore presses
+  (`aria-disabled`, so focus stays put).
+- **Picking a list** (`AddToListSheet`) serves the selection bar, an item's details
+  and "I used it already". It offers the lists in use, marks those the items are on
+  already, and can create a list inline — straight away, with a suggested name,
+  when the household has none. For a used-up item it sends the consumed status and
+  the picked list as the default in one patch; with a default already in use, the
+  remove sheet skips the picker and names the list on its button.
+- **The item form's "Shopping list"** offers the lists in use and keeps an archived
+  default visible as such.
+- **The lists editor** (`ShoppingListEditorDialog`, from the + beside the tabs and
+  the ⋮ menu) adds, renames, archives, restores and deletes, then saves with one
+  `PUT` (`PantryStore.saveShoppingLists`). Its draft is rebased onto the store on
+  every render (`shoppingListDraft.ts`), like the locations editor's, and a 409
+  refetches for another try. Archived lists sit in their own group below.
+- **Archived lists are frozen**, so only the editor shows them: not the tabs, the
+  picker, or the item form's choices (`pantry.activeShoppingLists`).
+- **Putting away** sends the ticked entries shown; the server restocks their items.
+  A 409 means the list changed meanwhile: the store refetches and says so.
+- **Sharing** (`shareList.ts`) builds the list's name and a line per entry still to
+  buy, and hands it to `navigator.share`, which opens the device's share sheet with
+  its messengers. Without it (Firefox on a desktop) the text is copied to the
+  clipboard, and a notice says so. Only `text` is shared, since some apps paste a
+  `title` too.
+
 ## Waiting on backend endpoints
 
-Shopping lists and bulk item actions are specified for the backend but not
-built. Until they land:
-
-- "I used it already; add it to shop list" in the remove sheet, and the
-  selection's add-to-list action, are shown but inactive.
-- Bulk delete and move send one request per item (`PantryStore.deleteItems`,
-  `moveItems`); switch them to `POST .../items/bulk-delete` and `bulk-move`.
+Bulk item actions are specified for the backend but not built. Until they land,
+bulk delete and move send one request per item (`PantryStore.deleteItems`,
+`moveItems`); switch them to `POST .../items/bulk-delete` and `bulk-move`.
 
 ## Importing from shared
 

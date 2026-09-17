@@ -70,6 +70,13 @@ export const ItemEditForm = observer(function ItemEditForm({
   // added by an admin since, or the list failed to load.
   const categoryCodes = pantry.categories.map((category) => category.code);
   if (!categoryCodes.includes(draft.category)) categoryCodes.push(draft.category);
+  // Lists in use are offered. The draft's own stays listed when it is not one of
+  // them: archived, which reads as such, or not loaded yet.
+  const shoppingLists = pantry.activeShoppingLists;
+  const isOwnListOffered =
+    draft.defaultShoppingListId === '' ||
+    shoppingLists.some((list) => list.id === draft.defaultShoppingListId);
+  const ownArchivedList = pantry.shoppingListsById.get(draft.defaultShoppingListId);
 
   function update(changes: Partial<ItemDraft>): void {
     onChange({ ...draft, ...changes });
@@ -177,6 +184,36 @@ export const ItemEditForm = observer(function ItemEditForm({
                 {messages.itemForm.edible}
               </label>
             )}
+
+            <Field
+              label={messages.itemForm.shoppingList}
+              hint={messages.itemForm.shoppingListHint}
+              error={errors['defaultShoppingListId']}
+              className="col-span-2"
+            >
+              {(props) => (
+                <select
+                  {...props}
+                  value={draft.defaultShoppingListId}
+                  onChange={(event) => update({ defaultShoppingListId: event.target.value })}
+                  className={cn(FIELD_CONTROL, 'sm:max-w-72')}
+                >
+                  <option value="">{messages.itemForm.noShoppingList}</option>
+                  {shoppingLists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name}
+                    </option>
+                  ))}
+                  {!isOwnListOffered && (
+                    <option value={draft.defaultShoppingListId}>
+                      {ownArchivedList === undefined
+                        ? '…'
+                        : messages.itemForm.archivedList(ownArchivedList.name)}
+                    </option>
+                  )}
+                </select>
+              )}
+            </Field>
           </div>
         </DetailsSection>
 

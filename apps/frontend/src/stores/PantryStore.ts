@@ -1,5 +1,6 @@
 import {
   ITEM_STATUS,
+  MAX_SHOPPING_LISTS_PER_HOUSEHOLD,
   PANTRY_COMMAND,
   PANTRY_EVENT,
   QUANTITY_UNIT_KIND,
@@ -17,6 +18,14 @@ import {
   type PantryLocationsReorderedPayload,
   type PantryLocationsUpsertedPayload,
   type PantrySnapshotPayload,
+  type ShoppingList,
+  type ShoppingListDeletedPayload,
+  type ShoppingListEntriesDeletedPayload,
+  type ShoppingListEntriesUpsertedPayload,
+  type ShoppingListEntry,
+  type ShoppingListPayload,
+  type ShoppingLists,
+  type ShoppingListsUpsertedPayload,
   type SupportedLocale,
   type Unit,
   type UserHousehold,
@@ -26,7 +35,9 @@ import type {
   CreatePantryItemDto,
   UpdateMeDto,
   UpdatePantryItemDto,
+  UpdateShoppingListEntryDto,
   UpsertLocationsDto,
+  UpsertShoppingListsDto,
 } from '@pantry-pal/shared/dto';
 import { makeAutoObservable, observableRef } from 'mobx';
 
@@ -41,7 +52,17 @@ import { reconcileById, shallowEqual } from './reconcile';
 export type ConnectionState = 'idle' | 'connecting' | 'online' | 'offline';
 export type LoadState = 'idle' | 'loading' | 'ready' | 'failed';
 
+/** A write that answers with something: what it made, or the message to show. */
+export type WriteResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
 const NO_ITEMS: readonly PantryItem[] = [];
+const NO_ENTRIES: readonly ShoppingListEntry[] = [];
+
+/**
+ * How many times a shopping refetch starts over because changes landed while it
+ * was out. Past that, it applies what it got; the next snapshot corrects it.
+ */
+const MAX_SHOPPING_REFETCHES = 3;
 
 function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : messages.errors.loadFailed;
@@ -49,8 +70,22 @@ function toMessage(error: unknown): string {
 
 const isActive = (item: PantryItem): boolean => item.status === ITEM_STATUS.Active;
 
-const bySortOrder = (a: PantryLocation, b: PantryLocation): number =>
-  a.sortOrder - b.sortOrder || nameCollator.compare(a.name, b.name);
+const bySortOrder = (
+  a: Pick<PantryLocation, 'sortOrder' | 'name'>,
+  b: Pick<PantryLocation, 'sortOrder' | 'name'>,
+): number => a.sortOrder - b.sortOrder || nameCollator.compare(a.name, b.name);
+
+/**
+ * Whether `incoming` should replace `existing`: never an older copy, and not an
+ * identical one. Server timestamps are ISO-8601 strings in one format, so they
+ * compare chronologically as strings.
+ */
+const replaces = <T extends { readonly updatedAt: string }>(
+  incoming: T,
+  existing: T | undefined,
+): boolean =>
+  existing === undefined ||
+  (existing.updatedAt <= incoming.updatedAt && !shallowEqual(existing, incoming));
 
 /**
  * One household's pantry, kept in sync over REST and the socket.
@@ -68,6 +103,11 @@ const bySortOrder = (a: PantryLocation, b: PantryLocation): number =>
  *
  * The socket delivers events for every household the user belongs to; those
  * for any household other than the one shown are ignored.
+ *
+ * Shopping lists name items rather than copying them, so an entry shows the item
+ * it names: an active one from `items`, and one used up or thrown out — off the
+ * shelf, so not in `items` — from `offShelfItems`, which holds exactly those
+ * that some entry names.
  */
 export class PantryStore {
   private readonly api: PantryApi;
@@ -80,6 +120,12 @@ export class PantryStore {
   locations: readonly PantryLocation[] = [];
   units: readonly Unit[] = [];
   categories: readonly Category[] = [];
+  shoppingLists: readonly ShoppingList[] = [];
+  shoppingEntries: readonly ShoppingListEntry[] = NO_ENTRIES;
+  /** Items that are not active but are on a shopping list: never in `items` at the same time. */
+  offShelfItems: readonly PantryItem[] = NO_ITEMS;
+  /** Shopping lists load beside the bootstrap, so the rest of the app works without them. */
+  shoppingLoadState: LoadState = 'idle';
   connection: ConnectionState = 'idle';
   loadState: LoadState = 'idle';
   error: string | null = null;
@@ -98,6 +144,17 @@ export class PantryStore {
   /** The bootstrap running now, which a second `load()` joins instead of repeating. */
   private loadInFlight: Promise<void> | null = null;
 
+  /*
+   * Shopping refetch bookkeeping, not observable either. A refetch that returns
+   * after a snapshot is stale and is dropped; one that returns after a broadcast
+   * may predate it, so it asks again.
+   */
+  private shoppingChanges = 0;
+  private shoppingSnapshots = 0;
+
+  /** Entries and lists deleted in this session: a late copy of one must not bring it back. */
+  private readonly goneShopping = new Set<string>();
+
   constructor(api: PantryApi, socket: PantrySocket, notices: NoticeStore) {
     this.api = api;
     this.socket = socket;
@@ -115,6 +172,9 @@ export class PantryStore {
       | 'refreshSuperseded'
       | 'touchedDuringRefresh'
       | 'loadInFlight'
+      | 'shoppingChanges'
+      | 'shoppingSnapshots'
+      | 'goneShopping'
     >(
       this,
       {
@@ -126,12 +186,18 @@ export class PantryStore {
         refreshSuperseded: false,
         touchedDuringRefresh: false,
         loadInFlight: false,
+        shoppingChanges: false,
+        shoppingSnapshots: false,
+        goneShopping: false,
         user: observableRef,
         household: observableRef,
         items: observableRef,
         locations: observableRef,
         units: observableRef,
         categories: observableRef,
+        shoppingLists: observableRef,
+        shoppingEntries: observableRef,
+        offShelfItems: observableRef,
       },
       { autoBind: true },
     );
@@ -196,6 +262,51 @@ export class PantryStore {
     return this.itemsByLocation.get(locationId) ?? NO_ITEMS;
   }
 
+  /** Every item held: the active ones, and those off the shelf that a shopping list names. */
+  get itemsById(): ReadonlyMap<string, PantryItem> {
+    return new Map([...this.offShelfItems, ...this.items].map((item) => [item.id, item]));
+  }
+
+  get shoppingListsById(): ReadonlyMap<string, ShoppingList> {
+    return new Map(this.shoppingLists.map((list) => [list.id, list]));
+  }
+
+  /**
+   * The lists in use, in display order. Archived ones are frozen, so only the
+   * shopping lists editor shows them; everywhere else offers these.
+   */
+  get activeShoppingLists(): readonly ShoppingList[] {
+    return this.shoppingLists.filter((list) => list.archivedAt === null);
+  }
+
+  /** Each list's entries, in the order they arrived. */
+  get entriesByList(): ReadonlyMap<string, readonly ShoppingListEntry[]> {
+    const groups = new Map<string, ShoppingListEntry[]>();
+    for (const entry of this.shoppingEntries) {
+      const group = groups.get(entry.listId);
+      if (group === undefined) groups.set(entry.listId, [entry]);
+      else group.push(entry);
+    }
+    return groups;
+  }
+
+  entriesOn(listId: string): readonly ShoppingListEntry[] {
+    return this.entriesByList.get(listId) ?? NO_ENTRIES;
+  }
+
+  /** The items on at least one shopping list. */
+  get listedItemIds(): ReadonlySet<string> {
+    return new Set(this.shoppingEntries.map((entry) => entry.itemId));
+  }
+
+  /** The lists an item is on, in display order. */
+  listsHolding(itemId: string): readonly ShoppingList[] {
+    const listIds = new Set(
+      this.shoppingEntries.filter((entry) => entry.itemId === itemId).map((entry) => entry.listId),
+    );
+    return this.shoppingLists.filter((list) => listIds.has(list.id));
+  }
+
   /* -------------------------------------------------------------- lifecycle */
 
   connect(): void {
@@ -216,6 +327,12 @@ export class PantryStore {
     this.socket.on(PANTRY_EVENT.HouseholdUpdated, this.handleHouseholdUpdated);
     this.socket.on(PANTRY_EVENT.HouseholdDeleted, this.handleHouseholdDeleted);
     this.socket.on(PANTRY_EVENT.MemberRemoved, this.handleMemberRemoved);
+    this.socket.on(PANTRY_EVENT.ShoppingListCreated, this.handleShoppingListUpserted);
+    this.socket.on(PANTRY_EVENT.ShoppingListUpdated, this.handleShoppingListUpserted);
+    this.socket.on(PANTRY_EVENT.ShoppingListDeleted, this.handleShoppingListDeleted);
+    this.socket.on(PANTRY_EVENT.ShoppingListsUpserted, this.handleShoppingListsUpserted);
+    this.socket.on(PANTRY_EVENT.ShoppingListEntriesUpserted, this.handleShoppingEntriesUpserted);
+    this.socket.on(PANTRY_EVENT.ShoppingListEntriesDeleted, this.handleShoppingEntriesDeleted);
 
     this.socket.connect();
   }
@@ -236,6 +353,12 @@ export class PantryStore {
     this.socket.off(PANTRY_EVENT.HouseholdUpdated, this.handleHouseholdUpdated);
     this.socket.off(PANTRY_EVENT.HouseholdDeleted, this.handleHouseholdDeleted);
     this.socket.off(PANTRY_EVENT.MemberRemoved, this.handleMemberRemoved);
+    this.socket.off(PANTRY_EVENT.ShoppingListCreated, this.handleShoppingListUpserted);
+    this.socket.off(PANTRY_EVENT.ShoppingListUpdated, this.handleShoppingListUpserted);
+    this.socket.off(PANTRY_EVENT.ShoppingListDeleted, this.handleShoppingListDeleted);
+    this.socket.off(PANTRY_EVENT.ShoppingListsUpserted, this.handleShoppingListsUpserted);
+    this.socket.off(PANTRY_EVENT.ShoppingListEntriesUpserted, this.handleShoppingEntriesUpserted);
+    this.socket.off(PANTRY_EVENT.ShoppingListEntriesDeleted, this.handleShoppingEntriesDeleted);
     this.socket.disconnect();
   }
 
@@ -275,6 +398,7 @@ export class PantryStore {
       ]);
 
       this.applyLoaded({ user, household, units, locations, items });
+      void this.refreshShopping();
       // The account's language outranks this browser's copy of it — on a new
       // device, say. When they differ, the page reloads in the account's.
       switchLocale(user.locale);
@@ -302,7 +426,42 @@ export class PantryStore {
 
   /** Background refetch of everything shown: no loading state, and only what changed repaints. */
   async refresh(): Promise<void> {
-    await Promise.all([this.refreshLocations(), this.refreshItems()]);
+    await Promise.all([this.refreshLocations(), this.refreshItems(), this.refreshShopping()]);
+  }
+
+  /**
+   * Fetches the shopping lists, their entries and the items those name. Like
+   * categories, beside the bootstrap: a failure — a backend older than shopping
+   * lists, say — leaves everything else working. Only the first load shows a
+   * loading state; later ones repaint what changed.
+   *
+   * A snapshot that arrives meanwhile is newer and complete, so the response is
+   * dropped. A broadcast that arrives meanwhile may be newer than the response
+   * but is only a part, so the fetch starts over, a few times at most.
+   */
+  async refreshShopping(attempt = 1): Promise<void> {
+    const householdId = this.householdId;
+    if (householdId === null) return;
+
+    const changes = this.shoppingChanges;
+    const snapshots = this.shoppingSnapshots;
+    if (this.shoppingLoadState !== 'ready') this.setShoppingLoadState('loading');
+
+    let shopping: ShoppingLists;
+    try {
+      shopping = await this.api.listShoppingLists(householdId);
+    } catch {
+      if (this.shoppingLoadState === 'ready') this.notices.error(messages.errors.refreshFailed);
+      else this.setShoppingLoadState('failed');
+      return;
+    }
+
+    if (this.shoppingSnapshots !== snapshots) return;
+    if (this.shoppingChanges !== changes && attempt < MAX_SHOPPING_REFETCHES) {
+      await this.refreshShopping(attempt + 1);
+      return;
+    }
+    this.applyShopping(householdId, shopping);
   }
 
   async refreshLocations(): Promise<void> {
@@ -487,30 +646,164 @@ export class PantryStore {
     }
   }
 
+  /** Creates a shopping list, appended after the others. */
+  async createShoppingList(name: string): Promise<WriteResult<ShoppingList>> {
+    const householdId = this.householdId;
+    if (householdId === null) return { ok: false, error: messages.errors.loadFailed };
+
+    try {
+      const list = await this.api.createShoppingList(householdId, { name });
+      this.acceptShoppingList(list);
+      return { ok: true, value: list };
+    } catch (error) {
+      return { ok: false, error: this.shoppingListError(error) };
+    }
+  }
+
+  /**
+   * Saves the shopping lists editor in one request: additions, renames,
+   * archiving, deletions and order. Returns `null` once saved, or the message
+   * the editor shows.
+   *
+   * A 409 means the lists changed on the server while the user edited them. The
+   * latest are fetched before this returns, the editor's draft rebases onto
+   * them, and the user saves again.
+   */
+  async saveShoppingLists(dto: UpsertShoppingListsDto): Promise<string | null> {
+    const householdId = this.householdId;
+    if (householdId === null) return messages.errors.loadFailed;
+
+    try {
+      this.applyShoppingLists(householdId, await this.api.upsertShoppingLists(householdId, dto));
+      // Items lose a deleted list as their default. Broadcasts announce them too,
+      // but the socket may be down.
+      if ((dto.removed?.length ?? 0) > 0) void this.refreshItems();
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        await this.refreshShopping();
+        return messages.shoppingListEditor.changedElsewhere;
+      }
+      return toMessage(error);
+    }
+  }
+
+  /** Puts items on a list; those already on it stay as they are. Answers how many were added. */
+  async addToShoppingList(
+    listId: string,
+    itemIds: readonly string[],
+  ): Promise<WriteResult<number>> {
+    const householdId = this.householdId;
+    if (householdId === null) return { ok: false, error: messages.errors.loadFailed };
+
+    try {
+      const change = await this.api.addShoppingListEntries(householdId, listId, {
+        itemIds: [...itemIds],
+      });
+      this.acceptShoppingEntries(householdId, change.entries, change.items);
+      return { ok: true, value: change.entries.length };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
+    }
+  }
+
+  /** How many to buy, or ticked off. Returns `null` once saved, or the message to show. */
+  async updateShoppingEntry(
+    entry: ShoppingListEntry,
+    dto: UpdateShoppingListEntryDto,
+  ): Promise<string | null> {
+    const householdId = this.householdId;
+    if (householdId === null) return messages.errors.loadFailed;
+
+    try {
+      const saved = await this.api.updateShoppingListEntry(
+        householdId,
+        entry.listId,
+        entry.id,
+        dto,
+      );
+      this.acceptShoppingEntries(householdId, [saved], []);
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        // Taken off the list elsewhere meanwhile.
+        this.forgetShoppingEntries(householdId, [entry.id]);
+      }
+      return toMessage(error);
+    }
+  }
+
+  async removeShoppingEntry(entry: ShoppingListEntry): Promise<string | null> {
+    const householdId = this.householdId;
+    if (householdId === null) return messages.errors.loadFailed;
+
+    try {
+      await this.api.removeShoppingListEntry(householdId, entry.listId, entry.id);
+      this.forgetShoppingEntries(householdId, [entry.id]);
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        this.forgetShoppingEntries(householdId, [entry.id]);
+        return null;
+      }
+      return toMessage(error);
+    }
+  }
+
+  /**
+   * Puts ticked-off entries away: the server restocks their items and takes the
+   * entries off the list, all or nothing. A 409 means the list changed while it
+   * was shown; the latest is fetched before this returns, for the user to check.
+   */
+  async putAwayShopping(listId: string, entryIds: readonly string[]): Promise<string | null> {
+    const householdId = this.householdId;
+    if (householdId === null) return messages.errors.loadFailed;
+
+    try {
+      const items = await this.api.putAwayShoppingListEntries(householdId, listId, {
+        entryIds: [...entryIds],
+      });
+      this.forgetShoppingEntries(householdId, entryIds);
+      this.acceptItems(items);
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        await this.refreshShopping();
+        return messages.shopping.changedElsewhere;
+      }
+      return toMessage(error);
+    }
+  }
+
   /**
    * Applies items the server just returned — a write's response or a broadcast.
-   * Never regresses to an older copy: server timestamps are ISO-8601 strings in
-   * one format, so they compare chronologically as strings.
+   * Never regresses to an older copy (`replaces`).
+   *
+   * Only active items are listed, so consuming or discarding one takes it out
+   * of `items`; if a shopping list names it, it moves to `offShelfItems`, and
+   * restocking brings it back.
    */
   acceptItem(item: PantryItem): void {
     if (item.householdId !== this.householdId) return;
     this.touch(item.id);
 
     const index = this.items.findIndex((candidate) => candidate.id === item.id);
-    const existing = this.items[index];
-    if (
-      existing !== undefined &&
-      (existing.updatedAt > item.updatedAt || shallowEqual(existing, item))
-    ) {
+    const offShelfIndex = this.offShelfItems.findIndex((candidate) => candidate.id === item.id);
+    const existing = this.items[index] ?? this.offShelfItems[offShelfIndex];
+    if (!replaces(item, existing)) return;
+
+    if (isActive(item)) {
+      if (offShelfIndex !== -1) this.offShelfItems = this.offShelfItems.toSpliced(offShelfIndex, 1);
+      this.items = index === -1 ? [...this.items, item] : this.items.with(index, item);
       return;
     }
 
-    // Only active items are listed, so consuming or discarding one removes it.
-    if (!isActive(item)) {
-      if (existing !== undefined) this.items = this.items.toSpliced(index, 1);
-      return;
+    if (index !== -1) this.items = this.items.toSpliced(index, 1);
+    if (offShelfIndex !== -1) {
+      this.offShelfItems = this.offShelfItems.with(offShelfIndex, item);
+    } else if (this.listedItemIds.has(item.id)) {
+      this.offShelfItems = [...this.offShelfItems, item];
     }
-    this.items = existing === undefined ? [...this.items, item] : this.items.with(index, item);
   }
 
   acceptItems(items: readonly PantryItem[]): void {
@@ -526,6 +819,13 @@ export class PantryStore {
     locations: PantryLocation[];
     items: PantryItem[];
   }): void {
+    // Another household than before (the last one was deleted): its lists are not this one's.
+    if (this.household !== null && this.household.id !== loaded.household.id) {
+      this.shoppingLists = [];
+      this.shoppingEntries = NO_ENTRIES;
+      this.offShelfItems = NO_ITEMS;
+      this.shoppingLoadState = 'idle';
+    }
     this.user = loaded.user;
     this.household = loaded.household;
     this.units = loaded.units;
@@ -554,6 +854,127 @@ export class PantryStore {
   private applyLocations(householdId: string, locations: readonly PantryLocation[]): void {
     if (householdId !== this.householdId) return;
     this.locations = reconcileById(this.locations, locations.toSorted(bySortOrder));
+  }
+
+  private setShoppingLoadState(state: LoadState): void {
+    this.shoppingLoadState = state;
+  }
+
+  /** Replaces every list, entry and off-shelf item with a complete copy: a refetch or a snapshot. */
+  private applyShopping(householdId: string, shopping: ShoppingLists): void {
+    if (householdId !== this.householdId) return;
+
+    // Ids never come back, so anything deleted here since is left out even of a late copy.
+    const gone = this.goneShopping;
+    this.shoppingLists = reconcileById(
+      this.shoppingLists,
+      shopping.lists.filter((list) => !gone.has(list.id)).toSorted(bySortOrder),
+    );
+    this.shoppingEntries = reconcileById(
+      this.shoppingEntries,
+      shopping.entries.filter((entry) => !gone.has(entry.id) && !gone.has(entry.listId)),
+    );
+    const listed = this.listedItemIds;
+    this.offShelfItems = reconcileById(
+      this.offShelfItems,
+      shopping.items.filter((item) => !isActive(item) && listed.has(item.id)),
+    );
+    // Active ones may be newer than the copies in `items`, never older.
+    this.acceptItems(shopping.items.filter(isActive));
+    this.shoppingLoadState = 'ready';
+  }
+
+  private acceptShoppingList(list: ShoppingList): void {
+    if (list.householdId !== this.householdId || this.goneShopping.has(list.id)) return;
+    this.shoppingChanges += 1;
+
+    const index = this.shoppingLists.findIndex((candidate) => candidate.id === list.id);
+    if (!replaces(list, this.shoppingLists[index])) return;
+
+    const others = index === -1 ? this.shoppingLists : this.shoppingLists.toSpliced(index, 1);
+    this.shoppingLists = [...others, list].toSorted(bySortOrder);
+  }
+
+  /**
+   * Replaces the lists with the complete set the editor saved, and drops the
+   * entries of every list missing from it, which it deleted.
+   */
+  private applyShoppingLists(householdId: string, lists: readonly ShoppingList[]): void {
+    if (householdId !== this.householdId) return;
+    this.shoppingChanges += 1;
+
+    const kept = new Set(lists.map((list) => list.id));
+    for (const list of this.shoppingLists) {
+      if (!kept.has(list.id)) this.goneShopping.add(list.id);
+    }
+    this.shoppingLists = reconcileById(this.shoppingLists, lists.toSorted(bySortOrder));
+    this.forgetShoppingEntries(
+      householdId,
+      this.shoppingEntries.filter((entry) => !kept.has(entry.listId)).map((entry) => entry.id),
+    );
+  }
+
+  /** Drops a deleted list with everything on it. */
+  private forgetShoppingList(householdId: string, listId: string): void {
+    if (householdId !== this.householdId) return;
+    this.shoppingChanges += 1;
+    this.goneShopping.add(listId);
+
+    this.shoppingLists = this.shoppingLists.filter((list) => list.id !== listId);
+    this.forgetShoppingEntries(
+      householdId,
+      this.entriesOn(listId).map((entry) => entry.id),
+    );
+  }
+
+  /**
+   * Applies entries a write created or changed, with the items they name. The
+   * entries go first, so an item that is off the shelf is known to be listed
+   * when it arrives.
+   */
+  private acceptShoppingEntries(
+    householdId: string,
+    entries: readonly ShoppingListEntry[],
+    items: readonly PantryItem[],
+  ): void {
+    if (householdId !== this.householdId) return;
+    this.shoppingChanges += 1;
+
+    let next = this.shoppingEntries;
+    for (const entry of entries) {
+      if (this.goneShopping.has(entry.id) || this.goneShopping.has(entry.listId)) continue;
+      const index = next.findIndex((candidate) => candidate.id === entry.id);
+      if (!replaces(entry, next[index])) continue;
+      next = index === -1 ? [...next, entry] : next.with(index, entry);
+    }
+    this.shoppingEntries = next;
+
+    this.acceptItems(items);
+  }
+
+  /** Drops entries taken off their lists, and any off-shelf item no list names any more. */
+  private forgetShoppingEntries(householdId: string, ids: readonly string[]): void {
+    if (householdId !== this.householdId || ids.length === 0) return;
+    this.shoppingChanges += 1;
+
+    const gone = new Set(ids);
+    for (const id of ids) this.goneShopping.add(id);
+    this.shoppingEntries = this.shoppingEntries.filter((entry) => !gone.has(entry.id));
+
+    const listed = this.listedItemIds;
+    const offShelf = this.offShelfItems.filter((item) => listed.has(item.id));
+    if (offShelf.length !== this.offShelfItems.length) this.offShelfItems = offShelf;
+  }
+
+  /**
+   * A 409 is a name another list has, or one list too many; the catalog says
+   * either better than the server's English.
+   */
+  private shoppingListError(error: unknown): string {
+    if (!(error instanceof ApiError) || error.status !== 409) return toMessage(error);
+    return this.shoppingLists.length >= MAX_SHOPPING_LISTS_PER_HOUSEHOLD
+      ? messages.shopping.limitReached(MAX_SHOPPING_LISTS_PER_HOUSEHOLD)
+      : messages.shopping.nameTaken;
   }
 
   private async runItemRefreshes(): Promise<void> {
@@ -586,6 +1007,11 @@ export class PantryStore {
       if (touched.has(item.id)) next.push(item);
     }
     this.items = reconcileById(this.items, next);
+
+    // A listed item that left the shelf without its broadcast reaching this tab
+    // is in neither list now; the shopping lists' refetch brings it back.
+    const held = this.itemsById;
+    if ([...this.listedItemIds].some((id) => !held.has(id))) void this.refreshShopping();
   }
 
   private forgetItems(householdId: string, ids: readonly string[]): void {
@@ -634,6 +1060,12 @@ export class PantryStore {
     if (this.refreshInFlight !== null) this.refreshSuperseded = true;
     this.items = reconcileById(this.items, payload.items.filter(isActive));
     this.locations = reconcileById(this.locations, payload.locations.toSorted(bySortOrder));
+
+    // A backend older than shopping lists sends snapshots without them.
+    if (payload.shopping !== undefined) {
+      this.shoppingSnapshots += 1;
+      this.applyShopping(payload.householdId, payload.shopping);
+    }
   }
 
   private handleItemUpserted({ item }: PantryItemPayload): void {
@@ -679,5 +1111,28 @@ export class PantryStore {
     if (payload.householdId === this.householdId && payload.userId === this.user?.id) {
       void this.load();
     }
+  }
+
+  private handleShoppingListUpserted({ list }: ShoppingListPayload): void {
+    this.acceptShoppingList(list);
+  }
+
+  private handleShoppingListDeleted({ householdId, id }: ShoppingListDeletedPayload): void {
+    this.forgetShoppingList(householdId, id);
+  }
+
+  private handleShoppingListsUpserted({ householdId, lists }: ShoppingListsUpsertedPayload): void {
+    this.applyShoppingLists(householdId, lists);
+  }
+
+  private handleShoppingEntriesUpserted(payload: ShoppingListEntriesUpsertedPayload): void {
+    this.acceptShoppingEntries(payload.householdId, payload.entries, payload.items);
+  }
+
+  private handleShoppingEntriesDeleted({
+    householdId,
+    ids,
+  }: ShoppingListEntriesDeletedPayload): void {
+    this.forgetShoppingEntries(householdId, ids);
   }
 }

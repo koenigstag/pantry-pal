@@ -114,10 +114,6 @@ export const uk = {
     refreshFailed: 'Не вдалося оновити, тому показано останні отримані дані.',
   },
 
-  pending: {
-    shoppingLists: 'Списки покупок з’являться незабаром.',
-  },
-
   categories: {
     name: (code: string, label: string): string => CATEGORY_NAMES.get(code) ?? label,
   },
@@ -185,7 +181,20 @@ export const uk = {
   removeSheet: {
     title: (name: string) => `Прибрати «${name}»?`,
     usedIt: 'Вже використано — додати до списку покупок',
+    usedItOnList: (list: string) => `Вже використано — додати до «${list}»`,
     justDelete: 'Просто видалити',
+  },
+
+  addToList: {
+    title: (count: number) => items(count, 'Куди додати ', '?'),
+    usedUpTitle: (name: string) => `Куди додати «${name}»?`,
+    usedUpHint: 'Коли закінчиться наступного разу, його буде додано туди автоматично.',
+    alreadyOn: 'Уже в цьому списку',
+    someAlreadyOn: (count: number) => plural(count, { other: 'Уже в ньому: #' }),
+    newList: 'Новий список',
+    added: (count: number, list: string) => `${items(count, 'Додано ')} до «${list}».`,
+    nothingAdded: (list: string) => `Уже в «${list}».`,
+    usedUpAdded: (name: string, list: string) => `«${name}» — у списку «${list}».`,
   },
 
   deleteSheet: {
@@ -274,6 +283,10 @@ export const uk = {
     openedToday: 'Сьогодні',
     clearOpened: 'Очистити дату відкриття',
     periodAfterOpening: 'Використати протягом (днів після відкриття)',
+    shoppingList: 'Список покупок',
+    shoppingListHint: 'Коли закінчиться, потрапить у цей список автоматично.',
+    noShoppingList: 'Немає',
+    archivedList: (name: string) => `«${name}» (в архіві)`,
     notes: 'Нотатки',
     conflict: (fields: string) =>
       `Хтось інший змінив поля (${fields}), поки ви редагували. Під час збереження залишаться ваші значення.`,
@@ -297,6 +310,7 @@ export const uk = {
     periodAfterOpeningDays: (max: number) =>
       `Введіть ціле число днів від 1 до ${formatNumber(max)}.`,
     notes: (max: number) => `Нотатки можуть містити до ${formatNumber(max)} символів.`,
+    defaultShoppingListId: 'Виберіть список покупок.',
   },
 
   itemDetails: {
@@ -326,6 +340,13 @@ export const uk = {
     added: 'Додано',
     updated: 'Оновлено',
     remove: 'Прибрати предмет',
+    shopping: 'Покупки',
+    defaultList: (list: string) => `Коли закінчиться, потрапить до списку «${list}».`,
+    noDefaultList: 'Коли закінчиться, сам не потрапить ні до якого списку.',
+    defaultListArchived: (list: string) =>
+      `Коли закінчиться, ні до якого списку не потрапить, доки «${list}» в архіві.`,
+    onLists: (lists: string) => `Зараз у списках: ${lists}.`,
+    addToList: 'Додати до списку покупок',
   },
 
   discardSheet: {
@@ -440,7 +461,78 @@ export const uk = {
 
   shopping: {
     title: 'Покупки',
-    description: 'Списки покупок з’являться незабаром.',
+    lists: 'Списки покупок',
+    editLists: 'Редагувати списки покупок',
+    listName: 'Назва списку',
+    defaultListName: 'Продукти',
+    create: 'Створити',
+    creating: 'Створення…',
+    nameRequired: (max: number) => `Введіть назву до ${formatNumber(max)} символів.`,
+    nameTaken: 'Список покупок із такою назвою вже є.',
+    limitReached: (max: number) =>
+      `У домогосподарстві може бути до ${formatNumber(max)} списків покупок.`,
+    moreActions: 'Інші дії',
+    refresh: 'Оновити',
+    share: 'Поділитися списком',
+    nothingToShare: 'У цьому списку більше нічого купувати.',
+    copied: 'Список скопійовано. Вставте його в повідомлення.',
+    shareFailed: 'Не вдалося поділитися списком.',
+    shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
+    loadFailed: 'Не вдалося завантажити списки покупок.',
+    noLists: 'Списків покупок поки немає.',
+    createFirst: 'Створити список покупок',
+    emptyList: (list: string) => `У списку «${list}» поки нічого немає.`,
+    emptyHint: 'У розділі «Зберігання» виберіть предмети або відкрийте один і додайте до списку.',
+    toBuy: (count: number) => plural(count, { other: 'Купити: #' }),
+    inCart: 'У кошику',
+    left: (count: number) => plural(count, { other: 'залишилося: #' }),
+    noneLeft: 'не залишилося',
+    increase: (name: string) => `Купити більше: «${name}»`,
+    decrease: (name: string) => `Купити менше: «${name}»`,
+    remove: (name: string) => `Прибрати «${name}» зі списку`,
+    quantity: (name: string) => `Скільки купити: «${name}»`,
+    putAway: (count: number) => items(count, 'Розкласти '),
+    puttingAway: 'Розкладаємо…',
+    putAwayHint: 'Відмічені предмети повернуться на свої місця зберігання.',
+    putAwayDone: (count: number) =>
+      plural(count, {
+        one: '# предмет знову на місці.',
+        few: '# предмети знову на місці.',
+        many: '# предметів знову на місці.',
+        other: '# предмета знову на місці.',
+      }),
+    changedElsewhere: 'Хтось змінив цей список. Перевірте його й розкладіть покупки ще раз.',
+  },
+
+  shoppingListEditor: {
+    title: 'Редагувати списки покупок',
+    name: 'Назва списку покупок',
+    newPlaceholder: 'Назва нового списку',
+    unnamed: 'Новий список',
+    add: 'Додати список',
+    empty: 'Списків покупок поки немає.',
+    limitReached: (max: number) =>
+      `У домогосподарстві може бути до ${formatNumber(max)} списків покупок разом з архівними.`,
+    archive: (name: string) => `Архівувати «${name}»`,
+    unarchive: (name: string) => `Відновити «${name}»`,
+    archivedHeading: 'Архів',
+    archivedHint: 'Приховані, і до них нічого не додається, доки їх не відновлять.',
+    remove: (name: string) => `Видалити «${name}»`,
+    restore: (name: string) => `Залишити «${name}»`,
+    deletedOnSave: (count: number) =>
+      count === 0
+        ? 'Буде видалено після збереження.'
+        : plural(count, {
+            one: 'Буде видалено після збереження разом із # предметом.',
+            other: 'Буде видалено після збереження разом із # предметами.',
+          }),
+    nameRequired: 'Введіть назву.',
+    nameTaken: 'Інший список покупок уже має таку назву.',
+    save: 'Зберегти',
+    saving: 'Збереження…',
+    saveFailed: 'Не вдалося зберегти списки покупок.',
+    changedElsewhere:
+      'Хтось інший змінив списки покупок, поки ви редагували. Їхні зміни вже в списку: перевірте його та збережіть знову.',
   },
 
   planner: {

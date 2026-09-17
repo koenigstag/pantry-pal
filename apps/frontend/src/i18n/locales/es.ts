@@ -101,10 +101,6 @@ export const es = {
     refreshFailed: 'No se ha podido actualizar, así que se muestran los últimos datos recibidos.',
   },
 
-  pending: {
-    shoppingLists: 'Las listas de la compra llegarán pronto.',
-  },
-
   categories: {
     name: (code: string, label: string): string => CATEGORY_NAMES.get(code) ?? label,
   },
@@ -172,7 +168,22 @@ export const es = {
   removeSheet: {
     title: (name: string) => `¿Quitar «${name}»?`,
     usedIt: 'Ya lo he usado; añadirlo a la lista de la compra',
+    usedItOnList: (list: string) => `Ya lo he usado; añadirlo a «${list}»`,
     justDelete: 'Solo quiero eliminarlo',
+  },
+
+  addToList: {
+    title: (count: number) => articles(count, 'Añadir ', ' a'),
+    usedUpTitle: (name: string) => `Añadir «${name}» a`,
+    usedUpHint: 'La próxima vez que se acabe, irá ahí por sí solo.',
+    alreadyOn: 'Ya está en esta lista',
+    someAlreadyOn: (count: number) =>
+      plural(count, { one: '# ya está en ella', other: '# ya están en ella' }),
+    newList: 'Nueva lista',
+    added: (count: number, list: string) =>
+      `${plural(count, { one: '# artículo añadido', other: '# artículos añadidos' })} a «${list}».`,
+    nothingAdded: (list: string) => `Ya estaba en «${list}».`,
+    usedUpAdded: (name: string, list: string) => `«${name}» está en «${list}».`,
   },
 
   deleteSheet: {
@@ -267,6 +278,10 @@ export const es = {
     openedToday: 'Hoy',
     clearOpened: 'Borrar la fecha de apertura',
     periodAfterOpening: 'Consumir en (días tras abrirlo)',
+    shoppingList: 'Lista de la compra',
+    shoppingListHint: 'Cuando se acabe, irá a esta lista por sí solo.',
+    noShoppingList: 'Ninguna',
+    archivedList: (name: string) => `«${name}» (archivada)`,
     notes: 'Notas',
     conflict: (fields: string) =>
       `Otra persona ha cambiado ${fields} mientras editabas. Al guardar se conservarán tus valores.`,
@@ -290,6 +305,7 @@ export const es = {
     periodAfterOpeningDays: (max: number) =>
       `Introduce un número entero de días de 1 a ${formatNumber(max)}.`,
     notes: (max: number) => `Las notas pueden tener ${formatNumber(max)} caracteres como máximo.`,
+    defaultShoppingListId: 'Elige una lista de la compra.',
   },
 
   itemDetails: {
@@ -314,6 +330,13 @@ export const es = {
     added: 'Añadido',
     updated: 'Última actualización',
     remove: 'Quitar artículo',
+    shopping: 'Compras',
+    defaultList: (list: string) => `Cuando se acabe, irá a «${list}».`,
+    noDefaultList: 'Cuando se acabe, no irá a ninguna lista por sí solo.',
+    defaultListArchived: (list: string) =>
+      `Cuando se acabe, no irá a ninguna lista mientras «${list}» esté archivada.`,
+    onLists: (lists: string) => `Ahora en: ${lists}.`,
+    addToList: 'Añadir a una lista de la compra',
   },
 
   discardSheet: {
@@ -424,7 +447,77 @@ export const es = {
 
   shopping: {
     title: 'Compras',
-    description: 'Las listas de la compra llegarán pronto.',
+    lists: 'Listas de la compra',
+    editLists: 'Editar listas de la compra',
+    listName: 'Nombre de la lista',
+    defaultListName: 'Compra',
+    create: 'Crear',
+    creating: 'Creando…',
+    nameRequired: (max: number) => `Introduce un nombre de hasta ${formatNumber(max)} caracteres.`,
+    nameTaken: 'Ya hay otra lista de la compra con este nombre.',
+    limitReached: (max: number) =>
+      `Un hogar puede tener hasta ${formatNumber(max)} listas de la compra.`,
+    moreActions: 'Más acciones',
+    refresh: 'Actualizar',
+    share: 'Compartir la lista',
+    nothingToShare: 'No queda nada por comprar en esta lista.',
+    copied: 'Lista copiada. Pégala en un mensaje.',
+    shareFailed: 'No se ha podido compartir la lista.',
+    shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
+    loadFailed: 'No se han podido cargar las listas de la compra.',
+    noLists: 'Aún no hay listas de la compra.',
+    createFirst: 'Crear una lista de la compra',
+    emptyList: (list: string) => `Todavía no hay nada en «${list}».`,
+    emptyHint: 'En Despensa, selecciona artículos o abre uno y añádelo a una lista.',
+    toBuy: (count: number) => plural(count, { other: '# por comprar' }),
+    inCart: 'En el carro',
+    left: (count: number) => plural(count, { one: 'queda #', other: 'quedan #' }),
+    noneLeft: 'no queda ninguno',
+    increase: (name: string) => `Comprar más «${name}»`,
+    decrease: (name: string) => `Comprar menos «${name}»`,
+    remove: (name: string) => `Quitar «${name}» de la lista`,
+    quantity: (name: string) => `Cantidad de «${name}» que comprar`,
+    putAway: (count: number) => articles(count, 'Guardar '),
+    puttingAway: 'Guardando…',
+    putAwayHint: 'Los artículos marcados vuelven a su lugar de almacenamiento.',
+    putAwayDone: (count: number) =>
+      plural(count, {
+        one: '# artículo ha vuelto a la despensa.',
+        other: '# artículos han vuelto a la despensa.',
+      }),
+    changedElsewhere:
+      'Alguien ha cambiado esta lista mientras tanto. Revísala y vuelve a guardar la compra.',
+  },
+
+  shoppingListEditor: {
+    title: 'Editar listas de la compra',
+    name: 'Nombre de la lista de la compra',
+    newPlaceholder: 'Nombre de la lista nueva',
+    unnamed: 'Lista nueva',
+    add: 'Añadir lista',
+    empty: 'Aún no hay listas de la compra.',
+    limitReached: (max: number) =>
+      `Un hogar puede tener hasta ${formatNumber(max)} listas de la compra, contando las archivadas.`,
+    archive: (name: string) => `Archivar «${name}»`,
+    unarchive: (name: string) => `Restaurar «${name}»`,
+    archivedHeading: 'Archivadas',
+    archivedHint: 'Ocultas, y no se les añade nada hasta que se restauren.',
+    remove: (name: string) => `Eliminar «${name}»`,
+    restore: (name: string) => `Conservar «${name}»`,
+    deletedOnSave: (count: number) =>
+      count === 0
+        ? 'Se eliminará al guardar.'
+        : plural(count, {
+            one: 'Se eliminará al guardar, con el artículo que tiene.',
+            other: 'Se eliminará al guardar, con los # artículos que tiene.',
+          }),
+    nameRequired: 'Introduce un nombre.',
+    nameTaken: 'Ya hay otra lista de la compra con este nombre.',
+    save: 'Guardar',
+    saving: 'Guardando…',
+    saveFailed: 'No se han podido guardar las listas de la compra.',
+    changedElsewhere:
+      'Otra persona ha cambiado las listas de la compra mientras editabas. Sus cambios ya están en la lista: revísala y vuelve a guardar.',
   },
 
   planner: {

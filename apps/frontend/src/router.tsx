@@ -4,9 +4,10 @@ import { GuestOnly, RequireSession } from './features/auth/sessionRoutes';
 import { SignInPage } from './features/auth/SignInPage';
 import { SignUpPage } from './features/auth/SignUpPage';
 import { WelcomePage } from './features/auth/WelcomePage';
-import { PlannerPage, ProfilePage, ShoppingPage } from './features/pages';
+import { PlannerPage, ProfilePage } from './features/pages';
 import { AppShell } from './features/shell/AppShell';
 import { ROUTES } from './features/shell/navigation';
+import { ShoppingPage } from './features/shopping/ShoppingPage';
 import { ItemDetailsDialog } from './features/storage/ItemDetailsDialog';
 import { StoragePage } from './features/storage/StoragePage';
 
@@ -21,7 +22,8 @@ import { StoragePage } from './features/storage/StoragePage';
  * second branch, outside the app shell: the account exists by then.
  *
  * `/storage` alone redirects to the first location; an item's details are a
- * child of its location, rendered over the list.
+ * child of its location, rendered over the list. `/shopping` alone redirects to
+ * the first shopping list, the same way.
  *
  * `basename` is Vite's `base` (`BASE_PATH` in `vite.config.ts`), so routes and
  * links resolve under `/<repo>/` when the app is served from GitHub Pages.
@@ -51,6 +53,7 @@ export const router = createBrowserRouter(
               children: [{ path: 'items/:itemId', Component: ItemDetailsDialog }],
             },
             { path: ROUTES.shopping, Component: ShoppingPage },
+            { path: `${ROUTES.shopping}/:listId`, Component: ShoppingPage },
             { path: ROUTES.planner, Component: PlannerPage },
             { path: ROUTES.profile, Component: ProfilePage },
             { path: '*', element: <Navigate replace to={ROUTES.storage} /> },

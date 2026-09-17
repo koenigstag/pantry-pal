@@ -37,9 +37,10 @@ import { IsIsoDate, IsOmittable, Trim } from './decorators';
  * Every rule is declared explicitly (no `emitDecoratorMetadata`) because the
  * shared package is bundled with esbuild, which does not emit design-time types.
  *
- * What a DTO cannot express is checked by the server: that `locationId` belongs
- * to the household, that the category and unit codes exist, that `unit` is a
- * count unit, and that `sizeValue`/`sizeUnit` come as a pair.
+ * What a DTO cannot express is checked by the server: that `locationId` and
+ * `defaultShoppingListId` belong to the household, that the category and unit
+ * codes exist, that `unit` is a count unit, and that `sizeValue`/`sizeUnit` come
+ * as a pair.
  */
 export class CreatePantryItemDto {
   @Trim()
@@ -109,6 +110,11 @@ export class CreatePantryItemDto {
   @IsString()
   @MaxLength(MAX_ITEM_NOTES_LENGTH)
   notes?: string | null;
+
+  /** A shopping list of the household, which the item goes on when it runs out. Omit or `null` for none. */
+  @IsOptional()
+  @IsUUID()
+  defaultShoppingListId?: string | null;
 }
 
 /**
@@ -189,6 +195,15 @@ export class UpdatePantryItemDto {
   @IsOmittable()
   @IsIn([...ITEM_STATUSES])
   status?: ItemStatus;
+
+  /**
+   * `null` removes it. Sent together with a change that runs the item out — a
+   * `consumed` status, say — the item goes on this list rather than the one it
+   * had.
+   */
+  @IsOptional()
+  @IsUUID()
+  defaultShoppingListId?: string | null;
 }
 
 export const ITEM_STATUS_FILTER_ALL = 'all';

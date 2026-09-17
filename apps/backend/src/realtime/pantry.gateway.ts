@@ -30,6 +30,7 @@ import { HouseholdsService } from '../households/households.service';
 import { MembershipService } from '../households/membership.service';
 import { ItemsService } from '../items/items.service';
 import { LocationsService } from '../locations/locations.service';
+import { ShoppingListsService } from '../shopping-lists/shopping-lists.service';
 import { ChangeFeed } from './change-feed';
 import type { DomainChange } from './domain-change';
 import { WsExceptionFilter } from './ws-exception.filter';
@@ -98,6 +99,7 @@ export class PantryGateway
     private readonly households: HouseholdsService,
     private readonly items: ItemsService,
     private readonly locations: LocationsService,
+    private readonly shopping: ShoppingListsService,
   ) {}
 
   afterInit(server: PantryNamespace): void {
@@ -151,15 +153,17 @@ export class PantryGateway
     @MessageBody() dto: SyncPantryDto,
   ): Promise<void> {
     const membership = await this.membership.resolve(dto.householdId, client.data.user.id);
-    const [items, locations] = await Promise.all([
+    const [items, locations, shopping] = await Promise.all([
       this.items.list(membership, {}),
       this.locations.list(membership),
+      this.shopping.overview(membership),
     ]);
 
     client.emit(PANTRY_EVENT.Snapshot, {
       householdId: membership.householdId,
       items,
       locations,
+      shopping,
       serverTime: new Date().toISOString(),
     });
   }
@@ -310,6 +314,49 @@ export class PantryGateway
         server.in(userRoom(change.userId)).socketsLeave(room);
         break;
       }
+
+      case 'shopping-list.created':
+        server
+          .to(householdRoom(change.list.householdId))
+          .emit(PANTRY_EVENT.ShoppingListCreated, { list: change.list });
+        break;
+
+      case 'shopping-list.updated':
+        server
+          .to(householdRoom(change.list.householdId))
+          .emit(PANTRY_EVENT.ShoppingListUpdated, { list: change.list });
+        break;
+
+      case 'shopping-list.deleted':
+        server.to(householdRoom(change.householdId)).emit(PANTRY_EVENT.ShoppingListDeleted, {
+          householdId: change.householdId,
+          id: change.id,
+        });
+        break;
+
+      case 'shopping-lists.upserted':
+        server.to(householdRoom(change.householdId)).emit(PANTRY_EVENT.ShoppingListsUpserted, {
+          householdId: change.householdId,
+          lists: change.lists,
+        });
+        break;
+
+      case 'shopping-list-entries.upserted':
+        server
+          .to(householdRoom(change.householdId))
+          .emit(PANTRY_EVENT.ShoppingListEntriesUpserted, {
+            householdId: change.householdId,
+            entries: change.entries,
+            items: change.items,
+          });
+        break;
+
+      case 'shopping-list-entries.deleted':
+        server.to(householdRoom(change.householdId)).emit(PANTRY_EVENT.ShoppingListEntriesDeleted, {
+          householdId: change.householdId,
+          ids: change.ids,
+        });
+        break;
 
       case 'session.revoked':
         // Access tokens are checked only at the handshake, so a revoked session's

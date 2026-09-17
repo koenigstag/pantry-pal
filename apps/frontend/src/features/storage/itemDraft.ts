@@ -26,6 +26,8 @@ export interface ItemDraft {
   openedAt: string;
   periodAfterOpeningDays: string;
   notes: string;
+  /** A shopping list id, or blank for none. */
+  defaultShoppingListId: string;
 }
 
 /** A change set in the shapes `UpdatePantryItemDto` accepts. */
@@ -42,6 +44,7 @@ export interface ItemPatch {
   openedAt?: string | null;
   periodAfterOpeningDays?: number | null;
   notes?: string | null;
+  defaultShoppingListId?: string | null;
 }
 
 /**
@@ -62,6 +65,7 @@ export function emptyDraft(locationId: string, isEdible: boolean): ItemDraft {
     openedAt: '',
     periodAfterOpeningDays: '',
     notes: '',
+    defaultShoppingListId: '',
   };
 }
 
@@ -81,6 +85,7 @@ export function toDraft(item: PantryItem, quantity: number): ItemDraft {
     periodAfterOpeningDays:
       item.periodAfterOpeningDays === null ? '' : String(item.periodAfterOpeningDays),
     notes: item.notes ?? '',
+    defaultShoppingListId: item.defaultShoppingListId ?? '',
   };
 }
 
@@ -121,6 +126,9 @@ export function toPatch(base: ItemDraft, draft: ItemDraft): ItemPatch {
   if (draft.notes !== base.notes) {
     patch.notes = draft.notes.trim() === '' ? null : draft.notes;
   }
+  if (draft.defaultShoppingListId !== base.defaultShoppingListId) {
+    patch.defaultShoppingListId = blankToNull(draft.defaultShoppingListId);
+  }
 
   return patch;
 }
@@ -147,6 +155,7 @@ export function toCreate(
     periodAfterOpeningDays:
       draft.periodAfterOpeningDays.trim() === '' ? null : toNumber(draft.periodAfterOpeningDays),
     notes: draft.notes.trim() === '' ? null : draft.notes,
+    defaultShoppingListId: blankToNull(draft.defaultShoppingListId),
   };
 }
 
@@ -225,6 +234,8 @@ export function draftFieldLabel(field: DraftField): string {
       return labels.periodAfterOpening;
     case 'notes':
       return labels.notes;
+    case 'defaultShoppingListId':
+      return labels.shoppingList;
   }
 }
 

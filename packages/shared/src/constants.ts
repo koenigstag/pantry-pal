@@ -51,6 +51,12 @@ export const PANTRY_EVENT = {
   MemberAdded: 'pantry:member-added',
   MemberUpdated: 'pantry:member-updated',
   MemberRemoved: 'pantry:member-removed',
+  ShoppingListCreated: 'pantry:shopping-list-created',
+  ShoppingListUpdated: 'pantry:shopping-list-updated',
+  ShoppingListDeleted: 'pantry:shopping-list-deleted',
+  ShoppingListsUpserted: 'pantry:shopping-lists-upserted',
+  ShoppingListEntriesUpserted: 'pantry:shopping-list-entries-upserted',
+  ShoppingListEntriesDeleted: 'pantry:shopping-list-entries-deleted',
 } as const;
 export type PantryEventName = (typeof PANTRY_EVENT)[keyof typeof PANTRY_EVENT];
 
@@ -197,6 +203,14 @@ export const MAX_PASSWORD_LENGTH = 128;
 export const MAX_LOCATION_NAME_LENGTH = 40;
 export const MAX_LOCATION_ICON_LENGTH = 32;
 export const MAX_LOCATIONS_PER_HOUSEHOLD = 50;
+
+export const MAX_SHOPPING_LIST_NAME_LENGTH = 40;
+export const MAX_SHOPPING_LISTS_PER_HOUSEHOLD = 20;
+/**
+ * How many items one request may put on a list, or entries it may put away:
+ * more than a selection of cards holds, so the limit only turns away abuse.
+ */
+export const MAX_SHOPPING_LIST_BATCH = 200;
 
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;

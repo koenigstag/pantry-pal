@@ -7,9 +7,9 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Eleven tables, the transaction layer, seed data, and repositories for users,
+Thirteen tables, the transaction layer, seed data, and repositories for users,
 refresh tokens, households, members, locations, items, item events, units,
-categories and app settings.
+categories, app settings, shopping lists and their entries.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -134,6 +134,22 @@ These are deliberate. Changing any of them affects the whole workspace.
   refused by the backend, because a CHECK cannot see the old name. Households
   get it on creation through `withFallbackLocation` in `@pantry-pal/shared`,
   which marks a default named "Other" or appends one.
+- **Shopping lists** (`shopping_lists`) are per-household and named, unique
+  ignoring case with archived lists included, so restoring one never collides.
+  **`shopping_list_entries`** holds an item and how many to buy, at most once per
+  list (`shopping_list_entries_list_item_idx`). The item is referenced, never
+  copied: putting the shopping away restocks that same row, even one used up
+  meanwhile. Both tables carry composite tenancy keys like `items`, which is why
+  `items` has the otherwise redundant `UNIQUE (household_id, id)`.
+- **`items.default_shopping_list_id`** names the list an item goes on when it runs
+  out. Its key (`items_default_shopping_list_household_fk`) is `NO ACTION`: a list
+  that is still some item's default cannot be deleted, so `ShoppingListsService`
+  clears those defaults first and announces each item.
+  `ON DELETE SET NULL (default_shopping_list_id)` would clear them silently — no
+  broadcast — and a plain `SET NULL` would null `household_id` too.
+- **Lists are deleted outright**, unlike locations: no history points at one, and
+  its entries cascade. **`archived_at`** freezes a list instead of deleting it; the
+  column only records it, and the backend refuses writes to a frozen list.
 - **`app_settings`** is key → jsonb for global, admin-managed values. Untyped
   here on purpose: keys, value types and defaults live in `@pantry-pal/shared`
   (`APP_SETTING`), and the backend validates every read and write. A missing row
@@ -220,16 +236,20 @@ the enclosing transaction. Callbacks must not throw — the write is durable by
 then. The backend's realtime broadcasts go through it.
 
 Repositories lock rows explicitly where a service reads before it writes
-(`HouseholdsRepository.lock`, `LocationsRepository.lock`, `ItemsRepository.lock`),
+(`HouseholdsRepository.lock`, `LocationsRepository.lock`, `ItemsRepository.lock`
+and `lockMany`, `ShoppingListsRepository.lock`, `ShoppingListEntriesRepository.lockMany`),
 and every `update()` treats an empty patch as a no-op — Drizzle itself throws
 "No values to set" on an empty SET, `$onUpdate` columns notwithstanding.
+`lockMany` locks in id order, so two callers locking overlapping rows cannot
+deadlock on each other.
 
 ## Errors
 
 `findPostgresError(error)` walks the `cause` chain (Drizzle wraps driver errors
 in `DrizzleQueryError`) and returns the SQLSTATE, constraint, table and detail.
 It recognises the driver error by shape, so callers need no `pg` import.
-`PG_ERROR` names the codes worth translating.
+`PG_ERROR` names the codes worth translating, `40P01` (a deadlock, rolled back
+whole) among them.
 
 ## Migrations
 
@@ -277,6 +297,14 @@ Both were verified on a database migrated to `0001` and seeded before them.
 `0004_birth_date` adds the nullable `users.birth_date`, exactly as drizzle-kit
 generated it. It has no CHECK: the range ends today, which a CHECK cannot
 compare with, so the DTO checks it.
+
+`0005_shopping_lists` adds both shopping tables and `items.default_shopping_list_id`.
+It is hand-ordered, and says so: drizzle-kit emitted `items_household_id_id_unique`
+last, after the entries' foreign key that references it, as it did in `0001`.
+Verified on PostgreSQL 18 over a database migrated to `0004` with items in it, and
+in a rolled-back transaction: the tenancy keys, the one-entry-per-item index, the
+quantity check, refusing to delete a list that is still a default, and deleting a
+household that holds lists, defaults and entries.
 
 ## Resolved: categories are a table
 

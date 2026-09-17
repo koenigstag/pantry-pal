@@ -1,4 +1,11 @@
-import type { Household, HouseholdMember, PantryItem, PantryLocation } from '@pantry-pal/shared';
+import type {
+  Household,
+  HouseholdMember,
+  PantryItem,
+  PantryLocation,
+  ShoppingList,
+  ShoppingListEntry,
+} from '@pantry-pal/shared';
 
 /**
  * Everything a service can announce. The gateway maps each to a socket event
@@ -26,5 +33,25 @@ export type DomainChange =
   | { readonly type: 'member.added'; readonly member: HouseholdMember }
   | { readonly type: 'member.updated'; readonly member: HouseholdMember }
   | { readonly type: 'member.removed'; readonly householdId: string; readonly userId: string }
+  | { readonly type: 'shopping-list.created'; readonly list: ShoppingList }
+  | { readonly type: 'shopping-list.updated'; readonly list: ShoppingList }
+  | { readonly type: 'shopping-list.deleted'; readonly householdId: string; readonly id: string }
+  | {
+      readonly type: 'shopping-lists.upserted';
+      readonly householdId: string;
+      readonly lists: ShoppingList[];
+    }
+  | {
+      readonly type: 'shopping-list-entries.upserted';
+      readonly householdId: string;
+      readonly entries: ShoppingListEntry[];
+      /** The items the entries name, which clients may not hold: a used-up one is off the shelf. */
+      readonly items: PantryItem[];
+    }
+  | {
+      readonly type: 'shopping-list-entries.deleted';
+      readonly householdId: string;
+      readonly ids: string[];
+    }
   /** Signed out, or its refresh token was reused: close the sockets it opened. */
   | { readonly type: 'session.revoked'; readonly userId: string; readonly sessionId: string };
