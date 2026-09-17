@@ -475,7 +475,7 @@ export const ru = {
     lists: 'Списки покупок',
     editLists: 'Редактировать списки покупок',
     listName: 'Название списка',
-    defaultListName: 'Продукты',
+    defaultListName: 'Мой список покупок',
     create: 'Создать',
     creating: 'Создание…',
     nameRequired: (max: number) => `Введите название длиной до ${formatNumber(max)} символов.`,

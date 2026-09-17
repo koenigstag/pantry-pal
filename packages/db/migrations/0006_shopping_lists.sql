@@ -38,3 +38,22 @@ CREATE INDEX "shopping_list_entries_item_idx" ON "shopping_list_entries" USING b
 CREATE INDEX "shopping_list_entries_household_idx" ON "shopping_list_entries" USING btree ("household_id");--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_default_shopping_list_household_fk" FOREIGN KEY ("household_id","default_shopping_list_id") REFERENCES "public"."shopping_lists"("household_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "items_default_shopping_list_idx" ON "items" USING btree ("household_id","default_shopping_list_id") WHERE default_shopping_list_id is not null;
+--> statement-breakpoint
+-- Hand-added: every existing household starts with a shopping list, as a new one
+-- does, named in its creator's language as `defaultShoppingListName` in
+-- @pantry-pal/shared named it when this was written: the exact tag, then its
+-- language, then English. Last, so the constraints above check the rows.
+INSERT INTO "shopping_lists" ("household_id", "name", "sort_order")
+SELECT "households"."id",
+	CASE
+		WHEN "users"."locale" = 'fr-CA' THEN 'Ma liste d’épicerie'
+		WHEN split_part("users"."locale", '-', 1) = 'uk' THEN 'Мій список покупок'
+		WHEN split_part("users"."locale", '-', 1) = 'ru' THEN 'Мой список покупок'
+		WHEN split_part("users"."locale", '-', 1) = 'de' THEN 'Meine Einkaufsliste'
+		WHEN split_part("users"."locale", '-', 1) = 'fr' THEN 'Ma liste de courses'
+		WHEN split_part("users"."locale", '-', 1) = 'es' THEN 'Mi lista de la compra'
+		ELSE 'My shopping list'
+	END,
+	0
+FROM "households"
+INNER JOIN "users" ON "users"."id" = "households"."created_by";

@@ -225,6 +225,14 @@ with `locations_fallback_not_deleted`.
 A list names items rather than copying them: an entry is an item, how many to
 buy, and whether it is ticked off. Any member manages lists and entries.
 
+- **Every household starts with a list**, "My shopping list", which
+  `HouseholdsService.create` creates with it. The name follows the creator's
+  language (`defaultShoppingListName` in shared): the exact tag, then its
+  language, then English.
+  - From then on it is an ordinary list, renamed, archived or deleted like any
+    other, so a household can end up with none.
+  - Creating a household announces the creator as a member first, which moves
+    their open sockets into its room, and then the list.
 - **Running out puts an item on its default list** (`items.default_shopping_list_id`),
   in the same transaction. `ItemsService.update` adds one of it when a patch takes
   it from in stock (active, quantity above 0) to not: consumed, discarded, or down

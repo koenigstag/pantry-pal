@@ -2,6 +2,8 @@ import {
   createId,
   daysUntil,
   DEFAULT_CATEGORY,
+  DEFAULT_LOCALE,
+  defaultShoppingListName,
   EXPIRY_WARNING_DAYS,
   HOUSEHOLD_ROLE,
   ITEM_EVENT_TYPE,
@@ -19,6 +21,7 @@ import {
   itemEvents,
   items,
   products,
+  shoppingLists,
   users,
   type NewItemEventRow,
   type NewItemRow,
@@ -678,6 +681,17 @@ export function seedTestHousehold(
     const locationRows = await seedHouseholdLocations(tx, TEST_HOUSEHOLD_ID);
     const locationIdByName = new Map(locationRows.map((row) => [row.name, row.id]));
 
+    // Like every household, it starts with a shopping list, named in its owner's
+    // language, which the fixture users leave at the default.
+    const shoppingListRows = await tx
+      .insert(shoppingLists)
+      .values({
+        householdId: TEST_HOUSEHOLD_ID,
+        name: defaultShoppingListName(DEFAULT_LOCALE),
+        sortOrder: 0,
+      })
+      .returning();
+
     const productRows = await tx
       .insert(products)
       .values(
@@ -812,6 +826,7 @@ export function seedTestHousehold(
         unitSystem: TEST_USERS[actor].unitSystem,
       })),
       locations: locationRows.length,
+      shoppingLists: shoppingListRows.length,
       products: productRows.length,
       items: {
         active: active.length,

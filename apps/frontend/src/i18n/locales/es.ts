@@ -450,7 +450,7 @@ export const es = {
     lists: 'Listas de la compra',
     editLists: 'Editar listas de la compra',
     listName: 'Nombre de la lista',
-    defaultListName: 'Compra',
+    defaultListName: 'Mi lista de la compra',
     create: 'Crear',
     creating: 'Creando…',
     nameRequired: (max: number) => `Introduce un nombre de hasta ${formatNumber(max)} caracteres.`,

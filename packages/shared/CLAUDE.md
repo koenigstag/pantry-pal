@@ -89,6 +89,11 @@ up the exact tag (`fr-CA`), then its language (`fr`), then the base text. Stored
 tags are `TRANSLATION_LOCALES`, the supported locales and their languages, so
 most rows are languages and a regional row exists only where the wording differs.
 
+The shopping list a new household starts with is named by the same rule, from a
+constant instead: `defaultShoppingListName` reads
+`DEFAULT_SHOPPING_LIST_TRANSLATIONS`. Unlike the default storage spaces, nothing
+changes that name at runtime, so it needs no table.
+
 ## Conventions
 
 - `src/utils/` is pure and dependency-free, and runs in both Node and the

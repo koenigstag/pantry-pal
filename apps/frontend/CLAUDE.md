@@ -384,6 +384,10 @@ the entries are applied first, so an item that left the shelf is kept.
   that returns after a broadcast may predate it, so it asks again, three times at
   most. Ids of deleted lists and entries are remembered, so a late copy never
   brings one back.
+- **A household starts with a list**, "My shopping list", which the backend names
+  in its creator's language. It is an ordinary list, so a household can delete
+  every one. The page's empty state and the picker then suggest the same name in
+  the page's language (`messages.shopping.defaultListName`).
 - **Nothing is optimistic.** Ticking, stepping how many to buy and removing wait
   for the server; while one runs, the row's controls ignore presses
   (`aria-disabled`, so focus stays put).

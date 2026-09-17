@@ -441,7 +441,7 @@ export const de = {
     lists: 'Einkaufslisten',
     editLists: 'Einkaufslisten bearbeiten',
     listName: 'Name der Liste',
-    defaultListName: 'Lebensmittel',
+    defaultListName: 'Meine Einkaufsliste',
     create: 'Erstellen',
     creating: 'Wird erstellt…',
     nameRequired: (max: number) =>

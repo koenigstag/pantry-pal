@@ -111,7 +111,7 @@ export const frCA = {
     title: 'Épicerie',
     lists: 'Listes d’épicerie',
     editLists: 'Modifier les listes d’épicerie',
-    defaultListName: 'Épicerie',
+    defaultListName: 'Ma liste d’épicerie',
     nameTaken: 'Une autre liste d’épicerie porte déjà ce nom.',
     limitReached: (max: number) =>
       `Un foyer peut avoir jusqu’à ${formatNumber(max)} listes d’épicerie.`,

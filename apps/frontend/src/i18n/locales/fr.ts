@@ -443,7 +443,7 @@ export const fr = {
     lists: 'Listes de courses',
     editLists: 'Modifier les listes de courses',
     listName: 'Nom de la liste',
-    defaultListName: 'Courses',
+    defaultListName: 'Ma liste de courses',
     create: 'Créer',
     creating: 'Création…',
     nameRequired: (max: number) => `Saisissez un nom de ${formatNumber(max)} caractères au plus.`,

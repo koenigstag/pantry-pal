@@ -464,7 +464,7 @@ export const uk = {
     lists: 'Списки покупок',
     editLists: 'Редагувати списки покупок',
     listName: 'Назва списку',
-    defaultListName: 'Продукти',
+    defaultListName: 'Мій список покупок',
     create: 'Створити',
     creating: 'Створення…',
     nameRequired: (max: number) => `Введіть назву до ${formatNumber(max)} символів.`,

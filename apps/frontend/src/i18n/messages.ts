@@ -499,8 +499,12 @@ const en = {
     lists: 'Shopping lists',
     editLists: 'Edit shopping lists',
     listName: 'List name',
-    /** Suggested as the name of a household's first list. */
-    defaultListName: 'Groceries',
+    /**
+     * Suggested for a new list when a household has none left. A household starts
+     * with one of this name, given by the server in its creator's language
+     * (`DEFAULT_SHOPPING_LIST_TRANSLATIONS`), so each catalog matches it.
+     */
+    defaultListName: 'My shopping list',
     create: 'Create',
     creating: 'Creating…',
     nameRequired: (max: number) => `Enter a name of up to ${formatNumber(max)} characters.`,

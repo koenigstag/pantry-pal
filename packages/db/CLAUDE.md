@@ -53,7 +53,8 @@ from Node's `--env-file-if-exists` flags instead. Neither needs dotenv.
 
 `pnpm db:seed` resets `TEST_HOUSEHOLD_ID` (`00000000-0000-4000-8000-000000000001`)
 and re-creates it in one transaction: two members with different unit systems,
-all eight locations, six products and 35 items covering every expiry state.
+all eight locations, the shopping list a new household starts with, six products
+and 35 items covering every expiry state.
 The fixture is `src/fixtures/test-household.ts`, published separately as
 `@pantry-pal/db/fixtures` so seed data never enters the main import graph;
 `scripts/seed-test-household.mjs` is only glue.
@@ -149,7 +150,9 @@ These are deliberate. Changing any of them affects the whole workspace.
   list (`shopping_list_entries_list_item_idx`). The item is referenced, never
   copied: putting the shopping away restocks that same row, even one used up
   meanwhile. Both tables carry composite tenancy keys like `items`, which is why
-  `items` has the otherwise redundant `UNIQUE (household_id, id)`.
+  `items` has the otherwise redundant `UNIQUE (household_id, id)`. A household
+  starts with one list, "My shopping list" in its creator's language, which the
+  backend creates with it; nothing marks that list afterwards.
 - **`items.default_shopping_list_id`** names the list an item goes on when it runs
   out. Its key (`items_default_shopping_list_household_fk`) is `NO ACTION`: a list
   that is still some item's default cannot be deleted, so `ShoppingListsService`
@@ -311,13 +314,23 @@ drop and the new tables were generated as two migrations and merged into one,
 the second one's snapshot becoming `0005`'s. `drizzle-kit generate` reporting no
 changes confirms that snapshot.
 
-`0006_shopping_lists` adds both shopping tables and `items.default_shopping_list_id`.
-It is hand-ordered, and says so: drizzle-kit emitted `items_household_id_id_unique`
-last, after the entries' foreign key that references it, as it did in `0001`.
-Verified on PostgreSQL 18 over a database migrated to `0004` with items in it, and
-in a rolled-back transaction: the tenancy keys, the one-entry-per-item index, the
-quantity check, refusing to delete a list that is still a default, and deleting a
-household that holds lists, defaults and entries.
+`0006_shopping_lists` adds both shopping tables and `items.default_shopping_list_id`,
+then gives every existing household the list a new one starts with. It is
+hand-edited in two places, and says so:
+
+- It is hand-ordered: drizzle-kit emitted `items_household_id_id_unique` last,
+  after the entries' foreign key that references it, as it did in `0001`.
+- The backfill is hand-added. Each list is named for the `users.locale` of its
+  household's creator, from a `CASE` holding the names `defaultShoppingListName`
+  in `@pantry-pal/shared` gave then: the exact tag, then its language, then
+  English. A copy, so that changing the names later never changes a migration.
+
+Verified on PostgreSQL 18 over a database migrated to `0005`, with items in it,
+and with households whose creators use every supported language and one without
+a translation (`pt-BR`, which gets English). Also verified in a rolled-back
+transaction: the tenancy keys, the one-entry-per-item index, the quantity check,
+refusing to delete a list that is still a default, and deleting a household that
+holds lists, defaults and entries.
 
 ## Resolved: categories are a table
 

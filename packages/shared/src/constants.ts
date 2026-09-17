@@ -194,6 +194,29 @@ export const MAX_SHOPPING_LISTS_PER_HOUSEHOLD = 20;
  */
 export const MAX_SHOPPING_LIST_BATCH = 200;
 
+/**
+ * The English name of the shopping list every household starts with. It is
+ * created with the household, named in its creator's language
+ * (`defaultShoppingListName`), and is an ordinary list from then on: it can be
+ * renamed, archived or deleted like any other.
+ */
+export const DEFAULT_SHOPPING_LIST_NAME = 'My shopping list';
+
+/**
+ * That name by BCP 47 tag, looked up as `pickTranslation` does: the exact tag,
+ * then its language. A regional key exists only where the wording differs.
+ * Migration `0006_shopping_lists` copied these for existing households, so a
+ * change here reaches new households only.
+ */
+export const DEFAULT_SHOPPING_LIST_TRANSLATIONS: Readonly<Record<string, string>> = {
+  uk: 'Мій список покупок',
+  ru: 'Мой список покупок',
+  de: 'Meine Einkaufsliste',
+  fr: 'Ma liste de courses',
+  'fr-CA': 'Ma liste d’épicerie',
+  es: 'Mi lista de la compra',
+};
+
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;
 
