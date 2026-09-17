@@ -1,11 +1,13 @@
-import { IsEmail, IsString, Length, MaxLength } from 'class-validator';
+import { IsEmail, IsIn, IsString, Length, MaxLength } from 'class-validator';
 
 import {
   MAX_DISPLAY_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
+  SUPPORTED_LOCALES,
 } from '../constants';
+import type { SupportedLocale } from '../types';
 import { IsOmittable, NormalizeEmail, Trim } from './decorators';
 
 /** A refresh token is a JWT of about 300 characters. The bound only turns away junk. */
@@ -29,6 +31,15 @@ export class SignUpDto {
   @IsString()
   @Length(1, MAX_DISPLAY_NAME_LENGTH)
   displayName?: string;
+
+  /**
+   * The language the page was showing, which the new account keeps; without it,
+   * `DEFAULT_LOCALE`. Otherwise the app would reload in another language the
+   * moment the account exists.
+   */
+  @IsOmittable()
+  @IsIn([...SUPPORTED_LOCALES])
+  locale?: SupportedLocale;
 }
 
 /**
@@ -86,4 +97,9 @@ export class DevSignInDto {
   @IsEmail()
   @MaxLength(MAX_EMAIL_LENGTH)
   email!: string;
+
+  /** As at sign-up: the language an account created here starts with. An existing account keeps its own. */
+  @IsOmittable()
+  @IsIn([...SUPPORTED_LOCALES])
+  locale?: SupportedLocale;
 }

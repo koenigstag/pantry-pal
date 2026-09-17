@@ -28,7 +28,7 @@ transport, whose upgrade Socket.IO does not check against its `cors` origins.
 
 ```
 src/main.tsx, router.tsx   entry; React Router data router
-src/features/auth/         sign-in and sign-up pages, route gates, the password form
+src/features/auth/         sign-in and sign-up pages, route gates, language picker, password form
 src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), PageStatus
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/pages.tsx     Shopping and Planner placeholders, Profile
@@ -318,11 +318,19 @@ language, then region: `fr-CA` is French as written in Canada.
   name it did not write. Write no-break spaces as `\u00A0` escapes: a raw one is
   invisible in an editor.
 - **The language is fixed per page load.** `i18n/locale.ts` reads `LOCALE` once,
-  from a localStorage copy of the account's `users.locale`, and the catalog and
-  every `Intl` formatter use it. `switchLocale(tag)` stores a different language
-  and reloads: the Profile page calls it after `PATCH /me` saves the choice, and
-  the store calls it when `GET /me` reports one that differs from the copy, as on
-  a new device. With storage blocked it cannot remember, so it does not reload.
+  and the catalog and every `Intl` formatter use it. It comes from a
+  localStorage copy, else the browser's preferred languages
+  (`navigator.languages`, on a first visit), else `DEFAULT_LOCALE`.
+  `switchLocale(tag)` stores a language and reloads if the page shows another:
+  the Profile page calls it after `PATCH /me` saves the choice, and the store
+  calls it with the language `GET /me` reports, so the account's `users.locale`
+  outranks the copy, as on a new device. With storage blocked it cannot
+  remember, so it does not reload.
+- **Signed out, the language is this browser's.** `LanguagePicker`, at the foot
+  of the sign-in and sign-up pages, changes only the copy. Sign-up and the
+  development sign-in send `LOCALE`, so a new account keeps the language it was
+  made in and nothing reloads. Signing in to an existing account switches to
+  that account's language.
 - **User data keeps its language.** Item names and the storage spaces a
   household named stay as typed. What the UI names is translated: seeded
   categories (`messages.categories.name`), count-unit nouns, metric unit

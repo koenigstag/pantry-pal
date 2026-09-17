@@ -46,6 +46,8 @@ export class AuthService {
         email: dto.email,
         displayName: dto.displayName ?? displayNameFor(dto.email),
         passwordHash,
+        // Omitted, the column's default applies.
+        locale: dto.locale,
       },
       userAgent,
     );
@@ -69,9 +71,11 @@ export class AuthService {
   async devSignIn(dto: DevSignInDto, userAgent: string | undefined): Promise<AuthSession> {
     if (!this.identity.devIdentityEnabled) throw new NotFoundException();
 
+    // The locale counts only if the account is created now.
     const user = await this.users.findOrCreateByEmail({
       email: dto.email,
       displayName: displayNameFor(dto.email),
+      locale: dto.locale,
     });
     return this.sessions.start(user, userAgent);
   }

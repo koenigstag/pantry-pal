@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useLocation } from 'react-router';
 
+import { LOCALE } from '../../i18n/locale';
 import { messages } from '../../i18n/messages';
 import { useAuthStore } from '../../stores/StoreContext';
 import { cn } from '../../ui/cn';
@@ -121,11 +122,11 @@ export const SignInPage = observer(function SignInPage(): ReactElement {
   /**
    * Development builds only: a session for the email without a password, which
    * the backend grants only while it runs with `DEV_AUTH=true`. An account made
-   * this way has no password.
+   * this way has no password, and starts in the page's language.
    */
   async function signInWithoutPassword(): Promise<void> {
     if (email === null) return;
-    await attempt('dev', () => auth.devSignIn({ email }));
+    await attempt('dev', () => auth.devSignIn({ email, locale: LOCALE }));
   }
 
   async function attempt(

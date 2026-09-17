@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useLocation } from 'react-router';
 
+import { LOCALE } from '../../i18n/locale';
 import { messages } from '../../i18n/messages';
 import { useAuthStore } from '../../stores/StoreContext';
 import { cn } from '../../ui/cn';
@@ -33,6 +34,8 @@ export const SignUpPage = observer(function SignUpPage(): ReactElement {
       password,
       // Left empty, the server names the account after the email.
       ...(displayName.trim() === '' ? {} : { displayName }),
+      // The account keeps the language of this page, so signing up reloads nothing.
+      locale: LOCALE,
     });
     if (!result.ok) {
       setErrors(authFieldErrors(result.errors, 'chosen'));

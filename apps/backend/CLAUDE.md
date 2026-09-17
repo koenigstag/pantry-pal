@@ -136,6 +136,12 @@ whoever typed the email first. Sign-in answers the same 401 for an unknown email
 and a wrong password, though sign-up's 409 reveals whether an email has an
 account anyway.
 
+**A new account starts in the client's language.** Sign-up and dev sign-in take
+an optional `locale`, the language the client was showing; omitted, the column's
+default applies. Without it, a client in another language would reload into
+English the moment the account exists. Dev sign-in applies it only when it
+creates the account: an existing account keeps its own.
+
 **Changing a password** (`POST /me/password`) takes the current password and a
 new one. Every other session of the account is revoked, closing its sockets, and
 the caller's own session stays signed in. Nothing sends email: a forgotten

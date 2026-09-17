@@ -1,6 +1,7 @@
 import { useId, type ReactElement, type ReactNode } from 'react';
 
 import { messages } from '../../i18n/messages';
+import { LanguagePicker } from './LanguagePicker';
 
 export const PRIMARY_BUTTON =
   'focus-ring h-10 cursor-pointer rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60';
@@ -17,13 +18,16 @@ interface AuthPageProps {
   footer: ReactNode;
 }
 
-/** The frame of a signed-out page: the app's name, one card, and a line under it. */
+/**
+ * The frame of a signed-out page: the app's name, one card, and a line under it.
+ * The language picker stands apart, at the foot of the page, out of the form's way.
+ */
 export function AuthPage({ title, children, footer }: AuthPageProps): ReactElement {
   const titleId = useId();
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
-      <div className="w-full max-w-sm">
+    <div className="flex min-h-dvh flex-col items-center px-4">
+      <main className="flex w-full max-w-sm flex-1 flex-col justify-center py-10">
         <p className="mb-6 text-center text-lg font-bold tracking-tight">{messages.app.name}</p>
         <section
           aria-labelledby={titleId}
@@ -35,7 +39,10 @@ export function AuthPage({ title, children, footer }: AuthPageProps): ReactEleme
           {children}
         </section>
         <p className="mt-6 text-center text-sm text-ink-muted">{footer}</p>
-      </div>
-    </main>
+      </main>
+      <footer className="pb-6">
+        <LanguagePicker />
+      </footer>
+    </div>
   );
 }
