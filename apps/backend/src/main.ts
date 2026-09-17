@@ -12,6 +12,7 @@ import {
 } from '@pantry-pal/shared';
 
 import { AppModule } from './app.module';
+import type { JwtSecretName } from './config/configuration';
 import { PantryIoAdapter } from './realtime/io-adapter';
 
 async function bootstrap(): Promise<void> {
@@ -28,6 +29,12 @@ async function bootstrap(): Promise<void> {
   // `?filter[name]=x` does not become an object. Restoring qs-based parsing
   // keeps query DTOs behaving the way they did on Express 4.
   app.set('query parser', 'extended');
+
+  // Behind a reverse proxy every request arrives from the proxy. The auth routes'
+  // rate limits key on the client address, which Express then takes from
+  // `X-Forwarded-For` — but only for the proxies this names.
+  const trustProxy = config.get<boolean | number | string>('trustProxy');
+  if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
 
   app.setGlobalPrefix(`${API_PREFIX}/${API_VERSION}`);
   app.enableCors({ origin: corsOrigins, credentials: true });
@@ -48,7 +55,23 @@ async function bootstrap(): Promise<void> {
   logger.log(`WebSocket ws://localhost:${port}${PANTRY_WS_NAMESPACE}`);
   logger.log(`CORS      ${corsOrigins.join(', ') || '(none configured)'}`);
   logger.log(
-    `Identity  ${config.get<boolean>('auth.devIdentity') === true ? `dev header (${DEV_USER_HEADER})` : 'none configured'}`,
+    `Identity  JWT${config.get<boolean>('auth.devIdentity') === true ? `, plus dev sign-in and ${DEV_USER_HEADER}` : ''}`,
+  );
+  const generatedSecrets = config.get<JwtSecretName[]>('auth.generatedSecrets', []);
+  if (generatedSecrets.includes('JWT_ACCESS_SECRET')) {
+    logger.warn(
+      'JWT_ACCESS_SECRET is not set: access tokens are signed with a key generated for this ' +
+        'process, so they stop verifying when it restarts and clients have to refresh.',
+    );
+  }
+  if (generatedSecrets.includes('JWT_REFRESH_SECRET')) {
+    logger.warn(
+      'JWT_REFRESH_SECRET is not set: refresh tokens are signed with a key generated for this ' +
+        'process, so every session ends when it restarts. Set it to stay signed in across restarts.',
+    );
+  }
+  logger.log(
+    `Proxies   ${trustProxy === undefined ? 'none trusted' : `trusted: ${String(trustProxy)}`}`,
   );
   logger.log(
     `Admin API ${config.get<string>('admin.apiKey') === undefined ? 'disabled' : 'enabled'}`,

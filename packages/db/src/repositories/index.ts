@@ -5,5 +5,6 @@ export * from './households.repository';
 export * from './item-events.repository';
 export * from './items.repository';
 export * from './locations.repository';
+export * from './refresh-tokens.repository';
 export * from './units.repository';
 export * from './users.repository';

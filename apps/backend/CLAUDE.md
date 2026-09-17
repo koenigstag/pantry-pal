@@ -17,7 +17,8 @@ pnpm type-check   # tsc --noEmit
 Served at `http://localhost:3001/api/v1`; socket namespace `/pantry`.
 `GET /api/v1/health` is the liveness route. The database must be migrated first
 (`pnpm --filter @pantry-pal/db db:migrate`); `pnpm db:seed` there adds a test
-household whose owner is `owner@pantry-pal.test`.
+household whose owner is `owner@pantry-pal.test`. Seeded users have no password:
+get a session for one with `POST /api/v1/auth/dev-sign-in` (`DEV_AUTH=true`).
 
 ## Module format — read before touching tsconfig
 
@@ -42,7 +43,8 @@ must stay `false` for constructor parameter properties to behave.
 src/
   database/     DatabaseModule (@Global): pool, transactional proxy, repositories;
                 Postgres error -> HTTP translation
-  auth/         AccessGuard (global), IdentityService, @Public/@AdminOnly, GET/PATCH /me
+  auth/         AccessGuard (global, Passport JWT), sign-up/sign-in/refresh/sign-out,
+                SessionsService, IdentityService, @Public/@AdminOnly, /me and its password
   common/       request context: @CurrentUser, @CurrentMembership, Membership
   households/   households + members, MembershipService, HouseholdAccessGuard
   locations/    per-household locations: CRUD, reorder, soft delete
@@ -50,14 +52,18 @@ src/
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   settings/     typed access to app_settings, with code defaults
-  admin/        /admin/units, /admin/categories, /admin/settings
+  admin/        /admin/units, /admin/categories, /admin/settings, /admin/users (passwords)
   realtime/     ChangeFeed, PantryGateway, Socket.IO adapter, WS exception filter
 ```
 
 ### Routes
 
 ```
+POST                   /auth/sign-up  /auth/sign-in                   public; 10/min per client address
+POST                   /auth/refresh  /auth/sign-out                  public; 30/min; body: refreshToken
+POST                   /auth/dev-sign-in                              DEV_AUTH=true only, else 404
 GET    PATCH           /me                                            PATCH: the caller's locale
+POST                   /me/password                                   current + new; 5/min per account
 GET    /units
 GET    /categories
 GET    POST            /households
@@ -72,6 +78,7 @@ GET    PATCH  DELETE   /households/:householdId/items/:itemId
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET                    /admin/settings           GET PUT   DELETE /admin/settings/:key
+PUT                    /admin/users/:email/password                   sets it, ends every session; no email
 ```
 
 ## Authentication and authorization
@@ -81,12 +88,100 @@ registered as `APP_GUARD`, so a new controller fails closed. `@Public()` opts
 out (health, units); `@AdminOnly()` switches to the `x-admin-api-key` header,
 which compares in constant time and answers 403 while `ADMIN_API_KEY` is unset.
 
-**Identity is a development stand-in.** With `DEV_AUTH=true`, the
-`x-dev-user-email` header names the caller, and an email seen for the first time
-becomes a user — the way a first sign-in through an identity provider would.
-`IdentityService.authenticate()` is the seam real authentication replaces;
-`AccessGuard` and the socket handshake call nothing else. Configuration refuses
-to boot with `DEV_AUTH=true` under `NODE_ENV=production`.
+**Identity is an access token**: a 15-minute HS256 JWT naming the user (`sub`)
+and the session (`sid`), sent as `Authorization: Bearer`. `AccessGuard` extends
+Passport's `AuthGuard('jwt')`; `JwtStrategy` checks the signature and expiry, and
+`IdentityService.userFromClaims` loads the user into `request.user`. Passport
+does not run for sockets, so the handshake calls
+`IdentityService.verifyAccessToken`, which ends in the same lookup.
+
+**Access and refresh tokens have separate secrets**, `JWT_ACCESS_SECRET` and
+`JWT_REFRESH_SECRET`, so neither kind verifies as the other. `TokenSigner` passes
+the secret and the algorithm on every sign and verify; `JwtModule` has no default
+secret, so a call that names none fails rather than borrowing one. Passport's
+strategy reads the access secret itself.
+
+**A session is one `refresh_tokens` row** (`SessionsService`). Its refresh token is
+a 30-day JWT naming the user, the session and a `jti` that changes at every
+refresh; the row stores only the `jti`'s SHA-256. It is verified in
+`SessionsService` rather than by a second Passport strategy, since rotation needs
+the row lock anyway. `POST /auth/refresh` rotates the row in place and answers
+with a new pair. A signed token whose `jti` the row no longer holds was spent
+already, so it was copied: the session is revoked for both holders. Two
+consequences for clients:
+
+- Refreshes must be serialised. Two tabs refreshing with one token look exactly
+  like theft, and sign the user out.
+- A refresh response lost in transit leaves the client holding a spent token, so
+  that client is signed out.
+
+`POST /auth/sign-out` revokes the session only when given its current token, so a
+stale copy signs nobody out. An access token already issued stays valid until it
+expires; household membership is still checked per request, so a removed member
+loses access at once.
+
+Nothing deletes a session's row yet, so every sign-in leaves one behind for good.
+Purging expired and revoked rows is the first planned background job (see
+Background jobs).
+
+**Revoking a session closes its sockets.** A socket authenticates only at its
+handshake and joins `session:<sid>`; `SessionsService` publishes
+`session.revoked`, and the gateway disconnects that room. An access token that
+merely expires does not disconnect anything.
+
+**Passwords** are hashed with Argon2id (`@node-rs/argon2`: 19 MiB, 2 passes, 1
+thread, OWASP's baseline). Sign-up refuses an email that has an account, a
+passwordless one included: setting a password on it would hand the account to
+whoever typed the email first. Sign-in answers the same 401 for an unknown email
+and a wrong password, though sign-up's 409 reveals whether an email has an
+account anyway.
+
+**Changing a password** (`POST /me/password`) takes the current password and a
+new one. Every other session of the account is revoked, closing its sockets, and
+the caller's own session stays signed in. Nothing sends email: a forgotten
+password is reset by an administrator (below).
+
+- **A wrong current password is 403, never 401**: clients take a 401 to mean the
+  access token expired.
+- **It needs the caller's session.** `JwtStrategy` puts the access token's `sid` on
+  the request (`@CurrentSessionId()`), kept off `request.user`, which `GET /me`
+  returns. The development header has no session and gets a 403, and so does an
+  account without a password.
+- **Argon2 runs outside the transaction.** Inside it, the user row is locked, and
+  the change goes ahead only if the stored hash is still the one just verified
+  (409 otherwise) and the caller's session is still live (401 otherwise). Of two
+  concurrent changes, one wins.
+
+**An administrator can reset any password**:
+`PUT /admin/users/:email/password` with `{ password }` and the `x-admin-api-key`
+header. It sets the password and ends every session of the user, closing their
+sockets.
+
+- **Nothing is emailed.** The administrator hands the password over, and the user
+  can replace it with `POST /me/password` once signed in.
+- **Passwordless accounts** made by the development sign-in get a password this
+  way.
+- **The email** is matched like at sign-up (trimmed, lowercased) and may be
+  percent-encoded: 400 if it is not an email, 404 if nobody has it.
+- **No current password and no rate limit**: the API key is the proof, as for
+  every admin route.
+- **It locks the user row**, so a change the user makes at the same moment either
+  finishes first or finds the new hash and answers 409.
+- **Each reset is logged** with the user's id.
+
+**Rate limits** come from `@nestjs/throttler`, in memory and per process, and only
+the auth controller and the password change use its guard (`rate-limits.ts`).
+Each route has its own budget: per client address, 10 requests a minute for
+sign-up, sign-in and dev sign-in and 30 for refresh and sign-out; per account, 5
+password changes, so a copied access token gains nothing from many addresses. Behind a reverse proxy, set `TRUST_PROXY`, or every client looks
+like the proxy and all share one budget. Unset, `X-Forwarded-For` is ignored, so
+it cannot be spoofed to get a fresh budget.
+
+**Development sign-in.** With `DEV_AUTH=true`, `POST /auth/dev-sign-in` gives any
+email a normal session, creating the account on first use, and the older
+`x-dev-user-email` header is still trusted while the frontend moves to real
+sign-in. A bearer token always wins over the header. Configuration refuses to
+boot with `DEV_AUTH=true` under `NODE_ENV=production`.
 
 **Household scope.** Every route with `:householdId` goes through
 `HouseholdAccessGuard`, which resolves the caller's membership (404, not 403,
@@ -217,8 +312,11 @@ are applied in `PantryIoAdapter`, registered via `app.useWebSocketAdapter()`.
 The `@WebSocketGateway()` decorator sets only the namespace, because decorator
 options are evaluated at import time — before `ConfigModule` has loaded `.env`.
 
-Browsers cannot set headers on a WebSocket, so the handshake carries identity in
-`auth.devUserEmail`; the header is accepted too, for non-browser clients.
+Browsers cannot set headers on a WebSocket, so the handshake carries the access
+token in `auth.token` (`ACCESS_TOKEN_HANDSHAKE_KEY`); `Authorization: Bearer` is
+accepted too, for non-browser clients. A refused handshake reaches the client as
+`connect_error`, with the 401 body in `data`: refresh the token and connect again.
+`auth.devUserEmail` still works with `DEV_AUTH=true`.
 
 ## Express 5
 
@@ -235,7 +333,32 @@ else goes through `ConfigService`. It throws at boot on dangerous or invalid
 settings rather than failing later. `ConfigModule` loads `.env.local` ahead of
 `.env`. See `.env.example` for the supported variables.
 
+`JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` must each be at least 32 bytes,
+must differ, and are required in production. Unset in development, the process
+generates its own, which lasts until it restarts: a generated access secret only
+makes clients refresh, but a generated refresh secret ends every session, so set
+that one wherever restarts are frequent. `TRUST_PROXY` is passed to Express's
+`trust proxy` as written: `true`, a hop count, or addresses such as `loopback`.
+
 On boot, `DatabaseModule` seeds `units` and `categories` **only into an empty
 table** — seeding every time would resurrect rows an admin deleted. Migration
 `0002_categories` inserts the categories itself; the boot seed covers `db:push`.
 That first query doubles as the connectivity check.
+
+## Background jobs: planned
+
+Nothing runs in the background yet. When something needs to, use **pg-boss**: a
+job queue that lives in PostgreSQL, so it adds no Redis or other service.
+
+- **It belongs in this package**, never in `@pantry-pal/db`, which may depend on
+  `drizzle-orm` and `pg` only.
+- **pg-boss 12 is ESM-only.** It reaches this CommonJS build through
+  `require(esm)`, like NestJS 12, and needs Node 22.12 and PostgreSQL 13 or newer.
+  Check the minimum release age in `pnpm-workspace.yaml` when adding it.
+- **Enqueue inside the transaction that calls for the job.** pg-boss can create
+  jobs in an existing transaction and has a Drizzle adapter; given the active
+  transaction, a rolled-back write leaves no job behind. That is the promise
+  `ChangeFeed` keeps with `runOnCommit`.
+- **First job: purge `refresh_tokens`.** Every sign-in adds a row and nothing
+  deletes expired or revoked ones. A daily cron schedule is enough.
+- **Later:** expiry reminders, deferred in `packages/db/CLAUDE.md`.

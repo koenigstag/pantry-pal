@@ -36,6 +36,23 @@ export interface CurrentUser {
   locale: string;
 }
 
+/**
+ * What sign-up, sign-in and refresh answer with.
+ *
+ * The access token is a short-lived JWT, sent as `Authorization: Bearer` and in
+ * the socket handshake. The refresh token is a JWT too, signed with a different
+ * secret, but clients should treat both as opaque. The refresh token is single-use:
+ * each refresh replaces it, and presenting a replaced one ends the session.
+ */
+export interface AuthSession {
+  user: CurrentUser;
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  refreshToken: string;
+  /** Pushed out by every refresh, so a session in use does not expire. */
+  refreshTokenExpiresAt: string;
+}
+
 /** A row of the `units` lookup table. */
 export interface Unit {
   /** Unambiguous by design: `fl_oz_us` and `fl_oz_uk` differ by 4%. */

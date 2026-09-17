@@ -8,8 +8,8 @@ workspace-wide guidance.
 ## Status: implemented
 
 Eleven tables, the transaction layer, seed data, and repositories for users,
-households, members, locations, items, item events, units, categories and app
-settings.
+refresh tokens, households, members, locations, items, item events, units,
+categories and app settings.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -96,6 +96,13 @@ These are deliberate. Changing any of them affects the whole workspace.
 
 - **Tenancy** via `households` + `household_members` from day one — not a
   `user_id` column. Retrofitting tenancy later is a rewrite.
+- **`refresh_tokens` holds one row per signed-in session**, rotated in place: a
+  refresh replaces `token_hash` and pushes `expires_at` out, so the row id is the
+  session id for its whole life. The refresh token is a JWT whose `jti` changes at
+  every refresh, and `token_hash` is that `jti`'s hash, never the token. Signing
+  out sets `revoked_at`. Nothing deletes rows yet: the backend plans a pg-boss job
+  to purge expired and revoked ones. `users.password_hash` is null for accounts
+  made by the development sign-in, which therefore cannot sign in with a password.
 - **Tenancy is enforced by foreign keys, not trusted to callers.** `items`
   references `locations(household_id, id)` with a composite key, so an item
   cannot be filed under another household's location. That needs the otherwise

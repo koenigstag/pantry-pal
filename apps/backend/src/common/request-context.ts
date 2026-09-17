@@ -24,6 +24,8 @@ export interface Membership {
 
 export interface PantryRequest extends Request {
   user?: AuthenticatedUser;
+  /** The session the access token was issued to. Kept off `user`, which `GET /me` returns. */
+  sessionId?: string;
   membership?: Membership;
 }
 
@@ -38,6 +40,12 @@ export const CurrentUser = createParamDecorator(
     }
     return user;
   },
+);
+
+/** The caller's session: `undefined` when the development header identified them. */
+export const CurrentSessionId = createParamDecorator(
+  (_data: unknown, context: ExecutionContext): string | undefined =>
+    context.switchToHttp().getRequest<PantryRequest>().sessionId,
 );
 
 /** The caller's verified membership. Only valid behind `HouseholdAccessGuard`. */

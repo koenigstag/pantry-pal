@@ -19,6 +19,7 @@ import {
   ItemEventsRepository,
   ItemsRepository,
   LocationsRepository,
+  RefreshTokensRepository,
   seedCategories,
   seedUnits,
   UnitsRepository,
@@ -38,6 +39,7 @@ const REPOSITORIES = [
   ItemEventsRepository,
   ItemsRepository,
   LocationsRepository,
+  RefreshTokensRepository,
   UnitsRepository,
   UsersRepository,
 ];

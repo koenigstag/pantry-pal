@@ -8,6 +8,7 @@ import { COUNT_UNIT } from '@pantry-pal/shared';
  * races and for anything they do not check.
  */
 const CONSTRAINT_MESSAGES: Readonly<Record<string, string>> = {
+  users_email_unique: 'An account with this email already exists',
   locations_household_name_idx: 'A location with this name already exists in this household',
   locations_household_fallback_idx: 'A household has only one fallback location',
   locations_fallback_not_deleted: "The household's fallback location cannot be deleted",

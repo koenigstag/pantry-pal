@@ -70,11 +70,12 @@ change and let the gateway broadcast it.
 ### Households scope everything
 
 Every domain row belongs to a household, and every household route checks the
-caller's membership before a service runs. Identity is currently a development
-stand-in — the `x-dev-user-email` header, honoured only with `DEV_AUTH=true` —
-behind a seam real authentication will replace. Global reference data (units,
-categories, default locations) is managed through `/admin`, authenticated by an
-API key.
+caller's membership before a service runs. Callers sign in with email and
+password and authenticate with a short-lived JWT access token, renewed through a
+rotating refresh token. The frontend does not sign in yet: it still sends the
+development `x-dev-user-email` header, honoured only with `DEV_AUTH=true`. Global
+reference data (units, categories, default locations) and password resets go
+through `/admin`, authenticated by an API key.
 Details in `apps/backend/CLAUDE.md`.
 
 ### The frontend applies one optimistic update, and only one
