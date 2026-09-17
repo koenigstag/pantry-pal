@@ -330,7 +330,60 @@ export const es = {
     language: 'Idioma',
     languageHint: 'La página se volverá a cargar en el idioma elegido.',
     languageFailed: 'No se ha podido cambiar el idioma.',
-    devIdentity: 'Inicio de sesión de desarrollo: la identidad viene de VITE_DEV_USER_EMAIL.',
+  },
+
+  auth: {
+    signInTitle: 'Iniciar sesión',
+    signUpTitle: 'Crear una cuenta',
+    email: 'Correo electrónico',
+    password: 'Contraseña',
+    displayName: 'Nombre',
+    displayNameHint: 'Opcional. Lo ven las personas con las que compartes un hogar.',
+    passwordHint: (min: number) =>
+      plural(min, { one: 'Al menos # carácter.', other: 'Al menos # caracteres.' }),
+    signIn: 'Iniciar sesión',
+    signingIn: 'Iniciando sesión…',
+    signUp: 'Crear cuenta',
+    signingUp: 'Creando cuenta…',
+    noAccount: '¿Aún no tienes cuenta?',
+    toSignUp: 'Crea una',
+    haveAccount: '¿Ya tienes cuenta?',
+    toSignIn: 'Inicia sesión',
+    signOut: 'Cerrar sesión',
+    signingOut: 'Cerrando sesión…',
+    invalidCredentials: 'El correo electrónico o la contraseña no son correctos.',
+    emailTaken: 'Ya existe una cuenta con este correo electrónico.',
+    tooManyAttempts: 'Demasiados intentos. Espera un minuto y vuelve a intentarlo.',
+    offline:
+      'No se ha podido conectar con el servidor. Comprueba la conexión y vuelve a intentarlo.',
+    failed: 'Algo ha salido mal. Vuelve a intentarlo.',
+    sessionEnded: 'Tu sesión ha terminado. Vuelve a iniciar sesión para continuar.',
+    fieldErrors: {
+      email: 'Introduce una dirección de correo electrónico.',
+      passwordRequired: 'Introduce tu contraseña.',
+      password: (min: number, max: number) =>
+        `Usa entre ${formatNumber(min)} y ${formatNumber(max)} caracteres.`,
+      displayName: (max: number) =>
+        `El nombre puede tener ${formatNumber(max)} caracteres como máximo.`,
+    },
+    dev: {
+      title: 'Desarrollo',
+      hint: 'Inicia sesión con cualquier correo electrónico, sin contraseña, mientras el backend se ejecute con DEV_AUTH=true.',
+      submit: 'Iniciar sesión sin contraseña',
+      unavailable: 'El backend no se está ejecutando con DEV_AUTH=true.',
+    },
+  },
+
+  changePassword: {
+    title: 'Contraseña',
+    current: 'Contraseña actual',
+    next: 'Nueva contraseña',
+    submit: 'Cambiar contraseña',
+    saving: 'Cambiando…',
+    changed: 'Contraseña cambiada. Se ha cerrado la sesión en tus otros dispositivos.',
+    incorrect: 'La contraseña actual no es correcta.',
+    sameAsCurrent: 'Elige una contraseña distinta de la actual.',
+    currentRequired: 'Introduce tu contraseña actual.',
   },
 
   shopping: {

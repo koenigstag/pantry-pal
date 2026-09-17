@@ -72,8 +72,8 @@ change and let the gateway broadcast it.
 Every domain row belongs to a household, and every household route checks the
 caller's membership before a service runs. Callers sign in with email and
 password and authenticate with a short-lived JWT access token, renewed through a
-rotating refresh token. The frontend does not sign in yet: it still sends the
-development `x-dev-user-email` header, honoured only with `DEV_AUTH=true`. Global
+rotating refresh token; the browser keeps both in localStorage, shared by every
+tab. With `DEV_AUTH=true` a development sign-in needs no password. Global
 reference data (units, categories, default locations) and password resets go
 through `/admin`, authenticated by an API key.
 Details in `apps/backend/CLAUDE.md`.

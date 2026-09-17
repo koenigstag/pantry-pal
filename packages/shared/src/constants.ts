@@ -27,15 +27,6 @@ export const SOCKET_IO_PATH = '/socket.io';
  */
 export const ACCESS_TOKEN_HANDSHAKE_KEY = 'token';
 
-/**
- * Development-only identity. With `DEV_AUTH=true` the backend trusts this header
- * (and the same key in the Socket.IO handshake `auth` payload) to name the
- * caller. It is a stand-in for real authentication and refuses to start in
- * production.
- */
-export const DEV_USER_HEADER = 'x-dev-user-email';
-export const DEV_USER_HANDSHAKE_KEY = 'devUserEmail';
-
 /** Admin routes authenticate with this header rather than a user identity. */
 export const ADMIN_API_KEY_HEADER = 'x-admin-api-key';
 

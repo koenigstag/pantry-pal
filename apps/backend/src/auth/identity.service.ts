@@ -1,8 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersRepository, type UserRow } from '@pantry-pal/db';
-import { ACCESS_TOKEN_HANDSHAKE_KEY, DEV_USER_HEADER, MAX_EMAIL_LENGTH } from '@pantry-pal/shared';
-import { isEmail } from 'class-validator';
+import { ACCESS_TOKEN_HANDSHAKE_KEY } from '@pantry-pal/shared';
 
 import type { AuthenticatedUser } from '../common/request-context';
 import { describeAccessTokenError, isAccessTokenClaims } from './session-tokens';
@@ -16,6 +15,7 @@ export function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
     unitSystem: row.unitSystem,
     timezone: row.timezone,
     locale: row.locale,
+    hasPassword: row.passwordHash !== null,
   };
 }
 
@@ -23,12 +23,9 @@ export function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
 export const displayNameFor = (email: string): string => email.slice(0, email.indexOf('@'));
 
 /**
- * Decides who is calling.
- *
- * Normally from an access token: Passport verifies it for HTTP (`JwtStrategy`),
- * `verifyAccessToken` does for the socket handshake, and both end in
- * `userFromClaims`. With `DEV_AUTH=true` the `x-dev-user-email` header is
- * trusted as well, a stand-in kept until the frontend signs in for real.
+ * Decides who is calling, from an access token: Passport verifies it for HTTP
+ * (`JwtStrategy`), `verifyAccessToken` does for the socket handshake, and both
+ * end in `userFromClaims`.
  */
 @Injectable()
 export class IdentityService {
@@ -72,30 +69,5 @@ export class IdentityService {
       throw new UnauthorizedException('The access token names an account that no longer exists');
     }
     return toAuthenticatedUser(row);
-  }
-
-  /**
-   * The development stand-in: the caller names themselves by email, and a
-   * first-time email becomes a user on the spot.
-   *
-   * @param claim the `x-dev-user-email` header or handshake value, unvalidated.
-   */
-  async authenticateDevClaim(claim: unknown): Promise<AuthenticatedUser> {
-    if (!this.devIdentityEnabled) {
-      throw new UnauthorizedException(`${DEV_USER_HEADER} is accepted only with DEV_AUTH=true`);
-    }
-
-    const email = typeof claim === 'string' ? claim.trim().toLowerCase() : '';
-    if (email.length > MAX_EMAIL_LENGTH || !isEmail(email)) {
-      throw new UnauthorizedException(
-        `Identify yourself with the ${DEV_USER_HEADER} header, set to an email address`,
-      );
-    }
-
-    const user = await this.users.findOrCreateByEmail({
-      email,
-      displayName: displayNameFor(email),
-    });
-    return toAuthenticatedUser(user);
   }
 }

@@ -3,13 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import {
-  API_BASE_PATH,
-  API_PREFIX,
-  API_VERSION,
-  DEV_USER_HEADER,
-  PANTRY_WS_NAMESPACE,
-} from '@pantry-pal/shared';
+import { API_BASE_PATH, API_PREFIX, API_VERSION, PANTRY_WS_NAMESPACE } from '@pantry-pal/shared';
 
 import { AppModule } from './app.module';
 import type { JwtSecretName } from './config/configuration';
@@ -55,7 +49,7 @@ async function bootstrap(): Promise<void> {
   logger.log(`WebSocket ws://localhost:${port}${PANTRY_WS_NAMESPACE}`);
   logger.log(`CORS      ${corsOrigins.join(', ') || '(none configured)'}`);
   logger.log(
-    `Identity  JWT${config.get<boolean>('auth.devIdentity') === true ? `, plus dev sign-in and ${DEV_USER_HEADER}` : ''}`,
+    `Identity  JWT${config.get<boolean>('auth.devIdentity') === true ? ', plus dev sign-in' : ''}`,
   );
   const generatedSecrets = config.get<JwtSecretName[]>('auth.generatedSecrets', []);
   if (generatedSecrets.includes('JWT_ACCESS_SECRET')) {

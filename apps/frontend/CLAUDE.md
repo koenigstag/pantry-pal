@@ -28,11 +28,12 @@ transport, whose upgrade Socket.IO does not check against its `cors` origins.
 
 ```
 src/main.tsx, router.tsx   entry; React Router data router
+src/features/auth/         sign-in and sign-up pages, route gates, the password form
 src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), PageStatus
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/pages.tsx     Shopping and Planner placeholders, Profile
-src/stores/                PantryStore (server state), QuantityUpdates (overlay), NoticeStore
-src/services/              api (REST), socket, identity (development sign-in)
+src/stores/                AuthStore, PantryStore (server state), QuantityUpdates (overlay), NoticeStore
+src/services/              http (fetch), session (tokens), api (REST), socket
 src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, cn
 src/i18n/                  message catalog and Intl formatters
 ```
@@ -127,15 +128,52 @@ for a user with none. The socket delivers events for every household the user
 belongs to, so each handler ignores payloads for any other household. Items
 that stop being active (consumed, discarded) leave the list.
 
-**Identity is a development stand-in.** `services/identity.ts` sends
-`VITE_DEV_USER_EMAIL` (default: the seeded test household's owner) as the
-`x-dev-user-email` header and in the socket handshake `auth`. Real sign-in
-replaces that one module.
-
-`StoreProvider` constructs the root store in a `useState` lazy initialiser
-because `new RootStore()` opens a socket — it must not run on every render.
+`SessionStoreProvider` constructs `SessionStores` in a `useState` lazy
+initialiser because it creates a socket — it must not run on every render.
 StrictMode's double-mount in development causes one connect/disconnect/connect
-cycle and doubled bootstrap requests; the resulting console warning is expected.
+cycle; the resulting console warning is expected. `load()` joins a bootstrap
+already running, so the double mount does not fetch twice, nor create two
+households for a new account.
+
+## Authentication
+
+**Tokens live in localStorage**, under `pantry-pal:session`, so every tab shares
+one session: `services/session.ts` owns them. The access token (15 minutes) goes
+out as `Authorization: Bearer` and in the socket handshake; the refresh token
+(30 days, single-use) buys a new pair at `POST /auth/refresh`.
+
+- **Refreshing is serialised.** The server takes a refresh token spent twice for a
+  stolen one and ends the session, so `refreshAccessToken` runs under a Web Lock
+  and re-reads storage inside it: a tab that waited uses the pair another tab
+  just stored. Within a tab, concurrent callers share one refresh. Signing out
+  takes the same lock.
+- **When to refresh:** `accessToken()` refreshes a token within 30 seconds of
+  expiring before sending it, and `api.ts` refreshes and retries once when a
+  request is refused with 401. A refresh the server refuses clears the session;
+  anything else, such as no network, keeps it.
+- **The socket's `auth` is a function**, so each attempt sends the current token.
+  After a 401 handshake, or when the server closes the socket because the
+  session ended, `socket.ts` refreshes and connects again. If the session is
+  over, the refresh signs the tab out instead.
+- **Every tab follows the session.** `AuthStore` subscribes to it, `storage`
+  events included, so signing in or out anywhere changes every tab.
+  `endedElsewhere` distinguishes a session that ended (expired, or signed out in
+  another tab) from this tab's own sign-out, and the sign-in page says so.
+- **Stores are per session.** `RootStore` (notices, auth) lives as long as the
+  page; `SessionStores` (pantry, quantities) are created by
+  `SessionStoreProvider` inside `RequireSession` and disposed when it unmounts,
+  so signing out drops the pantry and closes its socket.
+- **Routes:** `RequireSession` sends a signed-out visitor to `/sign-in`,
+  remembering the page in router state (`from`); `GuestOnly` sends a signed-in
+  visitor on to it. The sign-in pages validate with the shared DTOs and show
+  catalog messages (`authFieldErrors`).
+- **Development builds** show a sign-in without a password under the form,
+  starting from `VITE_DEV_USER_EMAIL` (default: the seeded test household's
+  owner). It works only while the backend runs with `DEV_AUTH=true`.
+- **The Profile page** has Sign out, and the password form when the account has
+  a password (`CurrentUser.hasPassword`). Changing it signs out the account's
+  other devices; a wrong current password is a 403, which the form shows,
+  never a 401, which would look like an expired token.
 
 ### The locations editor
 

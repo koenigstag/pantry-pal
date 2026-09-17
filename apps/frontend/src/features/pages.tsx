@@ -1,13 +1,15 @@
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@pantry-pal/shared';
-import { CalendarDays, ShoppingCart } from 'lucide-react';
+import { CalendarDays, LogOut, ShoppingCart } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useId, useState, type ReactElement } from 'react';
 
 import { LANGUAGE_NAMES, LOCALE } from '../i18n/locale';
 import { messages } from '../i18n/messages';
-import { usePantryStore } from '../stores/StoreContext';
+import { useAuthStore, usePantryStore } from '../stores/StoreContext';
 import { cn } from '../ui/cn';
 import { FIELD_CONTROL } from '../ui/Field';
+import { SECONDARY_BUTTON } from './auth/AuthPage';
+import { ChangePasswordForm } from './auth/ChangePasswordForm';
 import { ComingSoonPage } from './shell/ComingSoonPage';
 import { PageStatus } from './shell/PageStatus';
 
@@ -53,10 +55,35 @@ export const ProfilePage = observer(function ProfilePage(): ReactElement {
             )}
           </dl>
           <LanguageField />
-          <p className="mt-4 text-sm text-ink-muted">{messages.profile.devIdentity}</p>
+          {user.hasPassword && <ChangePasswordForm />}
         </>
       )}
+
+      <SignOutButton />
     </div>
+  );
+});
+
+/** Signing out drops the pantry, and the app returns to the sign-in page. */
+const SignOutButton = observer(function SignOutButton(): ReactElement {
+  const auth = useAuthStore();
+  const [isSigningOut, setSigningOut] = useState(false);
+
+  function signOut(): void {
+    setSigningOut(true);
+    void auth.signOut();
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={isSigningOut}
+      onClick={signOut}
+      className={cn(SECONDARY_BUTTON, 'mt-6 mb-6')}
+    >
+      <LogOut aria-hidden="true" className="size-4" />
+      {isSigningOut ? messages.auth.signingOut : messages.auth.signOut}
+    </button>
   );
 });
 

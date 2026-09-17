@@ -18,10 +18,7 @@ export interface AppConfig {
     poolMax: number;
   };
   auth: {
-    /**
-     * Development sign-in: `POST /auth/dev-sign-in` for any email, and the
-     * `x-dev-user-email` header as the caller's identity. Never in production.
-     */
+    /** Development sign-in: `POST /auth/dev-sign-in`, for any email. Never in production. */
     devIdentity: boolean;
     /** `JWT_ACCESS_SECRET`: signs and verifies access tokens. */
     accessTokenSecret: string;

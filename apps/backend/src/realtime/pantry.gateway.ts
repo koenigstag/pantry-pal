@@ -10,8 +10,6 @@ import {
 } from '@nestjs/websockets';
 import {
   ACCESS_TOKEN_HANDSHAKE_KEY,
-  DEV_USER_HANDSHAKE_KEY,
-  DEV_USER_HEADER,
   PANTRY_COMMAND,
   PANTRY_EVENT,
   PANTRY_WS_NAMESPACE,
@@ -38,8 +36,8 @@ import { WsExceptionFilter } from './ws-exception.filter';
 
 interface SocketData {
   user: AuthenticatedUser;
-  /** The session whose access token opened the socket; none for the development header. */
-  sessionId: string | undefined;
+  /** The session whose access token opened the socket. */
+  sessionId: string;
 }
 
 type PantryNamespace = Namespace<
@@ -132,9 +130,7 @@ export class PantryGateway
   async handleConnection(client: PantrySocket): Promise<void> {
     try {
       const { user, sessionId } = client.data;
-      await client.join(
-        sessionId === undefined ? userRoom(user.id) : [userRoom(user.id), sessionRoom(sessionId)],
-      );
+      await client.join([userRoom(user.id), sessionRoom(sessionId)]);
 
       const households = await this.households.listForUser(user.id);
       if (households.length > 0) {
@@ -205,19 +201,10 @@ export class PantryGateway
 
   private async authenticate(socket: PantrySocket): Promise<void> {
     // Browsers cannot set headers on a WebSocket, hence the handshake `auth`
-    // payload; the headers are accepted for non-browser clients.
+    // payload; the header is accepted for non-browser clients.
     const auth = socket.handshake.auth as Record<string, unknown>;
-    const { headers } = socket.handshake;
-    const token = auth[ACCESS_TOKEN_HANDSHAKE_KEY] ?? bearerToken(headers.authorization);
-
-    // The development stand-in, while the frontend still names its user by
-    // header. A token always wins over it.
-    const devClaim = auth[DEV_USER_HANDSHAKE_KEY] ?? headers[DEV_USER_HEADER];
-    if (token === undefined && devClaim !== undefined && this.identity.devIdentityEnabled) {
-      socket.data.user = await this.identity.authenticateDevClaim(devClaim);
-      socket.data.sessionId = undefined;
-      return;
-    }
+    const token =
+      auth[ACCESS_TOKEN_HANDSHAKE_KEY] ?? bearerToken(socket.handshake.headers.authorization);
 
     const { user, sessionId } = await this.identity.verifyAccessToken(token);
     socket.data.user = user;

@@ -173,15 +173,16 @@ sockets.
 the auth controller and the password change use its guard (`rate-limits.ts`).
 Each route has its own budget: per client address, 10 requests a minute for
 sign-up, sign-in and dev sign-in and 30 for refresh and sign-out; per account, 5
-password changes, so a copied access token gains nothing from many addresses. Behind a reverse proxy, set `TRUST_PROXY`, or every client looks
-like the proxy and all share one budget. Unset, `X-Forwarded-For` is ignored, so
-it cannot be spoofed to get a fresh budget.
+password changes, so a copied access token gains nothing from many addresses.
+Behind a reverse proxy, set `TRUST_PROXY`, or every client looks like the proxy
+and all share one budget. Unset, `X-Forwarded-For` is ignored, so it cannot be
+spoofed to get a fresh budget.
 
 **Development sign-in.** With `DEV_AUTH=true`, `POST /auth/dev-sign-in` gives any
-email a normal session, creating the account on first use, and the older
-`x-dev-user-email` header is still trusted while the frontend moves to real
-sign-in. A bearer token always wins over the header. Configuration refuses to
-boot with `DEV_AUTH=true` under `NODE_ENV=production`.
+email a normal session, creating the account on first use; without it, the route
+answers with a 404. It is the only way into the seeded accounts, which have no
+password until an administrator sets one. Configuration refuses to boot with
+`DEV_AUTH=true` under `NODE_ENV=production`.
 
 **Household scope.** Every route with `:householdId` goes through
 `HouseholdAccessGuard`, which resolves the caller's membership (404, not 403,
@@ -316,7 +317,6 @@ Browsers cannot set headers on a WebSocket, so the handshake carries the access
 token in `auth.token` (`ACCESS_TOKEN_HANDSHAKE_KEY`); `Authorization: Bearer` is
 accepted too, for non-browser clients. A refused handshake reaches the client as
 `connect_error`, with the 401 body in `data`: refresh the token and connect again.
-`auth.devUserEmail` still works with `DEV_AUTH=true`.
 
 ## Express 5
 

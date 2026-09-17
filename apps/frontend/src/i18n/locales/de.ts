@@ -321,7 +321,59 @@ export const de = {
     language: 'Sprache',
     languageHint: 'Die Seite wird in der gewählten Sprache neu geladen.',
     languageFailed: 'Die Sprache konnte nicht geändert werden.',
-    devIdentity: 'Entwicklungsanmeldung: Die Identität kommt aus VITE_DEV_USER_EMAIL.',
+  },
+
+  auth: {
+    signInTitle: 'Anmelden',
+    signUpTitle: 'Konto erstellen',
+    email: 'E-Mail',
+    password: 'Passwort',
+    displayName: 'Name',
+    displayNameHint: 'Optional. Sichtbar für alle, mit denen ein Haushalt geteilt wird.',
+    passwordHint: (min: number) =>
+      plural(min, { one: 'Mindestens # Zeichen.', other: 'Mindestens # Zeichen.' }),
+    signIn: 'Anmelden',
+    signingIn: 'Anmeldung läuft…',
+    signUp: 'Konto erstellen',
+    signingUp: 'Konto wird erstellt…',
+    noAccount: 'Noch kein Konto?',
+    toSignUp: 'Konto erstellen',
+    haveAccount: 'Schon ein Konto?',
+    toSignIn: 'Anmelden',
+    signOut: 'Abmelden',
+    signingOut: 'Abmeldung läuft…',
+    invalidCredentials: 'E-Mail oder Passwort ist falsch.',
+    emailTaken: 'Zu dieser E-Mail-Adresse gibt es bereits ein Konto.',
+    tooManyAttempts: 'Zu viele Versuche. Eine Minute warten und dann erneut versuchen.',
+    offline: 'Der Server ist nicht erreichbar. Verbindung prüfen und dann erneut versuchen.',
+    failed: 'Etwas ist schiefgelaufen. Erneut versuchen.',
+    sessionEnded: 'Die Sitzung ist beendet. Zum Fortfahren erneut anmelden.',
+    fieldErrors: {
+      email: 'E-Mail-Adresse eingeben.',
+      passwordRequired: 'Passwort eingeben.',
+      password: (min: number, max: number) =>
+        `${formatNumber(min)} bis ${formatNumber(max)} Zeichen verwenden.`,
+      displayName: (max: number) =>
+        `Der Name darf höchstens ${formatNumber(max)} Zeichen lang sein.`,
+    },
+    dev: {
+      title: 'Entwicklung',
+      hint: 'Meldet eine beliebige E-Mail-Adresse ohne Passwort an, solange das Backend mit DEV_AUTH=true läuft.',
+      submit: 'Ohne Passwort anmelden',
+      unavailable: 'Das Backend läuft nicht mit DEV_AUTH=true.',
+    },
+  },
+
+  changePassword: {
+    title: 'Passwort',
+    current: 'Aktuelles Passwort',
+    next: 'Neues Passwort',
+    submit: 'Passwort ändern',
+    saving: 'Wird geändert…',
+    changed: 'Passwort geändert. Alle anderen Geräte wurden abgemeldet.',
+    incorrect: 'Das aktuelle Passwort ist falsch.',
+    sameAsCurrent: 'Ein anderes Passwort als das aktuelle wählen.',
+    currentRequired: 'Aktuelles Passwort eingeben.',
   },
 
   shopping: {

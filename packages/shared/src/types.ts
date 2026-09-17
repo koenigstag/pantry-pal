@@ -34,6 +34,12 @@ export interface CurrentUser {
   timezone: string;
   /** A BCP 47 tag, such as `en-GB`: the UI language when it is one of `SUPPORTED_LOCALES`. */
   locale: string;
+  /**
+   * Whether the account signs in with a password. Accounts made by the
+   * development sign-in have none until an administrator sets one, so they have
+   * no password to change either.
+   */
+  hasPassword: boolean;
 }
 
 /**

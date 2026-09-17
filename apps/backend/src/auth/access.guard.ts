@@ -9,11 +9,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
-import { ADMIN_API_KEY_HEADER, DEV_USER_HEADER } from '@pantry-pal/shared';
+import { ADMIN_API_KEY_HEADER } from '@pantry-pal/shared';
 
 import type { PantryRequest } from '../common/request-context';
 import { ACCESS, ACCESS_METADATA, type Access } from './access.decorators';
-import { IdentityService } from './identity.service';
 import { JWT_STRATEGY } from './jwt.strategy';
 import { describeAccessTokenError } from './session-tokens';
 
@@ -27,7 +26,6 @@ import { describeAccessTokenError } from './session-tokens';
 export class AccessGuard extends AuthGuard(JWT_STRATEGY) {
   constructor(
     private readonly reflector: Reflector,
-    private readonly identity: IdentityService,
     private readonly config: ConfigService,
   ) {
     super();
@@ -52,21 +50,8 @@ export class AccessGuard extends AuthGuard(JWT_STRATEGY) {
         this.assertAdminKey(request.headers[ADMIN_API_KEY_HEADER]);
         return true;
 
-      case ACCESS.User: {
-        // The development stand-in, while the frontend still names its user by
-        // header. A bearer token always wins over it.
-        const devClaim = request.headers[DEV_USER_HEADER];
-        if (
-          devClaim !== undefined &&
-          request.headers.authorization === undefined &&
-          this.identity.devIdentityEnabled
-        ) {
-          request.user = await this.identity.authenticateDevClaim(devClaim);
-          return true;
-        }
-
+      case ACCESS.User:
         return (await super.canActivate(context)) as boolean;
-      }
     }
   }
 

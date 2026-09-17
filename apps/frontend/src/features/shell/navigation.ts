@@ -9,6 +9,8 @@ import {
 import type { messages } from '../../i18n/messages';
 
 export const ROUTES = {
+  signIn: '/sign-in',
+  signUp: '/sign-up',
   storage: '/storage',
   shopping: '/shopping',
   planner: '/planner',

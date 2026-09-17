@@ -1,5 +1,8 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 
+import { GuestOnly, RequireSession } from './features/auth/sessionRoutes';
+import { SignInPage } from './features/auth/SignInPage';
+import { SignUpPage } from './features/auth/SignUpPage';
 import { PlannerPage, ProfilePage, ShoppingPage } from './features/pages';
 import { AppShell } from './features/shell/AppShell';
 import { ROUTES } from './features/shell/navigation';
@@ -11,6 +14,10 @@ import { StoragePage } from './features/storage/StoragePage';
  * require. Data comes from the MobX stores rather than route loaders, so the
  * routes carry components only.
  *
+ * Two branches: the sign-in pages, which a signed-in visitor skips (`GuestOnly`),
+ * and everything else, which needs a session (`RequireSession`) and owns the
+ * pantry's stores while it is mounted.
+ *
  * `/storage` alone redirects to the first location; an item's details are a
  * child of its location, rendered over the list.
  *
@@ -20,20 +27,32 @@ import { StoragePage } from './features/storage/StoragePage';
 export const router = createBrowserRouter(
   [
     {
-      path: '/',
-      Component: AppShell,
+      Component: GuestOnly,
       children: [
-        { index: true, element: <Navigate replace to={ROUTES.storage} /> },
-        { path: ROUTES.storage, Component: StoragePage },
+        { path: ROUTES.signIn, Component: SignInPage },
+        { path: ROUTES.signUp, Component: SignUpPage },
+      ],
+    },
+    {
+      path: '/',
+      Component: RequireSession,
+      children: [
         {
-          path: `${ROUTES.storage}/:locationId`,
-          Component: StoragePage,
-          children: [{ path: 'items/:itemId', Component: ItemDetailsDialog }],
+          Component: AppShell,
+          children: [
+            { index: true, element: <Navigate replace to={ROUTES.storage} /> },
+            { path: ROUTES.storage, Component: StoragePage },
+            {
+              path: `${ROUTES.storage}/:locationId`,
+              Component: StoragePage,
+              children: [{ path: 'items/:itemId', Component: ItemDetailsDialog }],
+            },
+            { path: ROUTES.shopping, Component: ShoppingPage },
+            { path: ROUTES.planner, Component: PlannerPage },
+            { path: ROUTES.profile, Component: ProfilePage },
+            { path: '*', element: <Navigate replace to={ROUTES.storage} /> },
+          ],
         },
-        { path: ROUTES.shopping, Component: ShoppingPage },
-        { path: ROUTES.planner, Component: PlannerPage },
-        { path: ROUTES.profile, Component: ProfilePage },
-        { path: '*', element: <Navigate replace to={ROUTES.storage} /> },
       ],
     },
   ],
