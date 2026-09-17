@@ -35,6 +35,12 @@ export class AuthStore {
   isSignedIn: boolean;
   /** The session ended without this tab signing out: it expired, or another tab signed out. */
   endedElsewhere = false;
+  /**
+   * This tab just created the account, so the onboarding questions come before
+   * the page the visitor was headed for. Other tabs, which only see a session
+   * appear, go straight there.
+   */
+  isOnboarding = false;
 
   private signingOut = false;
 
@@ -61,7 +67,12 @@ export class AuthStore {
   }
 
   signUp(dto: SignUpDto): Promise<string | null> {
-    return this.begin(() => this.api.signUp(dto), { 409: messages.auth.emailTaken });
+    return this.begin(() => this.api.signUp(dto), { 409: messages.auth.emailTaken }, true);
+  }
+
+  /** Answered or skipped: the onboarding step is done. */
+  finishOnboarding(): void {
+    this.isOnboarding = false;
   }
 
   devSignIn(dto: DevSignInDto): Promise<string | null> {
@@ -80,19 +91,27 @@ export class AuthStore {
   private async begin(
     call: () => Promise<AuthSession>,
     refusals: RefusalMessages,
+    isNewAccount = false,
   ): Promise<string | null> {
     try {
-      saveSession(await call());
+      this.startSession(await call(), isNewAccount);
       return null;
     } catch (error) {
       return refusalMessage(error, refusals);
     }
   }
 
+  /** One action, so the routes see the session and the onboarding flag together. */
+  private startSession(session: AuthSession, isNewAccount: boolean): void {
+    this.isOnboarding = isNewAccount;
+    saveSession(session);
+  }
+
   private applySession(session: StoredSession | null): void {
     const signedIn = session !== null;
     if (this.isSignedIn && !signedIn) this.endedElsewhere = !this.signingOut;
     if (signedIn) this.endedElsewhere = false;
+    else this.isOnboarding = false;
     this.isSignedIn = signedIn;
   }
 }

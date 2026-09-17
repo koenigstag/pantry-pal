@@ -188,6 +188,8 @@ export const MAX_PERIOD_AFTER_OPENING_DAYS = 3650;
 export const MAX_HOUSEHOLD_NAME_LENGTH = 80;
 export const MAX_EMAIL_LENGTH = 254;
 export const MAX_DISPLAY_NAME_LENGTH = 80;
+/** The earliest date of birth accepted, `YYYY-MM-DD`: anything older is a typo. */
+export const MIN_BIRTH_DATE = '1900-01-01';
 /** The maximum only turns away absurd input: long passphrases are welcome. */
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 128;

@@ -7,7 +7,9 @@ export type CreateUserInput = Pick<NewUserRow, 'email' | 'displayName'> &
   Partial<Pick<NewUserRow, 'passwordHash' | 'unitSystem' | 'timezone' | 'locale'>>;
 
 /** The settings a user changes for themselves. An omitted field keeps its value. */
-export type UpdateUserInput = Partial<Pick<NewUserRow, 'locale'>>;
+export type UpdateUserInput = Partial<
+  Pick<NewUserRow, 'displayName' | 'unitSystem' | 'birthDate' | 'locale'>
+>;
 
 export class UsersRepository {
   constructor(private readonly db: Database) {}

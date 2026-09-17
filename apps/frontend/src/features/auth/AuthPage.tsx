@@ -1,6 +1,7 @@
 import { useId, type ReactElement, type ReactNode } from 'react';
 
 import { messages } from '../../i18n/messages';
+import { cn } from '../../ui/cn';
 import { LanguagePicker } from './LanguagePicker';
 
 export const PRIMARY_BUTTON =
@@ -11,18 +12,38 @@ export const SECONDARY_BUTTON =
 
 export const TEXT_LINK = 'focus-ring rounded font-medium text-accent hover:underline';
 
+/** Where a page stands in a journey of several pages or steps. */
+export interface JourneyStep {
+  current: number;
+  total: number;
+}
+
 interface AuthPageProps {
   title: string;
   children: ReactNode;
   /** Under the card: the way to the other page, sign-in or sign-up. */
-  footer: ReactNode;
+  footer?: ReactNode;
+  /** Shown above the title, as a bar and in words. */
+  step?: JourneyStep;
+  /**
+   * The signed-out pages offer a language for this browser. A signed-in page
+   * leaves it out: the account's language applies there.
+   */
+  languagePicker?: boolean;
 }
 
 /**
- * The frame of a signed-out page: the app's name, one card, and a line under it.
- * The language picker stands apart, at the foot of the page, out of the form's way.
+ * The frame of the sign-in and sign-up journey: the app's name, one card, and a
+ * line under it. The language picker stands apart, at the foot of the page, out
+ * of the form's way.
  */
-export function AuthPage({ title, children, footer }: AuthPageProps): ReactElement {
+export function AuthPage({
+  title,
+  children,
+  footer,
+  step,
+  languagePicker = true,
+}: AuthPageProps): ReactElement {
   const titleId = useId();
 
   return (
@@ -33,16 +54,42 @@ export function AuthPage({ title, children, footer }: AuthPageProps): ReactEleme
           aria-labelledby={titleId}
           className="rounded-xl border border-line bg-surface px-5 py-6"
         >
+          {step !== undefined && <StepBar step={step} />}
           <h1 id={titleId} className="text-xl font-semibold tracking-tight">
             {title}
           </h1>
           {children}
         </section>
-        <p className="mt-6 text-center text-sm text-ink-muted">{footer}</p>
+        {footer !== undefined && (
+          <p className="mt-6 text-center text-sm text-ink-muted">{footer}</p>
+        )}
       </main>
-      <footer className="pb-6">
-        <LanguagePicker />
-      </footer>
+      {languagePicker && (
+        <footer className="pb-6">
+          <LanguagePicker />
+        </footer>
+      )}
+    </div>
+  );
+}
+
+function StepBar({ step }: { step: JourneyStep }): ReactElement {
+  return (
+    <div className="mb-3 flex items-center gap-3">
+      <div aria-hidden="true" className="flex flex-1 gap-1">
+        {Array.from({ length: step.total }, (_, index) => (
+          <span
+            key={index}
+            className={cn(
+              'h-1 flex-1 rounded-full',
+              index < step.current ? 'bg-accent' : 'bg-line',
+            )}
+          />
+        ))}
+      </div>
+      <p className="shrink-0 text-xs text-ink-muted">
+        {messages.auth.step(step.current, step.total)}
+      </p>
     </div>
   );
 }

@@ -336,7 +336,6 @@ export const uk = {
 
   profile: {
     title: 'Профіль',
-    name: 'Ім’я',
     email: 'Ел. пошта',
     household: 'Домогосподарство',
     language: 'Мова',
@@ -344,13 +343,36 @@ export const uk = {
     languageFailed: 'Не вдалося змінити мову.',
   },
 
+  details: {
+    title: 'Дані',
+    name: 'Ім’я',
+    nameHint: 'Його бачать люди, з якими ви ділите домогосподарство.',
+    birthDate: 'Дата народження',
+    birthDateHint: 'Її бачите лише ви.',
+    clearBirthDate: 'Очистити дату народження',
+    units: 'Одиниці виміру',
+    unitSystems: {
+      metric: { name: 'Метрична', examples: 'г, кг, мл, л' },
+      imperial: { name: 'Імперська', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Назва домогосподарства',
+    save: 'Зберегти зміни',
+    saving: 'Збереження…',
+    saved: 'Дані збережено.',
+    fieldErrors: {
+      displayName: (max: number) => `Введіть ім’я до ${formatNumber(max)} символів.`,
+      birthDate: (fromYear: string) => `Введіть дату від ${fromYear} року до сьогодні.`,
+      householdName: (max: number) => `Введіть назву до ${formatNumber(max)} символів.`,
+    },
+  },
+
   auth: {
     signInTitle: 'Вхід',
     signUpTitle: 'Створення облікового запису',
+    step: (current: number, total: number) =>
+      `Крок ${formatNumber(current)} з ${formatNumber(total)}`,
     email: 'Ел. пошта',
     password: 'Пароль',
-    displayName: 'Ім’я',
-    displayNameHint: 'Необов’язково. Його бачать люди, з якими ви ділите домогосподарство.',
     passwordHint: (min: number) =>
       plural(min, {
         one: 'Щонайменше # символ.',
@@ -361,6 +383,7 @@ export const uk = {
     continueWithGoogle: 'Продовжити з Google',
     continueWithEmail: 'Продовжити з ел. поштою',
     otherMethods: 'Інші способи входу',
+    otherSignUpMethods: 'Інші способи реєстрації',
     continue: 'Продовжити',
     changeEmail: 'Змінити ел. пошту',
     signIn: 'Увійти',
@@ -384,13 +407,23 @@ export const uk = {
       passwordRequired: 'Введіть пароль.',
       password: (min: number, max: number) =>
         `Пароль має містити від ${formatNumber(min)} до ${formatNumber(max)} символів.`,
-      displayName: (max: number) => `Ім’я може містити до ${formatNumber(max)} символів.`,
     },
     dev: {
       hint: 'Вхід під будь-якою ел. поштою без пароля, поки бекенд працює з DEV_AUTH=true.',
       submit: 'Увійти без пароля',
       unavailable: 'Бекенд працює без DEV_AUTH=true.',
     },
+  },
+
+  welcome: {
+    title: (app: string) => `Вітаємо в ${app}`,
+    intro: 'Кілька необов’язкових запитань. Відповіді можна змінити пізніше в профілі.',
+    storageSpaces: 'Місця зберігання',
+    storageSpacesHint: (fallback: string) =>
+      `Зніміть позначки з тих, що не потрібні. «${fallback}» залишається завжди: туди переходять речі з вилученого місця.`,
+    finish: 'Готово',
+    finishing: 'Збереження…',
+    skip: 'Пропустити',
   },
 
   changePassword: {

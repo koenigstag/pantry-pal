@@ -315,7 +315,6 @@ export const de = {
 
   profile: {
     title: 'Profil',
-    name: 'Name',
     email: 'E-Mail',
     household: 'Haushalt',
     language: 'Sprache',
@@ -323,18 +322,44 @@ export const de = {
     languageFailed: 'Die Sprache konnte nicht geändert werden.',
   },
 
+  details: {
+    title: 'Angaben',
+    name: 'Name',
+    nameHint: 'Sichtbar für alle, mit denen ein Haushalt geteilt wird.',
+    birthDate: 'Geburtsdatum',
+    birthDateHint: 'Für niemanden sonst sichtbar.',
+    clearBirthDate: 'Geburtsdatum löschen',
+    units: 'Einheiten',
+    unitSystems: {
+      metric: { name: 'Metrisch', examples: 'g, kg, ml, l' },
+      imperial: { name: 'Imperial', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Name des Haushalts',
+    save: 'Änderungen speichern',
+    saving: 'Wird gespeichert…',
+    saved: 'Angaben gespeichert.',
+    fieldErrors: {
+      displayName: (max: number) =>
+        `Einen Namen mit höchstens ${formatNumber(max)} Zeichen eingeben.`,
+      birthDate: (fromYear: string) => `Ein Datum zwischen ${fromYear} und heute eingeben.`,
+      householdName: (max: number) =>
+        `Einen Namen mit höchstens ${formatNumber(max)} Zeichen eingeben.`,
+    },
+  },
+
   auth: {
     signInTitle: 'Anmelden',
     signUpTitle: 'Konto erstellen',
+    step: (current: number, total: number) =>
+      `Schritt ${formatNumber(current)} von ${formatNumber(total)}`,
     email: 'E-Mail',
     password: 'Passwort',
-    displayName: 'Name',
-    displayNameHint: 'Optional. Sichtbar für alle, mit denen ein Haushalt geteilt wird.',
     passwordHint: (min: number) =>
       plural(min, { one: 'Mindestens # Zeichen.', other: 'Mindestens # Zeichen.' }),
     continueWithGoogle: 'Weiter mit Google',
     continueWithEmail: 'Weiter mit E-Mail',
     otherMethods: 'Andere Anmeldemöglichkeiten',
+    otherSignUpMethods: 'Andere Registrierungsmöglichkeiten',
     continue: 'Weiter',
     changeEmail: 'E-Mail ändern',
     signIn: 'Anmelden',
@@ -358,14 +383,23 @@ export const de = {
       passwordRequired: 'Passwort eingeben.',
       password: (min: number, max: number) =>
         `${formatNumber(min)} bis ${formatNumber(max)} Zeichen verwenden.`,
-      displayName: (max: number) =>
-        `Der Name darf höchstens ${formatNumber(max)} Zeichen lang sein.`,
     },
     dev: {
       hint: 'Meldet eine beliebige E-Mail-Adresse ohne Passwort an, solange das Backend mit DEV_AUTH=true läuft.',
       submit: 'Ohne Passwort anmelden',
       unavailable: 'Das Backend läuft nicht mit DEV_AUTH=true.',
     },
+  },
+
+  welcome: {
+    title: (app: string) => `Willkommen bei ${app}`,
+    intro: 'Ein paar optionale Fragen. Die Antworten lassen sich später im Profil ändern.',
+    storageSpaces: 'Lagerorte',
+    storageSpacesHint: (fallback: string) =>
+      `Nicht benötigte abwählen. „${fallback}“ bleibt immer: Dorthin kommt alles aus einem entfernten Lagerort.`,
+    finish: 'Fertig',
+    finishing: 'Wird gespeichert…',
+    skip: 'Überspringen',
   },
 
   changePassword: {

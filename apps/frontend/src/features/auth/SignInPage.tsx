@@ -1,5 +1,4 @@
 import { SignInDto, validateDto } from '@pantry-pal/shared/dto';
-import { Mail } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useLocation } from 'react-router';
@@ -12,7 +11,7 @@ import { Field, FIELD_CONTROL } from '../../ui/Field';
 import { ROUTES } from '../shell/navigation';
 import { authFieldErrors } from './authFieldErrors';
 import { AuthPage, PRIMARY_BUTTON, SECONDARY_BUTTON, TEXT_LINK } from './AuthPage';
-import { GoogleMark } from './GoogleMark';
+import { ProviderChoice } from './ProviderChoice';
 
 /** Choose how to sign in, then give the email, then the password. */
 type Step = 'method' | 'email' | 'password';
@@ -58,7 +57,6 @@ function emailError(email: string): string | undefined {
 export const SignInPage = observer(function SignInPage(): ReactElement {
   const auth = useAuthStore();
   const location = useLocation();
-  const googleHintId = useId();
   const devHintId = useId();
   const emailMethodRef = useRef<HTMLButtonElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
@@ -173,35 +171,7 @@ export const SignInPage = observer(function SignInPage(): ReactElement {
 
       <form noValidate onSubmit={submit} className="relative mt-5 flex flex-col gap-4">
         {step === 'method' && (
-          <>
-            <div className="flex flex-col gap-1.5">
-              {/* Shown so the choice is visible from the start; it works once the backend offers it. */}
-              <button
-                type="button"
-                aria-disabled="true"
-                aria-describedby={googleHintId}
-                className={cn(
-                  SECONDARY_BUTTON,
-                  'w-full aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-transparent',
-                )}
-              >
-                <GoogleMark className="size-4" />
-                {messages.auth.continueWithGoogle}
-              </button>
-              <p id={googleHintId} className="text-center text-xs text-ink-muted">
-                {messages.common.comingSoon}
-              </p>
-            </div>
-            <button
-              ref={emailMethodRef}
-              type="button"
-              onClick={() => goTo('email')}
-              className={cn(PRIMARY_BUTTON, 'inline-flex w-full items-center justify-center gap-2')}
-            >
-              <Mail aria-hidden="true" className="size-4" />
-              {messages.auth.continueWithEmail}
-            </button>
-          </>
+          <ProviderChoice emailButtonRef={emailMethodRef} onEmail={() => goTo('email')} />
         )}
 
         <div inert={!onEmailStep} className={cn(!onEmailStep && HIDDEN_FIELD)}>

@@ -29,6 +29,13 @@
       "when": 1789592989136,
       "tag": "0003_edible",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789632667716,
+      "tag": "0004_birth_date",
+      "breakpoints": true
     }
   ]
 }

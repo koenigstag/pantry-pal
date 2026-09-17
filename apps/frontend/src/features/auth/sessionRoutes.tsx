@@ -11,7 +11,7 @@ interface ReturnState {
 }
 
 /** An in-app path to return to, else storage. Anything else in the state is ignored. */
-function returnPath(state: unknown): string {
+export function returnPath(state: unknown): string {
   const from = (state as ReturnState | null)?.from;
   return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')
     ? from
@@ -38,10 +38,19 @@ export const RequireSession = observer(function RequireSession(): ReactElement {
   );
 });
 
-/** The sign-in and sign-up pages. Once signed in, the visitor goes where they were headed. */
+/**
+ * The sign-in and sign-up pages. Once signed in, the visitor goes where they were
+ * headed; a new account answers the onboarding questions first, and the
+ * onboarding page passes the destination on.
+ */
 export const GuestOnly = observer(function GuestOnly(): ReactElement {
   const auth = useAuthStore();
   const location = useLocation();
 
-  return auth.isSignedIn ? <Navigate replace to={returnPath(location.state)} /> : <Outlet />;
+  if (!auth.isSignedIn) return <Outlet />;
+  return auth.isOnboarding ? (
+    <Navigate replace to={ROUTES.welcome} state={location.state} />
+  ) : (
+    <Navigate replace to={returnPath(location.state)} />
+  );
 });

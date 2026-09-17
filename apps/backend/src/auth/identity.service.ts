@@ -15,6 +15,7 @@ export function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
     unitSystem: row.unitSystem,
     timezone: row.timezone,
     locale: row.locale,
+    birthDate: row.birthDate,
     hasPassword: row.passwordHash !== null,
   };
 }

@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router';
 import { GuestOnly, RequireSession } from './features/auth/sessionRoutes';
 import { SignInPage } from './features/auth/SignInPage';
 import { SignUpPage } from './features/auth/SignUpPage';
+import { WelcomePage } from './features/auth/WelcomePage';
 import { PlannerPage, ProfilePage, ShoppingPage } from './features/pages';
 import { AppShell } from './features/shell/AppShell';
 import { ROUTES } from './features/shell/navigation';
@@ -16,7 +17,8 @@ import { StoragePage } from './features/storage/StoragePage';
  *
  * Two branches: the sign-in pages, which a signed-in visitor skips (`GuestOnly`),
  * and everything else, which needs a session (`RequireSession`) and owns the
- * pantry's stores while it is mounted.
+ * pantry's stores while it is mounted. Sign-up's onboarding step is in the
+ * second branch, outside the app shell: the account exists by then.
  *
  * `/storage` alone redirects to the first location; an item's details are a
  * child of its location, rendered over the list.
@@ -37,6 +39,7 @@ export const router = createBrowserRouter(
       path: '/',
       Component: RequireSession,
       children: [
+        { path: ROUTES.welcome, Component: WelcomePage },
         {
           Component: AppShell,
           children: [

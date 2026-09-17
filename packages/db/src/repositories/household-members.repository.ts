@@ -17,6 +17,13 @@ export class HouseholdMembersRepository {
       .orderBy(asc(householdMembers.joinedAt), asc(householdMembers.userId));
   }
 
+  /** Every household membership of one user. */
+  listForUser(userId: string): Promise<HouseholdMemberWithUserRow[]> {
+    return this.selectWithUser()
+      .where(eq(householdMembers.userId, userId))
+      .orderBy(asc(householdMembers.joinedAt), asc(householdMembers.householdId));
+  }
+
   async find(householdId: string, userId: string): Promise<HouseholdMemberWithUserRow | undefined> {
     const [row] = await this.selectWithUser()
       .where(

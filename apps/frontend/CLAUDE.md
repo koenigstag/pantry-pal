@@ -28,7 +28,8 @@ transport, whose upgrade Socket.IO does not check against its `cors` origins.
 
 ```
 src/main.tsx, router.tsx   entry; React Router data router
-src/features/auth/         sign-in and sign-up pages, route gates, language picker, password form
+src/features/auth/         sign-in, sign-up and onboarding pages, route gates, language picker, password form
+src/features/profile/      the account's details: fields shared by onboarding and Profile
 src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), PageStatus
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/pages.tsx     Shopping and Planner placeholders, Profile
@@ -167,11 +168,13 @@ out as `Authorization: Bearer` and in the socket handshake; the refresh token
   remembering the page in router state (`from`); `GuestOnly` sends a signed-in
   visitor on to it. The sign-in pages validate with the shared DTOs and show
   catalog messages (`authFieldErrors`).
-- **Sign-in has three steps:** how to sign in, the email, then the password. The
-  first offers Google (shown with `aria-disabled` until the backend supports it)
-  and email. One form holds both inputs throughout, and each step only hides the
-  ones it does not use, so a password manager can fill both at any step and the
-  later steps show what it filled:
+- **Both start with the provider:** `ProviderChoice` offers Google (shown with
+  `aria-disabled` until the backend supports it) and email, so a provider is
+  added in one place.
+- **Sign-in has three steps:** how to sign in, the email, then the password. One
+  form holds both inputs throughout, and each step only hides the ones it does
+  not use, so a password manager can fill both at any step and the later steps
+  show what it filled:
   - Hide with `opacity-0`, out of the layout, plus `inert` — never `hidden` or
     `display: none`, which some managers refuse to fill.
   - Read the values from the inputs, not from state. Autofill does not always
@@ -181,14 +184,38 @@ out as `Authorization: Bearer` and in the socket handshake; the refresh token
     it there, and it fills that account's password with it.
   - A different email accepted on a later Continue clears the password, which
     belonged to the previous account.
+- **Sign-up has three steps too** (`SIGN_UP_STEPS`), shown as a bar above the
+  title: how to sign up, the account, then the onboarding questions.
+  - The account step asks only the email and a new password, and creates the
+    account. A Google sign-up will confirm the name and email the provider gives
+    instead; it is not built.
+  - Creating the account there, not after the questions, means a password
+    manager saves the password with the form that holds it, a taken email is
+    reported beside the field, and leaving mid-onboarding keeps a working account.
+  - `AuthStore.signUp` sets `isOnboarding` in the same action that stores the
+    session, so `GuestOnly` sends this tab to `/welcome` rather than onward,
+    passing `from` along. Other tabs just see a session and skip it. Signing out
+    clears the flag.
+  - `WelcomePage` (`/welcome`) is signed in, outside the app shell, without the
+    language picker. The pantry loads beneath it and creates the household. It
+    asks the name, date of birth, units and household name (owners only), all
+    prefilled, and which of the new household's storage spaces to keep: only
+    while the household holds nothing, and never the fallback. Finish saves
+    what changed; Skip saves nothing; both go on to `from`.
 - **Development builds** start the email step with `VITE_DEV_USER_EMAIL`
   (default: the seeded test household's owner) and add Sign in without a
   password to the password step. It works only while the backend runs with
   `DEV_AUTH=true`.
-- **The Profile page** has Sign out, and the password form when the account has
-  a password (`CurrentUser.hasPassword`). Changing it signs out the account's
-  other devices; a wrong current password is a 403, which the form shows,
-  never a 401, which would look like an expired token.
+- **The Profile page** shows the email, and the household's name to a member.
+  `DetailsForm` edits the onboarding questions' answers with the same
+  `DetailsFields`: Save is enabled once something changed and sends only that,
+  one `PATCH /me` plus a `PATCH` of the household for an owner's new name
+  (`PantryStore.saveDetails`). The date of birth may not be after today in the
+  user's own calendar, a rule the DTO cannot state. Below come the language,
+  the password form when the account has a password (`CurrentUser.hasPassword`),
+  and Sign out. Changing the password signs out the account's other devices; a
+  wrong current password is a 403, which the form shows, never a 401, which
+  would look like an expired token.
 
 ### The locations editor
 

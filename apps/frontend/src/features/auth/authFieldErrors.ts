@@ -1,8 +1,4 @@
-import {
-  MAX_DISPLAY_NAME_LENGTH,
-  MAX_PASSWORD_LENGTH,
-  MIN_PASSWORD_LENGTH,
-} from '@pantry-pal/shared';
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@pantry-pal/shared';
 import type { FieldError } from '@pantry-pal/shared/dto';
 
 import { messages } from '../../i18n/messages';
@@ -24,7 +20,6 @@ export function authFieldErrors(
   const byField: Record<string, string> = {
     email: t.email,
     password: password === 'typed' ? t.passwordRequired : chosen,
-    displayName: t.displayName(MAX_DISPLAY_NAME_LENGTH),
     currentPassword: messages.changePassword.currentRequired,
     newPassword: chosen,
   };

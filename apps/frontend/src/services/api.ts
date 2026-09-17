@@ -14,6 +14,7 @@ import type {
   DevSignInDto,
   SignInDto,
   SignUpDto,
+  UpdateHouseholdDto,
   UpdateMeDto,
   UpdatePantryItemDto,
   UpsertLocationsDto,
@@ -64,6 +65,13 @@ export const pantryApi = {
 
   createHousehold: (dto: CreateHouseholdDto): Promise<UserHousehold> =>
     request<UserHousehold>('/households', { method: 'POST', body: JSON.stringify(dto) }),
+
+  /** Owners only: 403 for a member. */
+  updateHousehold: (householdId: string, dto: UpdateHouseholdDto): Promise<UserHousehold> =>
+    request<UserHousehold>(household(householdId), {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    }),
 
   listUnits: (): Promise<Unit[]> => request<Unit[]>('/units'),
 

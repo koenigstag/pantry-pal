@@ -62,7 +62,7 @@ src/
 POST                   /auth/sign-up  /auth/sign-in                   public; 10/min per client address
 POST                   /auth/refresh  /auth/sign-out                  public; 30/min; body: refreshToken
 POST                   /auth/dev-sign-in                              DEV_AUTH=true only, else 404
-GET    PATCH           /me                                            PATCH: the caller's locale
+GET    PATCH           /me                                            PATCH: name, units, date of birth, locale
 POST                   /me/password                                   current + new; 5/min per account
 GET    /units
 GET    /categories
@@ -141,6 +141,16 @@ an optional `locale`, the language the client was showing; omitted, the column's
 default applies. Without it, a client in another language would reload into
 English the moment the account exists. Dev sign-in applies it only when it
 creates the account: an existing account keeps its own.
+
+**`PATCH /me` changes the caller's own settings**: `displayName`, `unitSystem`,
+`birthDate` and `locale`, each left alone when absent.
+
+- **The date of birth is private.** `GET /me` returns it, but member lists never
+  select it. `null` removes it, and the DTO takes dates from `MIN_BIRTH_DATE`
+  (1900) up to today anywhere on Earth, so up to a day ahead of UTC.
+- **A new name is broadcast.** Members see each other by name, so the service
+  publishes `member.updated` to each of the caller's households, in the
+  transaction that saves it. Nothing else a user sets is broadcast.
 
 **Changing a password** (`POST /me/password`) takes the current password and a
 new one. Every other session of the account is revoked, closing its sockets, and

@@ -274,6 +274,10 @@ an existing database upgrades with `db:migrate`. Both are hand-edited, and say s
 
 Both were verified on a database migrated to `0001` and seeded before them.
 
+`0004_birth_date` adds the nullable `users.birth_date`, exactly as drizzle-kit
+generated it. It has no CHECK: the range ends today, which a CHECK cannot
+compare with, so the DTO checks it.
+
 ## Resolved: categories are a table
 
 Categories used to be a CHECK generated from a shared constant, so adding one

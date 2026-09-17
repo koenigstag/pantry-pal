@@ -24,6 +24,7 @@ import {
 import type {
   ChangePasswordDto,
   CreatePantryItemDto,
+  UpdateMeDto,
   UpdatePantryItemDto,
   UpsertLocationsDto,
 } from '@pantry-pal/shared/dto';
@@ -405,13 +406,28 @@ export class PantryStore {
   }
 
   /**
-   * Saves the locations editor in one request: renames, additions, deletions
-   * and order. Returns `null` once saved, or the message the editor shows.
-   *
-   * A 409 means the list changed on the server while the user edited it. The
-   * latest data is fetched before this returns, the editor's draft rebases onto
-   * it, and the user saves again.
+   * Saves the caller's details and the household's name, the name only when
+   * given: owners rename, members cannot. Returns `null` once both are saved, or
+   * the message to show; a change saved before a later one failed stays saved.
    */
+  async saveDetails(changes: { me: UpdateMeDto; householdName?: string }): Promise<string | null> {
+    const householdId = this.householdId;
+
+    try {
+      if (Object.keys(changes.me).length > 0) {
+        this.applyUser(await this.api.updateMe(changes.me));
+      }
+      if (changes.householdName !== undefined && householdId !== null) {
+        this.applyHousehold(
+          await this.api.updateHousehold(householdId, { name: changes.householdName }),
+        );
+      }
+      return null;
+    } catch (error) {
+      return toMessage(error);
+    }
+  }
+
   /**
    * Saves the account's language, then reloads the page in it: the catalog is
    * fixed per page load. Returns the error message, or `null` — and then the
@@ -444,6 +460,14 @@ export class PantryStore {
     }
   }
 
+  /**
+   * Saves the locations editor in one request: renames, additions, deletions
+   * and order. Returns `null` once saved, or the message the editor shows.
+   *
+   * A 409 means the list changed on the server while the user edited it. The
+   * latest data is fetched before this returns, the editor's draft rebases onto
+   * it, and the user saves again.
+   */
   async saveLocations(dto: UpsertLocationsDto): Promise<string | null> {
     const householdId = this.householdId;
     if (householdId === null) return messages.errors.loadFailed;
@@ -512,6 +536,10 @@ export class PantryStore {
 
   private applyUser(user: CurrentUser): void {
     this.user = user;
+  }
+
+  private applyHousehold(household: UserHousehold): void {
+    if (household.id === this.householdId) this.household = household;
   }
 
   private applyCategories(categories: readonly Category[]): void {

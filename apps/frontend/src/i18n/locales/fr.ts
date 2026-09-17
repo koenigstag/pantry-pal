@@ -315,7 +315,6 @@ export const fr = {
 
   profile: {
     title: 'Profil',
-    name: 'Nom',
     email: 'E-mail',
     household: 'Foyer',
     language: 'Langue',
@@ -323,18 +322,45 @@ export const fr = {
     languageFailed: 'Impossible de changer la langue.',
   },
 
+  details: {
+    title: 'Informations',
+    name: 'Nom',
+    nameHint: 'Visible par les personnes avec qui vous partagez un foyer.',
+    birthDate: 'Date de naissance',
+    birthDateHint: 'Personne d’autre ne la voit.',
+    clearBirthDate: 'Effacer la date de naissance',
+    units: 'Unités',
+    unitSystems: {
+      metric: { name: 'Métrique', examples: 'g, kg, ml, l' },
+      imperial: { name: 'Impérial', examples: 'oz, lb, fl oz, cup' },
+    },
+    householdName: 'Nom du foyer',
+    save: 'Enregistrer les modifications',
+    saving: 'Enregistrement…',
+    saved: 'Informations enregistrées.',
+    fieldErrors: {
+      displayName: (max: number) =>
+        `Saisissez un nom de ${formatNumber(max)} caractères au maximum.`,
+      birthDate: (fromYear: string) =>
+        `Saisissez une date comprise entre ${fromYear} et aujourd’hui.`,
+      householdName: (max: number) =>
+        `Saisissez un nom de ${formatNumber(max)} caractères au maximum.`,
+    },
+  },
+
   auth: {
     signInTitle: 'Connexion',
     signUpTitle: 'Créer un compte',
+    step: (current: number, total: number) =>
+      `Étape ${formatNumber(current)} sur ${formatNumber(total)}`,
     email: 'E-mail',
     password: 'Mot de passe',
-    displayName: 'Nom',
-    displayNameHint: 'Facultatif. Visible par les personnes avec qui vous partagez un foyer.',
     passwordHint: (min: number) =>
       plural(min, { one: 'Au moins # caractère.', other: 'Au moins # caractères.' }),
     continueWithGoogle: 'Continuer avec Google',
     continueWithEmail: 'Continuer avec l’e-mail',
     otherMethods: 'Autres moyens de connexion',
+    otherSignUpMethods: 'Autres moyens d’inscription',
     continue: 'Continuer',
     changeEmail: 'Modifier l’e-mail',
     signIn: 'Se connecter',
@@ -358,13 +384,24 @@ export const fr = {
       passwordRequired: 'Saisissez votre mot de passe.',
       password: (min: number, max: number) =>
         `Utilisez de ${formatNumber(min)} à ${formatNumber(max)} caractères.`,
-      displayName: (max: number) => `Le nom est limité à ${formatNumber(max)} caractères.`,
     },
     dev: {
       hint: 'Connecte n’importe quelle adresse e-mail sans mot de passe, tant que le backend tourne avec DEV_AUTH=true.',
       submit: 'Se connecter sans mot de passe',
       unavailable: 'Le backend ne tourne pas avec DEV_AUTH=true.',
     },
+  },
+
+  welcome: {
+    title: (app: string) => `Bienvenue dans ${app}`,
+    intro:
+      'Quelques questions facultatives. Vous pourrez modifier vos réponses plus tard dans votre profil.',
+    storageSpaces: 'Emplacements',
+    storageSpacesHint: (fallback: string) =>
+      `Décochez ceux dont vous n’avez pas besoin. ${q(fallback)} reste toujours et reçoit le contenu d’un emplacement supprimé.`,
+    finish: 'Terminer',
+    finishing: 'Enregistrement…',
+    skip: 'Passer',
   },
 
   changePassword: {

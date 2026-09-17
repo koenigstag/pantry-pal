@@ -10,6 +10,8 @@ import { cn } from '../ui/cn';
 import { FIELD_CONTROL } from '../ui/Field';
 import { SECONDARY_BUTTON } from './auth/AuthPage';
 import { ChangePasswordForm } from './auth/ChangePasswordForm';
+import { canRenameHousehold } from './profile/details';
+import { DetailsForm } from './profile/DetailsForm';
 import { ComingSoonPage } from './shell/ComingSoonPage';
 import { PageStatus } from './shell/PageStatus';
 
@@ -48,12 +50,13 @@ export const ProfilePage = observer(function ProfilePage(): ReactElement {
       ) : (
         <>
           <dl className="mt-6 divide-y divide-line rounded-xl border border-line bg-surface">
-            <ProfileRow term={messages.profile.name} value={user.displayName} />
             <ProfileRow term={messages.profile.email} value={user.email} />
-            {household !== null && (
+            {/* An owner renames it in the details below. */}
+            {household !== null && !canRenameHousehold(household) && (
               <ProfileRow term={messages.profile.household} value={household.name} />
             )}
           </dl>
+          <DetailsForm user={user} household={household} />
           <LanguageField />
           {user.hasPassword && <ChangePasswordForm />}
         </>
