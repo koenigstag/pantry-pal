@@ -351,3 +351,28 @@ export interface ShoppingListEntriesDeletedPayload {
   householdId: string;
   ids: string[];
 }
+
+/**
+ * Where a pull left off. Documents are ordered by when they last changed, with
+ * the id breaking ties, so this pair names one document exactly and a client
+ * asking again from it misses nothing and repeats at most that one.
+ */
+export interface SyncCheckpoint {
+  updatedAt: string;
+  id: string;
+}
+
+/**
+ * A document as the offline mirror holds it: the shape the API already returns,
+ * plus whether the row is gone. A deleted row is still sent — that is how a
+ * client that was away learns to drop it — so `_deleted` is what it reads,
+ * never the absence of a document.
+ */
+export type SyncDocument<T> = T & { _deleted: boolean };
+
+/** One pull: documents in checkpoint order, and where to continue. */
+export interface SyncPullPayload<T> {
+  documents: SyncDocument<T>[];
+  /** `null` only when the household has no documents at all in this collection. */
+  checkpoint: SyncCheckpoint | null;
+}

@@ -217,6 +217,28 @@ export const DEFAULT_SHOPPING_LIST_TRANSLATIONS: Readonly<Record<string, string>
   es: 'Mi lista de la compra',
 };
 
+/**
+ * What the offline mirror replicates, spelled as it appears in a sync URL.
+ *
+ * Reference data (units, categories) is left out: it is the same for every
+ * household and changes about never, so the frontend keeps reading it over REST.
+ */
+export const SYNC_COLLECTION = {
+  Items: 'items',
+  Locations: 'locations',
+  ShoppingLists: 'shopping-lists',
+  ShoppingListEntries: 'shopping-list-entries',
+} as const;
+export type SyncCollection = (typeof SYNC_COLLECTION)[keyof typeof SYNC_COLLECTION];
+export const SYNC_COLLECTIONS = Object.values(SYNC_COLLECTION);
+
+/**
+ * How many documents one pull answers with. A client asks again from the
+ * checkpoint it gets back until a pull returns fewer than it asked for.
+ */
+export const DEFAULT_SYNC_PULL_LIMIT = 200;
+export const MAX_SYNC_PULL_LIMIT = 500;
+
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;
 

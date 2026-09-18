@@ -145,23 +145,34 @@ These are deliberate. Changing any of them affects the whole workspace.
   refused by the backend, because a CHECK cannot see the old name. Households
   get it on creation, from the default flagged `is_fallback`.
 - **Shopping lists** (`shopping_lists`) are per-household and named, unique
-  ignoring case with archived lists included, so restoring one never collides.
+  ignoring case with archived lists included, so restoring one never collides;
+  deleted lists are left out, so their names are free again.
   **`shopping_list_entries`** holds an item and how many to buy, at most once per
-  list (`shopping_list_entries_list_item_idx`). The item is referenced, never
+  list among entries still on it (`shopping_list_entries_list_item_idx`, partial),
+  so an item taken off can go back on as a new row. The item is referenced, never
   copied: putting the shopping away restocks that same row, even one used up
   meanwhile. Both tables carry composite tenancy keys like `items`, which is why
   `items` has the otherwise redundant `UNIQUE (household_id, id)`. A household
   starts with one list, "My shopping list" in its creator's language, which the
   backend creates with it; nothing marks that list afterwards.
 - **`items.default_shopping_list_id`** names the list an item goes on when it runs
-  out. Its key (`items_default_shopping_list_household_fk`) is `NO ACTION`: a list
-  that is still some item's default cannot be deleted, so `ShoppingListsService`
-  clears those defaults first and announces each item.
-  `ON DELETE SET NULL (default_shopping_list_id)` would clear them silently — no
-  broadcast — and a plain `SET NULL` would null `household_id` too.
-- **Lists are deleted outright**, unlike locations: no history points at one, and
-  its entries cascade. **`archived_at`** freezes a list instead of deleting it; the
-  column only records it, and the backend refuses writes to a frozen list.
+  out. Its key (`items_default_shopping_list_household_fk`) keeps the default
+  inside the household. Since lists are soft-deleted it no longer stops a delete,
+  so `ShoppingListsService` clears those defaults itself, first, and announces
+  each item: a default pointing at a deleted list would otherwise linger unseen.
+- **Lists and entries are soft-deleted** (`deleted_at`), like locations and items,
+  though no history points at them: the frontend's offline mirror has to be told
+  that a row is gone, and a row that vanished says nothing. So nothing cascades
+  from a list any more — `ShoppingListEntriesRepository.deleteForList` takes its
+  entries — and every read leaves deleted rows out, except `changedSince`.
+  **`archived_at`** freezes a list instead of deleting it; the column only records
+  it, and the backend refuses writes to a frozen list.
+- **Sync pulls walk `(household_id, updated_at, id)`**, indexed on every table the
+  mirror replicates (`*_sync_idx`). `changedSince` compares row-wise, so rows that
+  share a timestamp are each walked once, and returns `updated_at` as text to the
+  microsecond (`syncStamp`): a checkpoint built from a JS `Date`, which keeps
+  milliseconds, would sit just before its own row. Deleted rows are included —
+  they are the tombstones.
 - **Quantity is how many, then what is inside one**, so `2 cans × 400 g` can be
   represented: `quantity` + `unit`, then `size_value` + `size_unit`.
 - **Things are counted, never weighed.** `items.unit` must be a count unit:
@@ -331,6 +342,17 @@ a translation (`pt-BR`, which gets English). Also verified in a rolled-back
 transaction: the tenancy keys, the one-entry-per-item index, the quantity check,
 refusing to delete a list that is still a default, and deleting a household that
 holds lists, defaults and entries.
+
+`0007_offline_sync` prepares the tables the frontend's offline mirror replicates:
+`deleted_at` on `shopping_lists` and `shopping_list_entries`, whose name and
+one-entry-per-item indexes become partial (`WHERE deleted_at IS NULL`), and a
+`(household_id, updated_at, id)` index on items, locations, lists and entries.
+It is drizzle-kit's own output, in its order: the old indexes are dropped before
+the columns they will filter on are added. Verified over a database migrated to
+`0006` holding lists and entries, which all came through live, and in a
+rolled-back transaction: a live duplicate entry is still refused, an item taken
+off a list goes back on as a new row beside its tombstone, and a deleted list's
+name is free again.
 
 ## Resolved: categories are a table
 

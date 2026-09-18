@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
 import { shoppingListEntries, type ShoppingListEntryRow } from '../schema';
+import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from './sync-window';
 
 /** An omitted field is left alone. */
 export interface UpdateShoppingListEntryInput {
@@ -14,6 +15,10 @@ export interface UpdateShoppingListEntryInput {
  * The items on a household's shopping lists. Every method is scoped by
  * household; those that act on one entry are scoped by its list too, so an id
  * from another list is never found.
+ *
+ * Entries are soft-deleted. Every read here leaves the deleted ones out;
+ * `changedSince` is the one exception, since they are what tells a syncing
+ * client that an entry is off its list.
  */
 export class ShoppingListEntriesRepository {
   constructor(private readonly db: Database) {}
@@ -23,8 +28,32 @@ export class ShoppingListEntriesRepository {
     return this.db
       .select()
       .from(shoppingListEntries)
-      .where(eq(shoppingListEntries.householdId, householdId))
+      .where(and(eq(shoppingListEntries.householdId, householdId), this.live()))
       .orderBy(asc(shoppingListEntries.createdAt), asc(shoppingListEntries.id));
+  }
+
+  /**
+   * Entries changed since the checkpoint, deleted ones included, in the order a
+   * sync pull walks them.
+   */
+  changedSince(
+    householdId: string,
+    window: SyncWindow,
+  ): Promise<WithSyncStamp<ShoppingListEntryRow>[]> {
+    return this.db
+      .select({
+        ...getTableColumns(shoppingListEntries),
+        syncUpdatedAt: syncStamp(shoppingListEntries.updatedAt),
+      })
+      .from(shoppingListEntries)
+      .where(
+        and(
+          eq(shoppingListEntries.householdId, householdId),
+          syncWindowWhere(shoppingListEntries.updatedAt, shoppingListEntries.id, window.after),
+        ),
+      )
+      .orderBy(asc(shoppingListEntries.updatedAt), asc(shoppingListEntries.id))
+      .limit(window.limit);
   }
 
   /** Entries of one list, by id. Ids not on it are left out. */
@@ -61,7 +90,8 @@ export class ShoppingListEntriesRepository {
   /**
    * Puts items on a list with `quantity` each, skipping any already on it, and
    * returns only the entries it created. One statement, so a concurrent add of
-   * the same item cannot fail on the unique index.
+   * the same item cannot fail on the unique index — which counts entries still
+   * on the list, so an item taken off can go back on as a new row.
    */
   addMissing(
     householdId: string,
@@ -74,7 +104,11 @@ export class ShoppingListEntriesRepository {
     return this.db
       .insert(shoppingListEntries)
       .values(itemIds.map((itemId) => ({ householdId, listId, itemId, quantity })))
-      .onConflictDoNothing({ target: [shoppingListEntries.listId, shoppingListEntries.itemId] })
+      .onConflictDoNothing({
+        target: [shoppingListEntries.listId, shoppingListEntries.itemId],
+        // The index's own predicate: Postgres infers a partial index only with it.
+        where: sql`deleted_at is null`,
+      })
       .returning();
   }
 
@@ -108,7 +142,8 @@ export class ShoppingListEntriesRepository {
     id: string,
   ): Promise<ShoppingListEntryRow | undefined> {
     const [row] = await this.db
-      .delete(shoppingListEntries)
+      .update(shoppingListEntries)
+      .set({ deletedAt: sql`now()` })
       .where(this.one(householdId, listId, id))
       .returning();
 
@@ -123,28 +158,45 @@ export class ShoppingListEntriesRepository {
     if (ids.length === 0) return Promise.resolve([]);
 
     return this.db
-      .delete(shoppingListEntries)
+      .update(shoppingListEntries)
+      .set({ deletedAt: sql`now()` })
       .where(and(this.onList(householdId, listId), inArray(shoppingListEntries.id, [...ids])))
+      .returning();
+  }
+
+  /** Empties a list: it was deleted, and nothing cascades from a soft delete. */
+  deleteForList(householdId: string, listId: string): Promise<ShoppingListEntryRow[]> {
+    return this.db
+      .update(shoppingListEntries)
+      .set({ deletedAt: sql`now()` })
+      .where(this.onList(householdId, listId))
       .returning();
   }
 
   /** Takes an item off every list: it was deleted. Returns the entries removed. */
   deleteForItem(householdId: string, itemId: string): Promise<ShoppingListEntryRow[]> {
     return this.db
-      .delete(shoppingListEntries)
+      .update(shoppingListEntries)
+      .set({ deletedAt: sql`now()` })
       .where(
         and(
           eq(shoppingListEntries.householdId, householdId),
           eq(shoppingListEntries.itemId, itemId),
+          this.live(),
         ),
       )
       .returning();
+  }
+
+  private live() {
+    return isNull(shoppingListEntries.deletedAt);
   }
 
   private onList(householdId: string, listId: string) {
     return and(
       eq(shoppingListEntries.householdId, householdId),
       eq(shoppingListEntries.listId, listId),
+      this.live(),
     );
   }
 

@@ -17,9 +17,11 @@ import { households } from './households';
  * `shopping_list_entries`, and an item names the list it goes on when it runs
  * out (`items.default_shopping_list_id`).
  *
- * Deleted outright, unlike locations: no history points at a list. Its entries
- * cascade with it, and `ShoppingListsService` clears the items' defaults first,
- * which `items_default_shopping_list_household_fk` insists on.
+ * Soft-deleted, like locations, though nothing points at an old list: a client
+ * syncing its offline mirror has to be told that a list is gone, and a row that
+ * simply vanished says nothing. `ShoppingListsService` clears the items'
+ * defaults first, which `items_default_shopping_list_household_fk` insists on,
+ * and soft-deletes the entries itself, since no cascade fires any more.
  */
 export const shoppingLists = pgTable(
   'shopping_lists',
@@ -38,6 +40,7 @@ export const shoppingLists = pgTable(
      * items' defaults stay, so restoring brings it back as it was.
      */
     archivedAt: timestamp('archived_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -47,10 +50,15 @@ export const shoppingLists = pgTable(
   (t) => [
     /**
      * Case-insensitive, like location names: a picker cannot tell "Market" from
-     * "market". Archived lists count too, so restoring one never collides.
+     * "market". Archived lists count too, so restoring one never collides;
+     * deleted ones do not, so their names are free again.
      */
-    uniqueIndex('shopping_lists_household_name_idx').on(t.householdId, sql`lower(name)`),
+    uniqueIndex('shopping_lists_household_name_idx')
+      .on(t.householdId, sql`lower(name)`)
+      .where(sql`deleted_at is null`),
     index('shopping_lists_household_sort_idx').on(t.householdId, t.sortOrder),
+    /** A sync pull walks a household's lists in this order, from its checkpoint. */
+    index('shopping_lists_household_sync_idx').on(t.householdId, t.updatedAt, t.id),
     /**
      * Redundant as a uniqueness rule, but the target of the composite foreign
      * keys that keep entries and item defaults inside their own household.

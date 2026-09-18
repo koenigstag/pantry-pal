@@ -62,6 +62,8 @@ export const locations = pgTable(
       .on(t.householdId, sql`lower(name)`)
       .where(sql`deleted_at is null`),
     index('locations_household_sort_idx').on(t.householdId, t.sortOrder),
+    /** A sync pull walks a household's storage spaces in this order, from its checkpoint. */
+    index('locations_household_sync_idx').on(t.householdId, t.updatedAt, t.id),
     /** One fallback per household. Creating the household gives it that one. */
     uniqueIndex('locations_household_fallback_idx')
       .on(t.householdId)

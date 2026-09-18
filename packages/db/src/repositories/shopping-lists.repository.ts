@@ -1,7 +1,8 @@
-import { and, asc, count, eq, inArray, max, sql } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, inArray, isNull, max, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
 import { shoppingLists, type NewShoppingListRow, type ShoppingListRow } from '../schema';
+import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from './sync-window';
 
 export type CreateShoppingListInput = Pick<NewShoppingListRow, 'name' | 'sortOrder'>;
 
@@ -19,7 +20,13 @@ export interface ShoppingListChange {
   archived?: boolean;
 }
 
-/** A household's shopping lists. What is on them is `ShoppingListEntriesRepository`'s. */
+/**
+ * A household's shopping lists. What is on them is `ShoppingListEntriesRepository`'s.
+ *
+ * Lists are soft-deleted, so every read here leaves the deleted ones out.
+ * `changedSince` is the one exception: those rows are what tells a syncing
+ * client that a list is gone.
+ */
 export class ShoppingListsRepository {
   constructor(private readonly db: Database) {}
 
@@ -28,7 +35,7 @@ export class ShoppingListsRepository {
     return this.db
       .select()
       .from(shoppingLists)
-      .where(eq(shoppingLists.householdId, householdId))
+      .where(and(eq(shoppingLists.householdId, householdId), this.live()))
       .orderBy(
         asc(shoppingLists.sortOrder),
         asc(sql`lower(${shoppingLists.name})`),
@@ -65,11 +72,32 @@ export class ShoppingListsRepository {
     return row;
   }
 
+  /**
+   * Lists changed since the checkpoint, deleted ones included, in the order a
+   * sync pull walks them.
+   */
+  changedSince(householdId: string, window: SyncWindow): Promise<WithSyncStamp<ShoppingListRow>[]> {
+    return this.db
+      .select({
+        ...getTableColumns(shoppingLists),
+        syncUpdatedAt: syncStamp(shoppingLists.updatedAt),
+      })
+      .from(shoppingLists)
+      .where(
+        and(
+          eq(shoppingLists.householdId, householdId),
+          syncWindowWhere(shoppingLists.updatedAt, shoppingLists.id, window.after),
+        ),
+      )
+      .orderBy(asc(shoppingLists.updatedAt), asc(shoppingLists.id))
+      .limit(window.limit);
+  }
+
   async count(householdId: string): Promise<number> {
     const [row] = await this.db
       .select({ total: count() })
       .from(shoppingLists)
-      .where(eq(shoppingLists.householdId, householdId));
+      .where(and(eq(shoppingLists.householdId, householdId), this.live()));
 
     return row?.total ?? 0;
   }
@@ -79,7 +107,7 @@ export class ShoppingListsRepository {
     const [row] = await this.db
       .select({ last: max(shoppingLists.sortOrder) })
       .from(shoppingLists)
-      .where(eq(shoppingLists.householdId, householdId));
+      .where(and(eq(shoppingLists.householdId, householdId), this.live()));
 
     return row?.last === null || row?.last === undefined ? 0 : row.last + 1;
   }
@@ -109,12 +137,18 @@ export class ShoppingListsRepository {
   }
 
   /**
-   * Hard delete: its entries cascade. Refused by
-   * `items_default_shopping_list_household_fk` while any item still names the
-   * list as its default, so clear those first.
+   * Soft delete, so a client sees the list go. Its entries do not follow by
+   * themselves any more — `ShoppingListEntriesRepository.deleteForList` takes
+   * them — and `items_default_shopping_list_household_fk` no longer objects,
+   * so `ShoppingListsService` still clears the items' defaults itself.
    */
   async delete(householdId: string, id: string): Promise<ShoppingListRow | undefined> {
-    const [row] = await this.db.delete(shoppingLists).where(this.one(householdId, id)).returning();
+    const [row] = await this.db
+      .update(shoppingLists)
+      .set({ deletedAt: sql`now()` })
+      .where(this.one(householdId, id))
+      .returning();
+
     return row;
   }
 
@@ -207,11 +241,19 @@ export class ShoppingListsRepository {
       .where(this.some(householdId, orderedIds));
   }
 
+  private live() {
+    return isNull(shoppingLists.deletedAt);
+  }
+
   private one(householdId: string, id: string) {
-    return and(eq(shoppingLists.householdId, householdId), eq(shoppingLists.id, id));
+    return and(eq(shoppingLists.householdId, householdId), eq(shoppingLists.id, id), this.live());
   }
 
   private some(householdId: string, ids: readonly string[]) {
-    return and(eq(shoppingLists.householdId, householdId), inArray(shoppingLists.id, [...ids]));
+    return and(
+      eq(shoppingLists.householdId, householdId),
+      inArray(shoppingLists.id, [...ids]),
+      this.live(),
+    );
   }
 }

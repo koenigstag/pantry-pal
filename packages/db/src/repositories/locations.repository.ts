@@ -1,7 +1,8 @@
-import { and, asc, count, eq, inArray, isNull, max, sql } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, inArray, isNull, max, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
 import { locations, type LocationRow, type NewLocationRow } from '../schema';
+import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from './sync-window';
 
 export type CreateLocationInput = Pick<NewLocationRow, 'name' | 'icon' | 'sortOrder'>;
 
@@ -34,6 +35,24 @@ export class LocationsRepository {
       .from(locations)
       .where(and(eq(locations.householdId, householdId), isNull(locations.deletedAt)))
       .orderBy(asc(locations.sortOrder), asc(sql`lower(${locations.name})`), asc(locations.id));
+  }
+
+  /**
+   * Locations changed since the checkpoint, in the order a sync pull walks them.
+   * The one read that includes deleted ones: they tell a client what to drop.
+   */
+  changedSince(householdId: string, window: SyncWindow): Promise<WithSyncStamp<LocationRow>[]> {
+    return this.db
+      .select({ ...getTableColumns(locations), syncUpdatedAt: syncStamp(locations.updatedAt) })
+      .from(locations)
+      .where(
+        and(
+          eq(locations.householdId, householdId),
+          syncWindowWhere(locations.updatedAt, locations.id, window.after),
+        ),
+      )
+      .orderBy(asc(locations.updatedAt), asc(locations.id))
+      .limit(window.limit);
   }
 
   async findById(householdId: string, id: string): Promise<LocationRow | undefined> {

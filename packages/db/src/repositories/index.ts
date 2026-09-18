@@ -10,3 +10,4 @@ export * from './shopping-list-entries.repository';
 export * from './shopping-lists.repository';
 export * from './units.repository';
 export * from './users.repository';
+export type { SyncCheckpointRow, SyncWindow, WithSyncStamp } from './sync-window';

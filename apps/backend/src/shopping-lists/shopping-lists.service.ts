@@ -388,6 +388,9 @@ export class ShoppingListsService {
     if ((await this.lists.delete(householdId, id)) === undefined) {
       throw new NotFoundException('Shopping list not found');
     }
+    // Lists and entries are soft-deleted, so nothing cascades: the entries go
+    // here, and a client learns of them through the list's own deletion.
+    await this.entries.deleteForList(householdId, id);
     return cleared;
   }
 

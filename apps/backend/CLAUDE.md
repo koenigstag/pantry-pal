@@ -50,6 +50,7 @@ src/
   locations/    per-household locations: CRUD, reorder, soft delete
   items/        per-household items and their event history; running out, restocking
   shopping-lists/ lists and their entries: the editor's save, archiving, putting away
+  sync/         the offline mirror's pulls: each collection's changes after a checkpoint
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
@@ -81,6 +82,7 @@ PATCH  DELETE          /households/:householdId/shopping-lists/:listId
 POST                   /households/:householdId/shopping-lists/:listId/entries           itemIds, quantity
 PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:entryId  quantity, checked
 POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
+GET                    /households/:householdId/sync/:collection      ?updatedAt=&id=&limit=
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
@@ -269,6 +271,30 @@ buy, and whether it is ticked off. Any member manages lists and entries.
   `ItemsService` and `ShoppingListsService`, so the two cannot deadlock on each
   other. A deadlock that happens anyway (`40P01`) is rolled back whole and
   translated to a 409, so the request can simply be sent again.
+
+## Offline sync
+
+The frontend keeps an offline mirror of a household (RxDB, being built). The
+backend's part so far is the pull side: `GET .../sync/:collection` for `items`,
+`locations`, `shopping-lists` and `shopping-list-entries` (`SYNC_COLLECTION`).
+
+- **A page of changes after a checkpoint**, oldest first: `?updatedAt=&id=` names
+  the last document of the previous page (both or neither, 400 otherwise), and
+  `?limit=` caps the page (200 by default, 500 at most). A client pulls again
+  from the checkpoint it gets back until a page comes back short; an empty page
+  hands its own checkpoint back.
+- **Deleted rows are sent**, with `_deleted: true` beside the usual wire shape:
+  that is how a client that was away learns what to drop. Items of every status
+  are sent, since a used-up item can still be on a shopping list.
+- **The checkpoint's `updatedAt` is the database's text, to the microsecond.**
+  Pass it back untouched: a value round-tripped through a JS `Date` loses its
+  microseconds and sits before its own row.
+- **Reads only.** One query per call, no transaction: a row written during a
+  pull is in this page or, with a later `updated_at`, the next. Writes keep
+  going through the domain services; the push side will route through them too,
+  so the mirror never bypasses their rules.
+- **Units and categories are not synced**: the same for every household and
+  about never changed, so the frontend keeps reading them over REST.
 
 ## Request flow
 
