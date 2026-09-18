@@ -239,6 +239,20 @@ export const SYNC_COLLECTIONS = Object.values(SYNC_COLLECTION);
 export const DEFAULT_SYNC_PULL_LIMIT = 200;
 export const MAX_SYNC_PULL_LIMIT = 500;
 
+/**
+ * What the mirror writes to: the everyday actions — stepping, using up, adding
+ * an item, ticking, adding to a list — touch nothing else. Storage spaces and
+ * lists are only read; their editors stay online.
+ */
+export const SYNC_PUSH_COLLECTIONS = [
+  SYNC_COLLECTION.Items,
+  SYNC_COLLECTION.ShoppingListEntries,
+] as const;
+export type SyncPushCollection = (typeof SYNC_PUSH_COLLECTIONS)[number];
+
+/** How many changed documents one push carries at most. */
+export const MAX_SYNC_PUSH_BATCH = 50;
+
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;
 

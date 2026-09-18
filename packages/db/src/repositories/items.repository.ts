@@ -22,7 +22,7 @@ import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from 
  */
 export type CreateItemInput = Omit<
   NewItemRow,
-  'id' | 'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
+  'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
 >;
 
 export type UpdateItemInput = Partial<CreateItemInput>;
@@ -90,6 +90,20 @@ export class ItemsRepository {
 
   async findById(householdId: string, id: string): Promise<ItemRow | undefined> {
     const [row] = await this.db.select().from(items).where(this.live(householdId, id)).limit(1);
+
+    return row;
+  }
+
+  /**
+   * The row whatever its state, deleted included: a sync push compares against
+   * it, and must tell an item deleted meanwhile from one that never existed.
+   */
+  async findAnyById(householdId: string, id: string): Promise<ItemRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(items)
+      .where(and(eq(items.householdId, householdId), eq(items.id, id)))
+      .limit(1);
 
     return row;
   }

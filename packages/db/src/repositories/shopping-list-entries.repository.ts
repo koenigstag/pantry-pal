@@ -56,6 +56,20 @@ export class ShoppingListEntriesRepository {
       .limit(window.limit);
   }
 
+  /**
+   * The entry whatever its state, deleted included: a sync push compares
+   * against it, and must tell an entry removed meanwhile from an unknown one.
+   */
+  async findAnyById(householdId: string, id: string): Promise<ShoppingListEntryRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(shoppingListEntries)
+      .where(and(eq(shoppingListEntries.householdId, householdId), eq(shoppingListEntries.id, id)))
+      .limit(1);
+
+    return row;
+  }
+
   /** Entries of one list, by id. Ids not on it are left out. */
   findMany(
     householdId: string,
@@ -110,6 +124,27 @@ export class ShoppingListEntriesRepository {
         where: sql`deleted_at is null`,
       })
       .returning();
+  }
+
+  /**
+   * Puts one item on a list under the id the client chose, unless it is on the
+   * list already, in which case nothing is written and `undefined` comes back.
+   */
+  async addOne(
+    householdId: string,
+    listId: string,
+    entry: { id: string; itemId: string; quantity: number },
+  ): Promise<ShoppingListEntryRow | undefined> {
+    const [row] = await this.db
+      .insert(shoppingListEntries)
+      .values({ ...entry, householdId, listId })
+      .onConflictDoNothing({
+        target: [shoppingListEntries.listId, shoppingListEntries.itemId],
+        where: sql`deleted_at is null`,
+      })
+      .returning();
+
+    return row;
   }
 
   /** An empty patch is a no-op: Drizzle throws on an empty SET. */

@@ -50,7 +50,7 @@ src/
   locations/    per-household locations: CRUD, reorder, soft delete
   items/        per-household items and their event history; running out, restocking
   shopping-lists/ lists and their entries: the editor's save, archiving, putting away
-  sync/         the offline mirror's pulls: each collection's changes after a checkpoint
+  sync/         the offline mirror: pulls since a checkpoint, pushes through the services
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
@@ -83,6 +83,7 @@ POST                   /households/:householdId/shopping-lists/:listId/entries  
 PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:entryId  quantity, checked
 POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
 GET                    /households/:householdId/sync/:collection      ?updatedAt=&id=&limit=
+POST                   /households/:householdId/sync/:collection/push rows: items, entries only
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
@@ -274,9 +275,11 @@ buy, and whether it is ticked off. Any member manages lists and entries.
 
 ## Offline sync
 
-The frontend keeps an offline mirror of a household (RxDB, being built). The
-backend's part so far is the pull side: `GET .../sync/:collection` for `items`,
-`locations`, `shopping-lists` and `shopping-list-entries` (`SYNC_COLLECTION`).
+The frontend keeps an offline mirror of a household (RxDB, being built). It
+pulls `items`, `locations`, `shopping-lists` and `shopping-list-entries`
+(`SYNC_COLLECTION`), and pushes its own changes to items and entries only
+(`SYNC_PUSH_COLLECTIONS`): the everyday actions touch nothing else, and the
+space and list editors stay online.
 
 - **A page of changes after a checkpoint**, oldest first: `?updatedAt=&id=` names
   the last document of the previous page (both or neither, 400 otherwise), and
@@ -295,6 +298,22 @@ backend's part so far is the pull side: `GET .../sync/:collection` for `items`,
   so the mirror never bypasses their rules.
 - **Units and categories are not synced**: the same for every household and
   about never changed, so the frontend keeps reading them over REST.
+- **A push goes through the domain services** (`SyncPushService`), row by row,
+  oldest first: the same DTOs, locks, history, side effects and broadcasts as a
+  REST write. Running out still puts an item on its default list, server-side.
+  - A row without an assumed state is a create, made under the client's id
+    (`CreatePantryItemDto.id`, `ShoppingListsService.addEntry`). A replay of a
+    create that already landed passes; an entry for an item already on the list
+    comes back as a tombstone, dropping the client's duplicate quietly.
+  - Otherwise the row applies only if the assumed `updatedAt` is still the
+    server's, as the fields that differ between the two states. A stale base
+    comes back in `conflicts` with the server's version, for the client's
+    conflict handler to merge and push again.
+  - A 4xx from the services (invalid, archived list) comes back in `conflicts`
+    as the server's version — a tombstone for a refused create — and in
+    `refused` with the message, so the client can say why rather than retry.
+    Anything else fails the push, which the client sends again later.
+  - The answer is 200 whatever became of each row.
 
 ## Request flow
 

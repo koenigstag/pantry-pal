@@ -15,7 +15,9 @@
     "no-console": "off",
     "unicorn/prefer-node-protocol": "error",
     "import/no-duplicates": "error",
-    "import/no-unassigned-import": "off"
+    "import/no-unassigned-import": "off",
+    // `_deleted` is the offline sync protocol's own field name (RxDB's tombstone flag).
+    "no-underscore-dangle": ["warn", { "allow": ["_deleted"] }]
   },
   "overrides": [
     {

@@ -106,6 +106,8 @@ export class ItemsService {
     }
 
     const row = await this.items.create(householdId, {
+      // The client's own id when it chose one (the offline mirror does); else the database's.
+      id: dto.id,
       name: dto.name,
       locationId: dto.locationId,
       category: dto.category,

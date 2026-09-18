@@ -1,7 +1,18 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsInt,
+  IsISO8601,
+  IsObject,
+  IsOptional,
+  IsUUID,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
-import { MAX_SYNC_PULL_LIMIT } from '../constants';
+import { MAX_SYNC_PULL_LIMIT, MAX_SYNC_PUSH_BATCH } from '../constants';
 
 /**
  * `GET .../sync/:collection`: where to continue, and how many documents to take.
@@ -26,4 +37,23 @@ export class SyncPullQueryDto {
   @Min(1)
   @Max(MAX_SYNC_PULL_LIMIT)
   limit?: number;
+}
+
+/** One row of a push. Its documents are checked against the item or entry rules by the service. */
+export class SyncPushRowDto {
+  @IsOptional()
+  @IsObject()
+  assumedMasterState?: Record<string, unknown>;
+
+  @IsObject()
+  newDocumentState!: Record<string, unknown>;
+}
+
+/** `POST .../sync/:collection/push`: local changes, oldest first. */
+export class SyncPushDto {
+  @IsArray()
+  @ArrayMaxSize(MAX_SYNC_PUSH_BATCH)
+  @ValidateNested({ each: true })
+  @Type(() => SyncPushRowDto)
+  rows!: SyncPushRowDto[];
 }
