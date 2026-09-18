@@ -193,6 +193,12 @@ export const MAX_SHOPPING_LISTS_PER_HOUSEHOLD = 20;
  * more than a selection of cards holds, so the limit only turns away abuse.
  */
 export const MAX_SHOPPING_LIST_BATCH = 200;
+/**
+ * How many of an item go on a list when nothing says otherwise: picked for a
+ * list, or put on its default list for running out. The offline mirror adds
+ * entries itself, so both apps need the same number.
+ */
+export const DEFAULT_SHOPPING_ENTRY_QUANTITY = 1;
 
 /**
  * The English name of the shopping list every household starts with. It is

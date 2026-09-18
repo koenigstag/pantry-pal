@@ -78,14 +78,16 @@ reference data (units, categories, default locations) and password resets go
 through `/admin`, authenticated by an API key.
 Details in `apps/backend/CLAUDE.md`.
 
-### The frontend applies one optimistic update, and only one
+### The frontend works offline, from a mirror
 
-`PantryStore` holds server state only: a write waits for the server's response,
-and the matching broadcast re-applies the same data. This is deliberate — it
-keeps every connected client in agreement. The single exception is stepping an
-item's quantity, which renders at once from a separate overlay
-(`QuantityUpdates`) and saves after a short pause; see `apps/frontend/CLAUDE.md`.
-Keep any new optimism out of `PantryStore` itself.
+`PantryStore` shows the household as the device holds it: an offline mirror
+(RxDB over IndexedDB) that replicates with the server through the backend's
+`sync` routes. Everyday writes — items, and what is on shopping lists — land in
+the mirror first and are pushed when the server can be reached; the server
+applies each through the same services as a REST write, so its rules and
+broadcasts still hold. Editors, putting the shopping away and account settings
+stay online-only REST writes. Details in `apps/frontend/CLAUDE.md`, and the sync
+protocol in `apps/backend/CLAUDE.md`.
 
 ## Gotchas that will bite
 

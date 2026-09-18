@@ -91,7 +91,9 @@ export const fr = {
       'Impossible d’enregistrer la nouvelle quantité\u00A0: la quantité enregistrée est de nouveau affichée.',
     deleteFailed: (count: number) => articles(count, 'Impossible de supprimer ', '.'),
     moveFailed: (count: number) => articles(count, 'Impossible de déplacer ', '.'),
-    refreshFailed: 'Impossible d’actualiser\u00A0: les dernières données reçues sont affichées.',
+    unreachable: 'Impossible de joindre le serveur. Vérifiez votre connexion, puis réessayez.',
+    changeRefused: (reason: string) => `Impossible d’enregistrer une modification\u00A0: ${reason}`,
+    itemGone: 'Cet article a été supprimé entre-temps.',
   },
 
   categories: {
@@ -456,7 +458,6 @@ export const fr = {
     copied: 'Liste copiée. Collez-la dans un message.',
     shareFailed: 'Impossible de partager la liste.',
     shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
-    loadFailed: 'Impossible de charger les listes de courses.',
     noLists: 'Aucune liste de courses pour l’instant.',
     createFirst: 'Créer une liste de courses',
     emptyList: (list: string) => `Rien sur ${q(list)} pour l’instant.`,

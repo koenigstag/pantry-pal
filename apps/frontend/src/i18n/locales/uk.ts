@@ -111,7 +111,9 @@ export const uk = {
     quantityNotSaved: 'Не вдалося зберегти нову кількість, тому показано збережену.',
     deleteFailed: (count: number) => items(count, 'Не вдалося видалити ', '.'),
     moveFailed: (count: number) => items(count, 'Не вдалося перемістити ', '.'),
-    refreshFailed: 'Не вдалося оновити, тому показано останні отримані дані.',
+    unreachable: 'Не вдалося зв’язатися із сервером. Перевірте з’єднання й спробуйте знову.',
+    changeRefused: (reason: string) => `Не вдалося зберегти зміну: ${reason}`,
+    itemGone: 'Цей предмет тим часом видалили.',
   },
 
   categories: {
@@ -477,7 +479,6 @@ export const uk = {
     copied: 'Список скопійовано. Вставте його в повідомлення.',
     shareFailed: 'Не вдалося поділитися списком.',
     shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
-    loadFailed: 'Не вдалося завантажити списки покупок.',
     noLists: 'Списків покупок поки немає.',
     createFirst: 'Створити список покупок',
     emptyList: (list: string) => `У списку «${list}» поки нічого немає.`,

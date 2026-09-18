@@ -240,7 +240,8 @@ buy, and whether it is ticked off. Any member manages lists and entries.
   in the same transaction. `ItemsService.update` adds one of it when a patch takes
   it from in stock (active, quantity above 0) to not: consumed, discarded, or down
   to 0. An item already on the list stays as it is. Deleting an item is a
-  correction, and takes it off every list instead.
+  correction, and takes it off every list instead. A sync push skips this: the
+  offline mirror applies the same rule itself (see Offline sync).
 - **"I used it already"** sends `status` and `defaultShoppingListId` in one patch,
   so a list picked while using an item up becomes its default, atomically.
 - **Adding** (`POST .../entries`) skips items already on the list and answers with
@@ -275,8 +276,8 @@ buy, and whether it is ticked off. Any member manages lists and entries.
 
 ## Offline sync
 
-The frontend keeps an offline mirror of a household (RxDB, being built). It
-pulls `items`, `locations`, `shopping-lists` and `shopping-list-entries`
+The frontend keeps an offline mirror of a household (RxDB, in
+`apps/frontend/src/offline`). It pulls `items`, `locations`, `shopping-lists` and `shopping-list-entries`
 (`SYNC_COLLECTION`), and pushes its own changes to items and entries only
 (`SYNC_PUSH_COLLECTIONS`): the everyday actions touch nothing else, and the
 space and list editors stay online.
@@ -294,13 +295,20 @@ space and list editors stay online.
   microseconds and sits before its own row.
 - **Reads only.** One query per call, no transaction: a row written during a
   pull is in this page or, with a later `updated_at`, the next. Writes keep
-  going through the domain services; the push side will route through them too,
-  so the mirror never bypasses their rules.
+  going through the domain services, the push's included, so the mirror never
+  bypasses their rules.
 - **Units and categories are not synced**: the same for every household and
   about never changed, so the frontend keeps reading them over REST.
 - **A push goes through the domain services** (`SyncPushService`), row by row,
-  oldest first: the same DTOs, locks, history, side effects and broadcasts as a
-  REST write. Running out still puts an item on its default list, server-side.
+  oldest first: the same DTOs, locks, history and broadcasts as a REST write.
+  Two things are left to the client, which did them already:
+  - An item that runs out is not put on its default list
+    (`ItemsService.update(..., { listWhenRunOut: false })`): the mirror added
+    that entry itself and pushes it next, so the server adding one too would make
+    a duplicate.
+  - `isEdible` is dropped wherever a category other than the default one decides
+    it — on a create, and on a patch that changes the category — since the
+    client's copy is a guess. Sent alone against such a category, it is refused.
   - A row without an assumed state is a create, made under the client's id
     (`CreatePantryItemDto.id`, `ShoppingListsService.addEntry`). A replay of a
     create that already landed passes; an entry for an item already on the list

@@ -107,7 +107,10 @@ const en = {
       plural(count, { one: 'Couldn’t delete # item.', other: 'Couldn’t delete # items.' }),
     moveFailed: (count: number) =>
       plural(count, { one: 'Couldn’t move # item.', other: 'Couldn’t move # items.' }),
-    refreshFailed: 'Couldn’t refresh, so the last data received is shown.',
+    unreachable: 'Couldn’t reach the server. Check your connection, then try again.',
+    /** A change made on this device that the server refused later, with its reason. */
+    changeRefused: (reason: string) => `A change couldn’t be saved: ${reason}`,
+    itemGone: 'This item was deleted meanwhile.',
   },
 
   categories: {
@@ -518,7 +521,6 @@ const en = {
     shareFailed: 'Couldn’t share the list.',
     /** A line of the text a list is shared as, under the list's name. */
     shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
-    loadFailed: 'Couldn’t load the shopping lists.',
     noLists: 'No shopping lists yet.',
     createFirst: 'Create a shopping list',
     emptyList: (list: string) => `Nothing on ${list} yet.`,

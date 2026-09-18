@@ -7,6 +7,30 @@ const MS_PER_DAY = 86_400_000;
 export type Expirable = Pick<PantryItem, 'effectiveExpiresAt'>;
 
 /**
+ * `effectiveExpiresAt` worked out as the database's generated column does:
+ * `LEAST(expires_at, opened_at + period_after_opening_days)`, where `LEAST`
+ * skips nulls. The server's value always wins once it arrives; this is for a
+ * client showing an item it changed offline, before the server has seen it.
+ */
+export function effectiveExpiry(
+  item: Pick<PantryItem, 'expiresAt' | 'openedAt' | 'periodAfterOpeningDays'>,
+): string | null {
+  const { expiresAt, openedAt, periodAfterOpeningDays } = item;
+
+  let afterOpening: string | null = null;
+  const opened = openedAt === null ? null : /^(\d{4})-(\d{2})-(\d{2})/.exec(openedAt);
+  if (opened !== null && periodAfterOpeningDays !== null) {
+    const day = Date.UTC(Number(opened[1]), Number(opened[2]) - 1, Number(opened[3]));
+    afterOpening = new Date(day + periodAfterOpeningDays * MS_PER_DAY).toISOString().slice(0, 10);
+  }
+
+  if (expiresAt === null) return afterOpening;
+  if (afterOpening === null) return expiresAt;
+  // `YYYY-MM-DD` strings compare as the dates they name.
+  return afterOpening < expiresAt ? afterOpening : expiresAt;
+}
+
+/**
  * Whole days from today until the calendar date `isoDate` (`YYYY-MM-DD`): 0 for
  * today, 1 for tomorrow, negative once it has passed.
  *

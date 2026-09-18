@@ -6,6 +6,7 @@ import {
   type ShoppingListEntryRow,
 } from '@pantry-pal/db';
 import {
+  DEFAULT_CATEGORY,
   SYNC_COLLECTION,
   type PantryItem,
   type ShoppingListEntry,
@@ -58,9 +59,14 @@ const APPLIED: Outcome = { kind: 'applied' };
  * Takes the offline mirror's local changes to items and shopping entries.
  *
  * **Every change goes through the domain services**, exactly as a REST write
- * would: the same validation, locks, history and side effects — running out puts
- * an item on its default list — and the same broadcasts. The push only works out
- * what the client changed, and whether it changed it from what the server holds.
+ * would: the same validation, locks, history and broadcasts. The push only works
+ * out what the client changed, and whether it changed it from what the server
+ * holds.
+ *
+ * Two things differ from REST, because the mirror did them itself already: an
+ * item that runs out is not put on its default list — the mirror added that
+ * entry, and pushes it next — and `isEdible` is left out wherever a category
+ * other than the default one decides it, since the mirror's copy is a guess.
  *
  * Per row, independently, oldest first:
  * - **Created** (no assumed state): made under the client's id. A replay of a
@@ -130,7 +136,9 @@ export class SyncPushService {
       // Made and deleted before it ever reached the server: nothing to do.
       if (next._deleted) return APPLIED;
 
-      const dto = validateDto(CreatePantryItemDto, { id: next.id, ...pick(next, ITEM_FIELDS) });
+      const fields: Partial<PantryItem> = pick(next, ITEM_FIELDS);
+      if (next.category !== DEFAULT_CATEGORY) delete fields.isEdible;
+      const dto = validateDto(CreatePantryItemDto, { id: next.id, ...fields });
       if (!dto.ok) return refuseCreate(next, dto.errors);
       return this.attempt(() => this.itemsService.create(membership, dto.value), {
         onRefusal: () => ({ ...next, _deleted: true }),
@@ -148,13 +156,19 @@ export class SyncPushService {
     }
 
     const patch = changedFields(assumed, next, [...ITEM_FIELDS, 'status']);
+    if ('category' in patch && next.category !== DEFAULT_CATEGORY) delete patch['isEdible'];
     if (Object.keys(patch).length === 0) return APPLIED;
 
     const dto = validateDto(UpdatePantryItemDto, patch);
     if (!dto.ok) return { kind: 'refused', master: current, message: describe(dto.errors) };
-    return this.attempt(() => this.itemsService.update(membership, next.id, dto.value), {
-      onRefusal: () => this.currentItem(membership, next.id),
-    });
+    return this.attempt(
+      () =>
+        this.itemsService.update(membership, next.id, dto.value, {
+          // The mirror put the item on its default list itself, and pushes that entry next.
+          listWhenRunOut: false,
+        }),
+      { onRefusal: () => this.currentItem(membership, next.id) },
+    );
   }
 
   private async pushEntry(membership: Membership, row: SyncPushRowDto): Promise<Outcome> {

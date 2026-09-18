@@ -18,6 +18,7 @@ import {
   type ShoppingListRow,
 } from '@pantry-pal/db';
 import {
+  DEFAULT_SHOPPING_ENTRY_QUANTITY,
   ITEM_EVENT_TYPE,
   MAX_SHOPPING_LISTS_PER_HOUSEHOLD,
   type PantryItem,
@@ -40,9 +41,6 @@ import { toPantryItem } from '../items/item.mapper';
 import { ItemsService } from '../items/items.service';
 import { ChangeFeed } from '../realtime/change-feed';
 import { toShoppingList, toShoppingListEntry } from './shopping-list.mapper';
-
-/** How many of each item an add puts on a list when the request does not say. */
-const DEFAULT_ENTRY_QUANTITY = 1;
 
 /**
  * Any member may manage shopping lists and what is on them.
@@ -255,7 +253,7 @@ export class ShoppingListsService {
       householdId,
       listId,
       dto.itemIds,
-      dto.quantity ?? DEFAULT_ENTRY_QUANTITY,
+      dto.quantity ?? DEFAULT_SHOPPING_ENTRY_QUANTITY,
     );
     const added = new Set(rows.map((row) => row.itemId));
     const change: ShoppingListEntriesChange = {

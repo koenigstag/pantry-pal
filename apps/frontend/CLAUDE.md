@@ -34,8 +34,9 @@ src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), 
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/shopping/     the Shopping page, the list picker, the lists editor, sharing as text
 src/features/pages.tsx     Planner placeholder, Profile
-src/stores/                AuthStore, PantryStore (server state), QuantityUpdates (overlay), NoticeStore
-src/services/              http (fetch), session (tokens), api (REST), socket
+src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore
+src/offline/               the offline mirror: RxDB database, replication, merge rules, forgetting on sign-out
+src/services/              http (fetch), session (tokens), api (REST and sync), socket
 src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, cn
 src/i18n/                  message catalog and Intl formatters
 ```
@@ -104,10 +105,57 @@ src/i18n/                  message catalog and Intl formatters
 
 ## State flow
 
-`PantryStore` holds **server state only** and is never written optimistically.
-A write waits for the server and applies its response; the matching broadcast
-then re-applies the same data. `acceptItem` never regresses an item to an older
-`updatedAt`.
+`PantryStore` shows **one household as this device holds it**: an offline mirror
+(`src/offline/`, RxDB over IndexedDB, one database per user and household) that
+replicates with the server whenever it can reach it. The pages read only the
+mirror, so a change shows the same way whoever made it: this tab, another tab,
+or another member through the server.
+
+- **The bootstrap stays REST:** the user, their first household (a new "Home"
+  for a user with none) and the units, which the service worker answers from its
+  cache when offline. The household's mirror opens next, and the pages wait —
+  `household` stays `null` — until it holds the household: at once when an
+  earlier session synced it (a local document marks that), else after a first
+  pull, which needs the server. A first pull that fails shows the load error;
+  replication keeps retrying, and the pages appear once it succeeds.
+- **Everyday writes are local first:** adding, editing, using up, moving and
+  deleting items, and adding, ticking, stepping and removing shopping entries.
+  Each lands in the mirror at once, offline too, and resolves once the page shows
+  it (`shown`), so nothing flashes its old value. Replication pushes it, and the
+  server applies it through its own services. A change the server refuses (an
+  archived list, say) is dropped, and a notice gives its reason
+  (`errors.changeRefused`).
+- **What the server would work out, the store works out too**, so a change reads
+  right before it syncs: `effectiveExpiresAt` (`effectiveExpiry` in shared),
+  `isEdible` from the category, and running out onto the default list — an entry
+  the mirror adds and pushes itself, which the server then leaves to it.
+- **Online only:** the storage space and shopping list editors, "Bought", and
+  the account's settings stay REST writes. The editors hand the server's answer
+  to the mirror (`acceptLocations`, `acceptShoppingLists`), since those two
+  collections are only ever pulled; whatever else a REST write changed arrives
+  with the next pull.
+- **Pulls follow the socket.** A data broadcast, and every reconnect, makes the
+  mirror pull from its checkpoints; the broadcast's payload is not applied
+  itself, so changes arrive in order. The Refresh menu item pulls too. Household
+  events still act directly: a household deleted, or left, opens the next one's
+  mirror and deletes the old one from the device.
+
+**Conflicts** (`offline/merge.ts`): a push whose base is stale comes back with
+the server's version, and what changed here goes on top of it, field by field. A
+quantity is a delta, not a value, so two people's steps add up; a change the
+server has already is not applied twice.
+
+**One tab replicates**, the leader (RxDB's leader election); the other tabs share
+its database and see its writes. RxDB would also replicate in the visible tab,
+which is switched off (`toggleOnDocumentVisible: false`): a quantity pushed from
+two tabs could have its delta counted twice. The leader passes refusals on to
+the other tabs over a `BroadcastChannel`, since any of them may have made the
+change. Entries are pushed after items, as an entry may name an item created
+offline.
+
+**A schema change needs `MIRROR_VERSION` raised** (`offline/mirror.ts`): it is
+part of the database's name, so the next start pulls everything into a new
+database instead of migrating the old one.
 
 Quantities are whole numbers (`@IsInt()` in the shared DTOs, `integer` in the
 database), counted in a count unit — `pcs` or a container such as `bottle` or
@@ -117,25 +165,17 @@ units read as plural nouns from the catalog (`messages.units.countNoun`: `2
 cans`), and a code the catalog lacks, such as one an admin added, shows its API
 label. `pcs` alone is left out beside a size: `2 × 150 g`.
 
-**The one exception is stepping a quantity.** `QuantityUpdates` keeps an overlay
-of unconfirmed quantities, and cards render `quantityOf(item)`, so a tap shows at
-once. The PATCH goes out 600 ms after the last tap on that item, one request per
-item, always with the newest value. Once the server confirms, the overlay is
-dropped and items are refetched in the background; a failure drops the overlay
-and shows a notice. Sorting by quantity reads the server value, so a card does
-not move while it is being tapped. Keep any new optimism out of `PantryStore`.
+**Stepping a quantity** shows under the finger through `QuantityUpdates`: an
+overlay of the quantity being tapped, which cards render with
+`quantityOf(item)`. The item changes in the mirror 600 ms after the last tap on
+it, one write for a run of taps, so one change is pushed rather than one per
+tap, and a list sorted by quantity does not reshuffle while a card is tapped.
+The overlay is dropped once the store shows the saved number; a write that fails
+drops it too, with a notice.
 
-Background refetches (`refreshItems`) never show a loading state or clear the
-list. A broadcast that lands while a refetch is in flight wins over the
-response, and a snapshot supersedes it entirely.
-
-Reads arrive two ways: a REST fetch on mount (so the page populates even if the
-socket never connects) and a snapshot requested on socket connect.
-
-The store shows **one household**: the user's first, or a new "Home" created
-for a user with none. The socket delivers events for every household the user
-belongs to, so each handler ignores payloads for any other household. Items
-that stop being active (consumed, discarded) leave the list.
+The mirror holds items of every status, and the store splits them: `items` is the
+active ones, and those used up or thrown out leave it. Values are plain objects,
+replaced rather than mutated, and `reconcileById` keeps every unchanged one.
 
 `SessionStoreProvider` constructs `SessionStores` in a `useState` lazy
 initialiser because it creates a socket — it must not run on every render.
@@ -171,7 +211,12 @@ out as `Authorization: Bearer` and in the socket handshake; the refresh token
 - **Stores are per session.** `RootStore` (notices, auth) lives as long as the
   page; `SessionStores` (pantry, quantities) are created by
   `SessionStoreProvider` inside `RequireSession` and disposed when it unmounts,
-  so signing out drops the pantry and closes its socket.
+  so signing out drops the pantry and closes its socket and its mirror.
+- **The offline mirrors go with a sign-out, not with a session.** Signing out
+  deletes every mirror on the device (`forgetMirrors`), changes not sent yet
+  included. A session that merely ends — the refresh token expired during a long
+  time offline, or the password changed elsewhere — keeps them: a mirror belongs
+  to one user, and its changes go out once that person signs in again.
 - **Routes:** `RequireSession` sends a signed-out visitor to `/sign-in`,
   remembering the page in router state (`from`); `GuestOnly` sends a signed-in
   visitor on to it. The sign-in pages validate with the shared DTOs and show
@@ -378,23 +423,19 @@ language, then region: `fr-CA` is French as written in Canada.
 
 A list names items, so an entry shows the item it names: an active one from
 `pantry.items`, and one used up or thrown out from `pantry.offShelfItems`, which
-holds exactly the non-active items some entry names. `acceptItem` moves an item
-between the two as its status changes. Entry broadcasts carry their items, and
-the entries are applied first, so an item that left the shelf is kept.
+holds exactly the non-active items some entry names. Both come from the mirror's
+items, which include every status, so an item that leaves the shelf stays on its
+lists.
 
-- **Loading.** The lists load beside the bootstrap (`refreshShopping`), like
-  categories, so a backend without them breaks only the Shopping page, and the
-  snapshot replaces them. A refetch that returns after a snapshot is dropped; one
-  that returns after a broadcast may predate it, so it asks again, three times at
-  most. Ids of deleted lists and entries are remembered, so a late copy never
-  brings one back.
+- **Lists and entries are mirrored** with everything else, so the Shopping page
+  works offline: ticking, stepping how many to buy, removing, and adding items
+  from Storage.
 - **A household starts with a list**, "My shopping list", which the backend names
   in its creator's language. It is an ordinary list, so a household can delete
   every one. The page's empty state and the picker then suggest the same name in
   the page's language (`messages.shopping.defaultListName`).
-- **Nothing is optimistic.** Ticking, stepping how many to buy and removing wait
-  for the server; while one runs, the row's controls ignore presses
-  (`aria-disabled`, so focus stays put).
+- **A row's controls ignore presses while its write lands** (`aria-disabled`, so
+  focus stays put): a moment, since the write is local.
 - **Picking a list** (`AddToListSheet`) serves the selection bar, an item's details
   and "I used it already". It offers the lists in use, marks those the items are on
   already, and can create a list inline — straight away, with a suggested name,
@@ -414,15 +455,16 @@ the entries are applied first, so an item that left the shelf is kept.
   entries shown to the put-away endpoint (`PantryStore.putAwayShopping`), which
   restocks their items and takes them off the list. The copy says what the user
   did, the code what the server does with it, as with storage spaces and
-  locations. A 409 means the list changed meanwhile: the store refetches and says
-  so.
+  locations. It is online only, and first waits, briefly, for ticks made here to
+  reach the server, which checks them. A 409 means the list changed meanwhile:
+  the store pulls and says so.
 - **Sharing** (`shareList.ts`) builds the list's name and a line per entry still to
   buy, and hands it to `navigator.share`, which opens the device's share sheet with
   its messengers. Without it (Firefox on a desktop) the text is copied to the
   clipboard, and a notice says so. Only `text` is shared, since some apps paste a
   `title` too.
 
-## Installable, and readable offline
+## Installable, and usable offline
 
 `vite-plugin-pwa` (Workbox) writes a manifest and a service worker into `dist`,
 so the app installs to a home screen and opens without a network. **There is no
@@ -434,10 +476,14 @@ worker on, Chrome among the ones that allow it.
 - **The app itself is precached**: every hashed asset of the build, with
   `index.html` as the navigation fallback, so a deep link opens offline too.
   `start_url` and `scope` follow Vite's `base`, which is `/<repo>/` on Pages.
+- **The household itself works offline through the mirror** (State flow);
+  the worker only has to start the app and answer the bootstrap.
 - **Reads are cached as they arrive** — `NetworkFirst`, the cache
-  `pantry-api-reads`, five seconds before it gives up on the network. Offline,
-  the last data seen is shown and the header's Offline badge says why. Writes are
-  never cached and fail offline, as before.
+  `pantry-api-reads`, five seconds before it gives up on the network — so the
+  bootstrap (the user, households, units, categories) answers offline, and the
+  header's Offline badge says why the rest is not live. Sync pulls stay out of
+  it, since the mirror keeps its own copy and a cached page would skip changes.
+  Writes are never cached: the everyday ones go to the mirror, the rest fail.
   - The cache is keyed by URL alone, so `services/apiCache.ts` empties it
     whenever a session starts or ends (`AuthStore`): the next account to sign in
     on this device must never be shown the last one's pantry.
@@ -463,12 +509,6 @@ worker on, Chrome among the ones that allow it.
   The generator's own maskable and Apple icons are overwritten on purpose: it
   pads them with transparency and white, which those platforms then show as a
   frame around the icon.
-
-## Waiting on backend endpoints
-
-Bulk item actions are specified for the backend but not built. Until they land,
-bulk delete and move send one request per item (`PantryStore.deleteItems`,
-`moveItems`); switch them to `POST .../items/bulk-delete` and `bulk-move`.
 
 ## Importing from shared
 

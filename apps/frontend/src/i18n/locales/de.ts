@@ -93,8 +93,9 @@ export const de = {
         one: '# Artikel konnte nicht verschoben werden.',
         other: '# Artikel konnten nicht verschoben werden.',
       }),
-    refreshFailed:
-      'Aktualisieren fehlgeschlagen, daher werden die zuletzt empfangenen Daten angezeigt.',
+    unreachable: 'Der Server ist nicht erreichbar. Verbindung prüfen und dann erneut versuchen.',
+    changeRefused: (reason: string) => `Eine Änderung konnte nicht gespeichert werden: ${reason}`,
+    itemGone: 'Dieser Artikel wurde inzwischen gelöscht.',
   },
 
   categories: {
@@ -455,7 +456,6 @@ export const de = {
     copied: 'Liste kopiert. In eine Nachricht einfügen.',
     shareFailed: 'Die Liste konnte nicht geteilt werden.',
     shareLine: (name: string, amount: string) => `• ${name} – ${amount}`,
-    loadFailed: 'Die Einkaufslisten konnten nicht geladen werden.',
     noLists: 'Noch keine Einkaufslisten.',
     createFirst: 'Einkaufsliste erstellen',
     emptyList: (list: string) => `Auf „${list}“ steht noch nichts.`,

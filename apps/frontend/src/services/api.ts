@@ -8,6 +8,12 @@ import type {
   ShoppingListEntriesChange,
   ShoppingListEntry,
   ShoppingLists,
+  SyncCheckpoint,
+  SyncCollection,
+  SyncPullPayload,
+  SyncPushCollection,
+  SyncPushResult,
+  SyncPushRow,
   Unit,
   UserHousehold,
 } from '@pantry-pal/shared';
@@ -176,6 +182,35 @@ export const pantryApi = {
     request<PantryItem[]>(`${shoppingList(householdId, listId)}/put-away`, {
       method: 'POST',
       body: JSON.stringify(dto),
+    }),
+
+  /**
+   * The offline mirror's pull: a collection's changes after `checkpoint`, passed
+   * back exactly as a previous pull returned it.
+   */
+  syncPull: <T>(
+    householdId: string,
+    collection: SyncCollection,
+    checkpoint: SyncCheckpoint | undefined,
+    limit: number,
+  ): Promise<SyncPullPayload<T>> => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (checkpoint !== undefined) {
+      query.set('updatedAt', checkpoint.updatedAt);
+      query.set('id', checkpoint.id);
+    }
+    return request<SyncPullPayload<T>>(`${household(householdId)}/sync/${collection}?${query}`);
+  },
+
+  /** The offline mirror's push: local changes to items or entries, oldest first. */
+  syncPush: <T>(
+    householdId: string,
+    collection: SyncPushCollection,
+    rows: readonly SyncPushRow<T>[],
+  ): Promise<SyncPushResult<T>> =>
+    request<SyncPushResult<T>>(`${household(householdId)}/sync/${collection}/push`, {
+      method: 'POST',
+      body: JSON.stringify({ rows }),
     }),
 };
 
