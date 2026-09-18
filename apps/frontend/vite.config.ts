@@ -70,7 +70,9 @@ export default defineConfig(({ mode }) => {
           lang: DEFAULT_LOCALE,
           display: 'standalone',
           theme_color: '#c2410c',
-          background_color: '#f6f5f3',
+          // The splash screen behind the icon: the dark canvas from index.css.
+          // A manifest holds one colour, and a dark start is the quieter one.
+          background_color: '#151617',
           icons: [
             { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
             { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
