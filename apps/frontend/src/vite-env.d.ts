@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
   /** The email the development sign-in starts with; see `features/auth/SignInPage.tsx`. */

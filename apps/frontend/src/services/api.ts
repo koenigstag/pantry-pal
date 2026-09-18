@@ -31,7 +31,7 @@ import type {
 
 import { messages } from '../i18n/messages';
 import { ApiError, send } from './http';
-import { accessToken, refreshAccessToken } from './session';
+import { accessTokenOrStored, refreshAccessToken } from './session';
 
 export { ApiError } from './http';
 
@@ -44,7 +44,7 @@ export { ApiError } from './http';
  * ends the session, and the app returns to the sign-in page.
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await accessToken();
+  const token = await accessTokenOrStored();
   if (token === null) throw new ApiError(messages.auth.sessionEnded, 401);
 
   try {

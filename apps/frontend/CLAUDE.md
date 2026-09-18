@@ -422,6 +422,48 @@ the entries are applied first, so an item that left the shelf is kept.
   clipboard, and a notice says so. Only `text` is shared, since some apps paste a
   `title` too.
 
+## Installable, and readable offline
+
+`vite-plugin-pwa` (Workbox) writes a manifest and a service worker into `dist`,
+so the app installs to a home screen and opens without a network. **There is no
+worker in development**: `pnpm dev` serves the app as before, and a stale cache
+can never explain what you see. To exercise it, `pnpm build` then `pnpm preview`
+— over `http://localhost`, which some embedded browsers refuse to register a
+worker on, Chrome among the ones that allow it.
+
+- **The app itself is precached**: every hashed asset of the build, with
+  `index.html` as the navigation fallback, so a deep link opens offline too.
+  `start_url` and `scope` follow Vite's `base`, which is `/<repo>/` on Pages.
+- **Reads are cached as they arrive** — `NetworkFirst`, the cache
+  `pantry-api-reads`, five seconds before it gives up on the network. Offline,
+  the last data seen is shown and the header's Offline badge says why. Writes are
+  never cached and fail offline, as before.
+  - The cache is keyed by URL alone, so `services/apiCache.ts` empties it
+    whenever a session starts or ends (`AuthStore`): the next account to sign in
+    on this device must never be shown the last one's pantry.
+  - `accessTokenOrStored` in `session.ts` sends the stored token when a refresh
+    cannot reach the server, so the read is sent at all and the worker can answer
+    it from the cache. A server that does see that token still refuses it with 401.
+- **A new build is taken silently, but only while the app is starting**
+  (`services/pwa.ts`, registered by `main.tsx` before anyone signs in). Nothing
+  is on screen yet, so the reload costs nothing; a build deployed later in a
+  session waits for the next start rather than reloading under someone.
+- **`workbox-window` is a direct dependency**: the registration module imports
+  it, and pnpm's strict layout does not lend out the plugin's own copy.
+- **The icons** come from `public/icon.svg` (the storage box, corners rounded)
+  and `icons/icon-full-bleed.svg` (edge to edge, for the platforms that mask the
+  corners themselves). After changing either, regenerate them:
+
+  ```bash
+  pnpm dlx @vite-pwa/assets-generator@1 --preset minimal-2023 public/icon.svg
+  pnpm dlx sharp-cli --input icons/icon-full-bleed.svg --output public/maskable-icon-512x512.png resize 512 512
+  pnpm dlx sharp-cli --input icons/icon-full-bleed.svg --output public/apple-touch-icon-180x180.png resize 180 180
+  ```
+
+  The generator's own maskable and Apple icons are overwritten on purpose: it
+  pads them with transparency and white, which those platforms then show as a
+  frame around the icon.
+
 ## Waiting on backend endpoints
 
 Bulk item actions are specified for the backend but not built. Until they land,

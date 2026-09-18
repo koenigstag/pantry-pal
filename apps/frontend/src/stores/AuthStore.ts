@@ -4,6 +4,7 @@ import { makeAutoObservable } from 'mobx';
 
 import { messages } from '../i18n/messages';
 import { ApiError, type AuthApi } from '../services/api';
+import { clearApiCache } from '../services/apiCache';
 import {
   endSession,
   readSession,
@@ -103,13 +104,19 @@ export class AuthStore {
 
   /** One action, so the routes see the session and the onboarding flag together. */
   private startSession(session: AuthSession, isNewAccount: boolean): void {
+    // Whoever used this device before is not necessarily whoever signs in now.
+    void clearApiCache();
     this.isOnboarding = isNewAccount;
     saveSession(session);
   }
 
   private applySession(session: StoredSession | null): void {
     const signedIn = session !== null;
-    if (this.isSignedIn && !signedIn) this.endedElsewhere = !this.signingOut;
+    if (this.isSignedIn && !signedIn) {
+      this.endedElsewhere = !this.signingOut;
+      // Signed out here or in another tab: the cached reads go with the session.
+      void clearApiCache();
+    }
     if (signedIn) this.endedElsewhere = false;
     else this.isOnboarding = false;
     this.isSignedIn = signedIn;

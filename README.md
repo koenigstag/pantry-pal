@@ -123,6 +123,11 @@ variable, pages that need the API show their load error. The site is served from
 `https://<owner>.github.io/<repo>/`, a path the workflow passes to the build as
 `BASE_PATH`.
 
+The published site is an installable app: it can be added to a home screen, it
+opens without a network, and it shows the data last read while offline. A build
+is only ever taken into use while the app is starting, never under someone
+using it. Details in `apps/frontend/CLAUDE.md`.
+
 ## Decisions worth knowing
 
 ### Module formats

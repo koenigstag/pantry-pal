@@ -7,6 +7,8 @@
 
     /* Vite owns the emit; tsc is only used for type-checking. */
     "noEmit": true,
+    /* `vite.config.ts` imports a source file by path, extension and all. */
+    "allowImportingTsExtensions": true,
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,

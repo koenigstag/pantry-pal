@@ -100,6 +100,21 @@ export async function accessToken(): Promise<string | null> {
 }
 
 /**
+ * The same, except that a refresh with no response at all — the network is gone
+ * — falls back to the stored token, expired as it may be. The request then goes
+ * out, and the service worker can answer a read from its cache instead of the
+ * app failing before it asks. A server that does see the token refuses it with
+ * 401, exactly as before.
+ */
+export async function accessTokenOrStored(): Promise<string | null> {
+  try {
+    return await accessToken();
+  } catch {
+    return readSession()?.accessToken ?? null;
+  }
+}
+
+/**
  * Exchanges the refresh token for a new pair, and returns the new access token,
  * or `null` if the server refused: the session is over, and every tab signs out.
  * Without a response at all (offline, say) the session stays, and this throws.

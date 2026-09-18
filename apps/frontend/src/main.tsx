@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router/dom';
 
 import { LOCALE } from './i18n/locale';
 import { router } from './router';
+import { registerServiceWorker } from './services/pwa';
 import { StoreProvider } from './stores/StoreContext';
 
 import './index.css';
@@ -20,6 +21,10 @@ configure({
   reactionRequiresObservable: false,
   observableRequiresReaction: false,
 });
+
+// Before the app renders, and whether or not anyone signs in: the worker caches
+// the app itself, which is what makes it installable and openable offline.
+registerServiceWorker();
 
 const container = document.getElementById('root');
 if (container === null) {
