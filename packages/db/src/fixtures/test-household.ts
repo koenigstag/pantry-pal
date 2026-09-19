@@ -15,6 +15,7 @@ import {
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
+import { itemRowSelection } from '../repositories/item-rows';
 import {
   householdMembers,
   households,
@@ -22,9 +23,11 @@ import {
   items,
   products,
   shoppingLists,
+  subItems,
   users,
   type NewItemEventRow,
-  type NewItemRow,
+  type NewItemRecord,
+  type NewSubItemRow,
 } from '../schema';
 import {
   CATEGORY_SEED,
@@ -711,7 +714,8 @@ export function seedTestHousehold(
     // RETURNING preserves the order of a multi-row VALUES list.
     const productIdByName = new Map(productRows.map((row) => [row.name, row.id]));
 
-    const itemRows: NewItemRow[] = [];
+    const itemRows: NewItemRecord[] = [];
+    const unitRows: NewSubItemRow[] = [];
     const eventRows: NewItemEventRow[] = [];
 
     for (const fixture of ITEMS) {
@@ -743,13 +747,9 @@ export function seedTestHousehold(
         locationId: required(locationIdByName.get(fixture.location), fixture.location),
         category: fixture.category,
         isEdible: edibleFor(fixture),
-        quantity: fixture.quantity,
         unit: fixture.unit,
         sizeValue: fixture.size?.[0] ?? null,
         sizeUnit: fixture.size?.[1] ?? null,
-        expiresAt: fixture.expiresIn === undefined ? null : isoDay(now, fixture.expiresIn),
-        openedAt: fixture.openedDaysAgo === undefined ? null : isoDay(now, -fixture.openedDaysAgo),
-        periodAfterOpeningDays: fixture.paoDays ?? null,
         notes: fixture.notes ?? null,
         status,
         createdAt,
@@ -757,6 +757,22 @@ export function seedTestHousehold(
         deletedAt:
           fixture.deletedDaysAgo === undefined ? null : daysAgo(now, fixture.deletedDaysAgo),
       });
+
+      // One unit per piece, all sharing the fixture's dates. A used-up or thrown-out
+      // fixture keeps its units on the shelf: the item's own status says it left,
+      // exactly as restoring it would bring every unit back.
+      for (let unit = 0; unit < fixture.quantity; unit += 1) {
+        unitRows.push({
+          householdId: TEST_HOUSEHOLD_ID,
+          itemId: id,
+          expiresAt: fixture.expiresIn === undefined ? null : isoDay(now, fixture.expiresIn),
+          openedAt:
+            fixture.openedDaysAgo === undefined ? null : isoDay(now, -fixture.openedDaysAgo),
+          periodAfterOpeningDays: fixture.paoDays ?? null,
+          createdAt,
+          updatedAt: daysAgo(now, lastTouchedDaysAgo),
+        });
+      }
 
       const event = { householdId: TEST_HOUSEHOLD_ID, itemId: id, userId: actorId };
 
@@ -787,13 +803,17 @@ export function seedTestHousehold(
     }
 
     await tx.insert(items).values(itemRows);
+    await tx.insert(subItems).values(unitRows);
     await tx.insert(itemEvents).values(eventRows);
 
-    // Read the generated column back rather than recomputing it here, so the
-    // summary reports what Postgres actually stored.
+    // Read the generated column back, through the lead unit an item shows its
+    // dates from, rather than recomputing it here: the summary reports what
+    // Postgres actually stored.
+    const { leadUnit } = itemRowSelection(tx);
     const active = await tx
-      .select({ effectiveExpiresAt: items.effectiveExpiresAt })
+      .select({ effectiveExpiresAt: leadUnit.effectiveExpiresAt })
       .from(items)
+      .leftJoinLateral(leadUnit, sql`true`)
       .where(
         and(
           eq(items.householdId, TEST_HOUSEHOLD_ID),

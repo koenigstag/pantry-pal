@@ -9,10 +9,8 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
-  date,
   foreignKey,
   index,
-  integer,
   numeric,
   pgTable,
   text,
@@ -30,7 +28,11 @@ import { products } from './products';
 import { shoppingLists } from './shopping-lists';
 import { units } from './units';
 
-/** The batch half of product + batch: one physical package, with its own expiry. */
+/**
+ * Something the household keeps, in one location. Its units — how many there
+ * are, and each one's dates and fill level — are rows of `sub_items`; the
+ * quantity is their count, never a column here.
+ */
 export const items = pgTable(
   'items',
   {
@@ -53,17 +55,15 @@ export const items = pgTable(
     isEdible: boolean('is_edible').notNull(),
 
     /**
-     * Quantity is two parts so `2 cans × 400 g` can be represented: how many
-     * (`quantity` + `unit`), and what is inside one of them (`size_value` +
-     * `size_unit`).
+     * What the item is counted in, and what is inside one of it, so
+     * `2 cans × 400 g` can be represented: the count unit here, the size beside
+     * it, and how many as the number of active `sub_items`.
      *
-     * `quantity` counts whole things, so it is an integer, in a count unit —
-     * `pcs`, `bottle`, `bag`: see `items_unit_count_fk`. An amount is a size,
-     * `1 bag × 1.5 kg`, whose unit may be of any kind. `size_value` stays
-     * numeric, and its `mode: 'number'` matters — numeric otherwise arrives as
-     * the string "1.500".
+     * The unit is a count unit — `pcs`, `bottle`, `bag`: see
+     * `items_unit_count_fk`. An amount is a size, `1 bag × 1.5 kg`, whose unit
+     * may be of any kind. `size_value` stays numeric, and its `mode: 'number'`
+     * matters — numeric otherwise arrives as the string "1.500".
      */
-    quantity: integer('quantity').notNull(),
     unit: text('unit').notNull(),
     /**
      * Always `count`, and set by the database: the half of `items_unit_count_fk`
@@ -77,22 +77,12 @@ export const items = pgTable(
     sizeValue: numeric('size_value', { precision: 10, scale: 3, mode: 'number' }),
     sizeUnit: text('size_unit').references(() => units.code, { onDelete: 'restrict' }),
 
-    /** `date`, not timestamptz: a carton expires on a day, not an instant. */
-    expiresAt: date('expires_at'),
-    openedAt: date('opened_at'),
-    /** The "12M" symbol on cosmetics and syrups. */
-    periodAfterOpeningDays: integer('period_after_opening_days'),
-    /**
-     * `LEAST` skips NULLs and `date + int` yields a date, so an opened jar
-     * marked "use within 5 days" correctly outranks its printed 2027 date.
-     *
-     * Read THIS column when computing expiry status, never `expires_at`.
-     */
-    effectiveExpiresAt: date('effective_expires_at').generatedAlwaysAs(
-      sql`least(expires_at, opened_at + period_after_opening_days)`,
-    ),
-
     notes: text('notes'),
+    /**
+     * The whole item's lifecycle: on the shelf, used up, or thrown out. Its units
+     * have statuses of their own, so an item can stay on the shelf with none
+     * left, and restoring a used-up item brings its units back as they were.
+     */
     status: text('status').$type<ItemStatus>().notNull().default(ITEM_STATUS.Active),
     /**
      * The shopping list the item goes on by itself when it runs out: used up,
@@ -101,6 +91,11 @@ export const items = pgTable(
      */
     defaultShoppingListId: uuid('default_shopping_list_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Moves whenever anything a reader sees of the item changes, its units
+     * included: `ItemsRepository` touches it with every unit it writes, because
+     * a sync pull finds changed items by this column alone.
+     */
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
@@ -161,21 +156,16 @@ export const items = pgTable(
 
     /**
      * Redundant as a uniqueness rule, but the target of
-     * `shopping_list_entries_item_household_fk`, which keeps a list's entries
-     * within its household.
+     * `shopping_list_entries_item_household_fk` and `sub_items_item_household_fk`,
+     * which keep a list's entries and an item's units within its household.
      */
     unique('items_household_id_id_unique').on(t.householdId, t.id),
 
     check('items_status_check', sql`status in (${inList(ITEM_STATUSES)})`),
-    check('items_quantity_positive', sql`quantity >= 0`),
     check('items_unit_kind_count', sql`unit_kind = ${literal(QUANTITY_UNIT_KIND)}`),
     /** Both or neither: a size value without its unit is meaningless. */
     check('items_size_pair', sql`(size_value is null) = (size_unit is null)`),
 
-    /** The main list query: what is going off, soonest first. */
-    index('items_expiry_idx')
-      .on(t.householdId, t.effectiveExpiresAt)
-      .where(sql`deleted_at is null and status = 'active'`),
     index('items_location_idx')
       .on(t.householdId, t.locationId)
       .where(sql`deleted_at is null`),
@@ -195,5 +185,6 @@ export const items = pgTable(
   ],
 );
 
-export type ItemRow = typeof items.$inferSelect;
-export type NewItemRow = typeof items.$inferInsert;
+/** A row of the `items` table alone. Callers read `ItemRow`, which adds its units' state. */
+export type ItemRecord = typeof items.$inferSelect;
+export type NewItemRecord = typeof items.$inferInsert;
