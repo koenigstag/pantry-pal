@@ -3,7 +3,7 @@
  * `drizzle.config.ts` and `createDatabase()` both see the whole schema through
  * a single import.
  *
- * Export order follows the foreign-key graph: `units`, `categories`, `users`
+ * Export order follows the foreign-key graph (an item's units after the item): `units`, `categories`, `users`
  * and the default storage spaces depend on no household, everything else builds
  * on `households`.
  *
@@ -20,5 +20,6 @@ export * from './locations';
 export * from './products';
 export * from './shopping-lists';
 export * from './items';
+export * from './sub-items';
 export * from './item-events';
 export * from './shopping-list-entries';

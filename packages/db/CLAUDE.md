@@ -7,8 +7,8 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Fourteen tables, the transaction layer, seed data, and repositories for users,
-refresh tokens, households, members, locations, items, item events, units,
+Fifteen tables, the transaction layer, seed data, and repositories for users,
+refresh tokens, households, members, locations, items (with their units), item events, units,
 categories, the default storage spaces, shopping lists and their entries.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
@@ -174,7 +174,9 @@ These are deliberate. Changing any of them affects the whole workspace.
   milliseconds, would sit just before its own row. Deleted rows are included —
   they are the tombstones.
 - **Quantity is how many, then what is inside one**, so `2 cans × 400 g` can be
-  represented: `quantity` + `unit`, then `size_value` + `size_unit`.
+  represented: how many units, counted in `items.unit`, then `size_value` +
+  `size_unit`. The units are rows of `sub_items`; see Products, items and
+  sub-items below.
 - **Things are counted, never weighed.** `items.unit` must be a count unit:
   `pcs`, `pill`, or a container such as `bottle`, `can`, `jar`, `pack`, `box`,
   `bag`, `tube` or `blister`. A mass or volume goes in the size, whose unit may
@@ -185,8 +187,8 @@ These are deliberate. Changing any of them affects the whole workspace.
   redundant `UNIQUE (code, kind)` on `units`, and the same key refuses changing
   the kind of a count unit in use. `products.default_unit` follows the same rule
   (`products_default_unit_count_fk`).
-- **`quantity` is an integer** — how many whole things — and so is
-  `item_events.quantity_delta`. A fractional amount is a size: a 1.5 kg bag of
+- **Quantity is a count of rows** — an item's active `sub_items` — so it is a
+  whole number, and so is `item_events.quantity_delta`. A fractional amount is a size: a 1.5 kg bag of
   flour is `1 bag` with `size_value 1.5` in `kg`. `size_value` stays
   `numeric(10, 3)`. The shared DTOs enforce the same rule with `@IsInt()`.
 - **`units` is a lookup TABLE**, not an enum, with FKs from `items.unit`,
@@ -194,10 +196,11 @@ These are deliberate. Changing any of them affects the whole workspace.
   Adding `fl_oz_us` or a `carton` is an INSERT, not a migration. A count unit's
   label is its singular noun; the frontend's message catalog pluralises the ones
   it knows. `factor` exists but nothing reads it yet — conversions are deferred.
-- **`effective_expires_at`** is
+- **`sub_items.effective_expires_at`** is
   `GENERATED ALWAYS AS (LEAST(expires_at, opened_at + period_after_opening_days)) STORED`.
   **Expiry status must read this column, not `expires_at`** — otherwise an
-  opened item reports fresh until its printed date.
+  opened item reports fresh until its printed date. An item shows its lead
+  unit's: the active unit that expires first.
 - **Soft delete** (`deleted_at`) plus a `(household_id, updated_at)` index, so a
   reconnecting WebSocket client can fetch a delta rather than a full snapshot.
 - **Realtime via `pg_notify`**, ids only (8 KB payload cap). NOTIFY is
@@ -354,11 +357,214 @@ rolled-back transaction: a live duplicate entry is still refused, an item taken
 off a list goes back on as a new row beside its tombstone, and a deleted list's
 name is free again.
 
+`0008_sub_items` moves each item's quantity and dates into units: one `sub_items`
+row per piece, carrying the item's dates, and one consumed row for an item at
+quantity 0, so it keeps showing them. It is hand-edited in two places, and says
+so:
+
+- The data move is hand-added, after the new tenancy keys so they check every
+  unit, and before the item columns are dropped.
+- It is hand-ordered: drizzle-kit dropped `effective_expires_at` last, but
+  Postgres refuses to drop a column a generated column still reads, so it goes
+  first.
+
+Verified on PostgreSQL 18 over a database migrated to `0007` holding items of
+every shape — several units, opened with a period after opening, at quantity 0,
+used up, soft-deleted, above the new limit, without dates — with list entries and
+events: every item read back through `ItemsRepository` exactly as before, dates,
+status and `updated_at` included, in the same list order. On a database migrated
+from empty and seeded, the API check scripts from the offline sync work (35 pull,
+37 push, 82 shopping) all pass, as do 30 checks of what each write does to the
+units, among them the `sub_items` constraints in a rolled-back transaction.
+`drizzle-kit generate` reports no changes.
+
 ## Resolved: categories are a table
 
 Categories used to be a CHECK generated from a shared constant, so adding one
 needed a migration while adding a unit did not. `0002_categories` promoted them to
 a lookup table like `units`, and the asymmetry is gone.
+
+## Products, items and sub-items
+
+Designed on 2026-09-17. **Step 1 is built** (2026-09-18, migration `0008`): every
+unit of an item is a `sub_items` row, behind an `ItemsRepository` whose API and
+row shape did not change. Everything else below is designed, not built.
+
+Today one `items` row mixes what a thing is, where it is, and the state of its
+units. The design splits that into layers:
+
+```
+products, household_id NULL   catalog: admin-curated templates with translated names
+   │ copied the first time a household uses one (source_product_id)
+products, household_id set    the household's thing: name, brand, category, unit, size
+   │ one item per location that holds it
+items                         a group in a place: product, location, notes
+   │ one row per unit
+sub_items                     a unit: dates, period after opening, fill, status
+```
+
+A household's toothpaste is one product with two items: Bathroom, holding an
+opened tube at 60%, and Pantry, holding the spare. Each item has one sub-item.
+
+### Sub-items: built in step 1
+
+- **Every unit is a row** of `sub_items`: `household_id`, `item_id`, `expires_at`,
+  `opened_at`, `period_after_opening_days`, the generated `effective_expires_at`
+  (the same expression, over the unit's own columns), `fill_percent`, `status`,
+  timestamps and `deleted_at`. `items` lost `quantity`, the three dates and
+  `effective_expires_at`; `items_expiry_idx` became `sub_items_expiry_idx`.
+- **Quantity is derived, never stored:** the count of an item's active, non-deleted
+  units. Every item has at least one unit — creating one needs a quantity of at
+  least 1, units are only consumed or soft-deleted, and `0008` gave items at
+  quantity 0 one consumed unit to hold their dates.
+- **`items.status` stays: it is the whole item's lifecycle**, and a unit's status
+  is its own. Stepping a quantity down consumes units; using up, throwing out and
+  restoring an item change only the item's status, so an item can stay on the
+  shelf with no units left, and restoring brings back exactly the units it had —
+  both as before units existed. (The design first moved status to units only; it
+  stayed on items too because "on the shelf, quantity 0" and restoring need it.)
+- **`ItemsRepository` still reads and writes one row per item** (`ItemRow`): the
+  `items` row plus two lateral subqueries (`itemRowSelection` in
+  `repositories/item-rows.ts`), the active-unit count and the **lead unit** — the
+  active unit that expires first, else, with none active, the unit changed last —
+  whose dates the row shows. Writing a quantity adds copies of the lead unit or
+  consumes the units that should go first (opened, then soonest to expire, then
+  oldest); writing dates sets them on every active unit, or with none left on the
+  lead unit. So in step 1 an item's active units always share one state, and the
+  backend services, the sync layer and the offline mirror read items as before.
+- **Any unit write touches `items.updated_at`**, because a sync pull finds changed
+  items by that column alone. `ItemsRepository.update` always writes the `items`
+  row, units or not.
+- **Fill** is `smallint NOT NULL DEFAULT 100`, `BETWEEN 1 AND 100` — an empty unit
+  is consumed, not kept at 0 — with `fill_percent = 100 OR opened_at IS NOT NULL`,
+  because a partly used unit has been opened. Nothing writes it yet: the API has
+  no per-unit fields.
+- **Tenancy is a key:** `(household_id, item_id)` references
+  `items(household_id, id)` (`items_household_id_id_unique`), `ON DELETE CASCADE`.
+- **`item_events.sub_item_id`** (nullable) names the unit an event is about. Step 1
+  records whole-item events only, so it stays null.
+- **`MAX_ITEM_QUANTITY` dropped from 10,000 to 100**: it is now also how many rows
+  one item holds. A larger count is a size, `1 box × 200 pcs`. The offline mirror
+  uses the constant only to clamp merged quantities, not in its RxDB schema, so
+  existing mirrors open unchanged. `ItemsService.restock` never clamps an item
+  below what it holds, so one filled past 100 before the change keeps its units.
+
+### Sub-items: still to build
+
+- **The API and the mirror for per-unit state:** `PantryItem` gains its units, and
+  the frontend edits each unit's dates and fill. The mirror's RxDB schema changes
+  with it, which `apps/frontend/src/offline/schemas.ts` says needs a new mirror
+  database name (`MIRROR_VERSION`), since the server can resend everything.
+- When units can differ, **+** should add an unopened, full unit rather than copy
+  the lead unit, and events about one unit should fill `sub_item_id`.
+
+### Products
+
+- **One table, two roles.** A catalog row (`household_id` NULL) is a template,
+  curated through the admin API like categories. A household row is that
+  household's thing. Households cannot write catalog rows, which is why they
+  need rows of their own: homemade jam has no catalog entry but must still be
+  linkable across locations.
+- **Shared fields move here from `items`:** name, brand, category, `is_edible`,
+  unit and size. Two placements of one thing cannot disagree, and a rename
+  applies everywhere. `default_category` and `default_unit` become the product's
+  own `category` and `unit`; `default_shelf_life_days` stays.
+- **Using a template copies it** into a household row that keeps
+  `source_product_id`, so an admin editing the catalog never changes a
+  household's products.
+- **Barcode uniqueness needs `NULLS NOT DISTINCT`.** Today's
+  `products_household_barcode_idx` is unique on `(household_id, barcode)`, but
+  Postgres treats NULLs as distinct, so two catalog rows can share a barcode.
+  The bug was reproduced, and the fix verified, on PostgreSQL 18.
+
+### Translated names
+
+Modelled on `default_location_translations`, which was built after this was
+designed and already solves the same problem for storage spaces.
+
+- **`product_translations`** holds `product_id`, `locale` and `name`, with the
+  primary key `(product_id, locale)`, cascading from `products`. Translations
+  belong to catalog rows and are written through the admin API. A table rather
+  than a `jsonb` column keeps searching in one language, listing what is still
+  untranslated, and adding a language simple.
+- **Search as you type** uses an index on
+  `(locale, lower(name) text_pattern_ops)`. The operator class matters: when the
+  database collation is not C, Postgres uses an index for `LIKE 'том%'` only if
+  it was built with `text_pattern_ops`.
+- **`locale` is checked for format only**, `^[a-z]{2,3}(-[A-Z]{2})?$`, as for
+  default locations, and the admin DTO accepts `TRANSLATION_LOCALES` from
+  `@pantry-pal/shared`. A CHECK generated from that list would need a migration
+  for every new language.
+- **A name resolves in three steps:** the exact tag (`fr-CA`), then its language
+  (`fr`), then `products.name`, the catalog's English base name — the lookup
+  `pickTranslation` in `@pantry-pal/shared` already does for default locations.
+  Most translations are language-only rows; a regional row exists only where the
+  wording differs: corn is _maïs_ in France but _blé d'Inde_ in Quebec.
+- **Only names are translated in the database.** Categories and units are codes
+  that the frontend's message catalogs translate, and brands stay as they are.
+- **A household row copies the name** resolved in the language of the member who
+  used the template. Members of one household can have different
+  `users.locale`, but a change is broadcast once to the household's WebSocket
+  room, so a name resolved on the server could only be in one language.
+  `source_product_id` leaves room to show catalog names in each member's
+  language later, resolved on the client.
+
+### Items
+
+- **An item is a group of units placed in one location:** `household_id`,
+  `product_id`, `location_id`, `notes`, status, timestamps and `deleted_at`.
+  Location stays on the item, never on a sub-item.
+- **Every item has a product** (`product_id NOT NULL`). Adding something new
+  creates a household product first.
+- **Items use only their own household's products:**
+  `(household_id, product_id)` references `products(household_id, id)` — the
+  pattern locations already use — with `UNIQUE (household_id, id)` on `products`
+  as the target. A catalog row's `household_id` is NULL, so it never matches;
+  verified on PostgreSQL 18.
+- **At most one item per product per location:** unique
+  `(product_id, location_id)` among non-deleted items. "The toothpaste in the
+  Pantry" is always one card. Moving a unit to another location means finding or
+  creating that location's item, then changing the sub-item's `item_id`.
+
+### Outside the schema
+
+Step 1 changed nothing a client sees. The products step does: an item's name,
+category, unit and size come from its product, and the item edit form edits the
+product, so a rename applies in every location. Shopping list entries name items,
+so they keep working, but whether running out should consider a product's other
+locations (the spare in the pantry) is a question for that step.
+
+### Migrations
+
+- **`0008_sub_items` (built)** carries data, although the design said no database
+  held any worth keeping: the backend has been live on the VPS since 2026-09-17.
+  See Migrations for how it was assembled and verified.
+- **The products step (next migration)** adds `UNIQUE (household_id, id)` to
+  `products` before the key that references it — drizzle-kit has emitted a key
+  before its target — and turns each existing item's own name, category, unit and
+  size into a household product.
+
+### Open decisions
+
+1. ~~What the first implementation step covers.~~ Decided 2026-09-18 while the
+   user was away: the database layer alone, behind an unchanged API, on a branch
+   built over the offline sync work (PR #4), whose sync pull and push read the
+   same items code. Revisit if that order does not suit.
+2. **The stepper and a typed quantity**, once units can differ. Proposed: **+**
+   adds an unopened, full sub-item with the newest unit's printed date and period
+   after opening; **−** consumes the unit that should go first (what step 1 does).
+   Typing a lower quantity asks which units go.
+3. **Showing identical units.** Ten unopened eggs are ten rows; the details view
+   should collapse units in the same state rather than list ten identical lines.
+4. ~~An item whose last unit is consumed or moved out.~~ Settled by step 1: it
+   stays on the shelf, as an item at quantity 0 always has. Moving out comes with
+   the products step.
+5. **Moving units:** a `moved` event, and whether it belongs to the source item,
+   the target, or both.
+6. **Using the same catalog entry twice:** reuse the household's existing copy.
+   A unique `(household_id, source_product_id)` would guarantee it.
+7. **A default period after opening on products,** so a template pre-fills it,
+   alongside `default_shelf_life_days`.
 
 ## Deferred
 

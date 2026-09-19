@@ -1,29 +1,23 @@
 import { ITEM_STATUS, type ItemStatus } from '@pantry-pal/shared';
-import {
-  and,
-  asc,
-  count,
-  eq,
-  getTableColumns,
-  inArray,
-  isNull,
-  ne,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../client';
-import { items, type ItemRow, type NewItemRow } from '../schema';
+import { items, subItems, type NewItemRecord, type NewSubItemRow } from '../schema';
+import { itemRowSelection, LEAD_UNIT_ORDER, type ItemRow, type ItemUnitState } from './item-rows';
 import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from './sync-window';
+
+export type { ItemRow, ItemUnitState } from './item-rows';
 
 /**
  * Everything the caller supplies; tenancy and identity are applied by the
- * repository, and `unitKind` by the database.
+ * repository, and `unitKind` by the database. `quantity` and the dates are the
+ * item's units: that many are created, each with those dates.
  */
 export type CreateItemInput = Omit<
-  NewItemRow,
+  NewItemRecord,
   'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
->;
+> &
+  Partial<ItemUnitState> & { quantity: number };
 
 export type UpdateItemInput = Partial<CreateItemInput>;
 
@@ -33,6 +27,20 @@ export interface ListItemsFilter {
   locationId?: string;
 }
 
+/** The unit fields an update may set on an item's units. */
+const UNIT_STATE_FIELDS = ['expiresAt', 'openedAt', 'periodAfterOpeningDays'] as const;
+
+/**
+ * Which active units a lower quantity takes: the ones that should go first —
+ * opened before unopened, then the soonest to expire, then the oldest.
+ */
+const CONSUME_ORDER = [
+  sql`${subItems.openedAt} is null`,
+  sql`${subItems.effectiveExpiresAt} asc nulls last`,
+  asc(subItems.createdAt),
+  asc(subItems.id),
+];
+
 /**
  * Plain class, no decorators: `apps/backend` bridges it into Nest DI with a
  * `useFactory`, which is what keeps this package free of `@nestjs/*`.
@@ -40,6 +48,13 @@ export interface ListItemsFilter {
  * `db` is the transactional proxy from `createTransactionalDatabase()`, so
  * these methods participate in an ambient transaction without knowing it — no
  * executor parameter is threaded through, and none should be added.
+ *
+ * **Units.** An item's units are rows of `sub_items`, but every method here
+ * reads and writes the item as one row (`ItemRow`), as callers always have: a
+ * quantity, and one set of dates. Writing a quantity adds or consumes units;
+ * writing dates sets them on every unit on the shelf, so an item's active units
+ * always share one state. Anything a unit write changes also moves the item's
+ * `updated_at`, which is how a sync pull finds it.
  */
 export class ItemsRepository {
   constructor(private readonly db: Database) {}
@@ -47,21 +62,20 @@ export class ItemsRepository {
   /**
    * Most urgent first.
    *
-   * Ordered by `effective_expires_at`, never `expires_at` — an opened jar with a
-   * short period-after-opening has to outrank its printed date. Postgres sorts
-   * NULLs last on ASC, so items with no expiry fall to the bottom, matching
-   * `sortByUrgency` in `@pantry-pal/shared`.
+   * Ordered by the lead unit's `effective_expires_at`, never `expires_at` — an
+   * opened jar with a short period-after-opening has to outrank its printed
+   * date. Postgres sorts NULLs last on ASC, so items with no expiry fall to the
+   * bottom, matching `sortByUrgency` in `@pantry-pal/shared`.
    */
   list(householdId: string, { status, locationId }: ListItemsFilter = {}): Promise<ItemRow[]> {
     const conditions: SQL[] = [eq(items.householdId, householdId), isNull(items.deletedAt)];
     if (status !== undefined) conditions.push(eq(items.status, status));
     if (locationId !== undefined) conditions.push(eq(items.locationId, locationId));
 
-    return this.db
-      .select()
-      .from(items)
+    const { query, fields } = this.selectRows();
+    return query
       .where(and(...conditions))
-      .orderBy(asc(items.effectiveExpiresAt), asc(items.name), asc(items.id));
+      .orderBy(asc(fields.effectiveExpiresAt), asc(items.name), asc(items.id));
   }
 
   /** The main list: what is on the shelves now. */
@@ -75,9 +89,13 @@ export class ItemsRepository {
    * a client what to drop.
    */
   changedSince(householdId: string, window: SyncWindow): Promise<WithSyncStamp<ItemRow>[]> {
+    const { activeUnits, leadUnit, fields } = itemRowSelection(this.db);
+
     return this.db
-      .select({ ...getTableColumns(items), syncUpdatedAt: syncStamp(items.updatedAt) })
+      .select({ ...fields, syncUpdatedAt: syncStamp(items.updatedAt) })
       .from(items)
+      .leftJoinLateral(activeUnits, sql`true`)
+      .leftJoinLateral(leadUnit, sql`true`)
       .where(
         and(
           eq(items.householdId, householdId),
@@ -89,7 +107,7 @@ export class ItemsRepository {
   }
 
   async findById(householdId: string, id: string): Promise<ItemRow | undefined> {
-    const [row] = await this.db.select().from(items).where(this.live(householdId, id)).limit(1);
+    const [row] = await this.selectRows().query.where(this.live(householdId, id)).limit(1);
 
     return row;
   }
@@ -99,10 +117,8 @@ export class ItemsRepository {
    * it, and must tell an item deleted meanwhile from one that never existed.
    */
   async findAnyById(householdId: string, id: string): Promise<ItemRow | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(items)
-      .where(and(eq(items.householdId, householdId), eq(items.id, id)))
+    const [row] = await this.selectRows()
+      .query.where(and(eq(items.householdId, householdId), eq(items.id, id)))
       .limit(1);
 
     return row;
@@ -112,7 +128,7 @@ export class ItemsRepository {
   findByIds(householdId: string, ids: readonly string[]): Promise<ItemRow[]> {
     if (ids.length === 0) return Promise.resolve([]);
 
-    return this.db.select().from(items).where(this.liveIn(householdId, ids)).orderBy(asc(items.id));
+    return this.selectRows().query.where(this.liveIn(householdId, ids)).orderBy(asc(items.id));
   }
 
   /**
@@ -120,49 +136,82 @@ export class ItemsRepository {
    * from being deleted while entries naming them are written, `update` to
    * change them. Locked in id order, so two callers locking overlapping sets
    * cannot deadlock on each other.
+   *
+   * The `items` rows are locked first, alone — Postgres refuses `FOR UPDATE`
+   * beside the aggregate an `ItemRow` is read with — and read after.
    */
-  lockMany(
+  async lockMany(
     householdId: string,
     ids: readonly string[],
     strength: 'share' | 'update',
   ): Promise<ItemRow[]> {
-    if (ids.length === 0) return Promise.resolve([]);
+    if (ids.length === 0) return [];
 
-    return this.db
-      .select()
+    await this.db
+      .select({ id: items.id })
       .from(items)
       .where(this.liveIn(householdId, ids))
       .orderBy(asc(items.id))
       .for(strength);
+
+    return this.findByIds(householdId, ids);
   }
 
   /**
    * Reads an item and row-locks it until the transaction ends, so a
    * read-compare-write (an update that records what changed) cannot interleave
-   * with another one on the same item.
+   * with another one on the same item. Its units need no locks of their own:
+   * every write to them comes through here, under this one.
    */
   async lock(householdId: string, id: string): Promise<ItemRow | undefined> {
-    const [row] = await this.db
-      .select()
+    const [locked] = await this.db
+      .select({ id: items.id })
       .from(items)
       .where(this.live(householdId, id))
       .for('update');
+    if (locked === undefined) return undefined;
 
-    return row;
+    return this.findById(householdId, id);
   }
 
+  /**
+   * Creates the item and `quantity` units, each with the given dates. Creating
+   * one needs a quantity of at least 1; at 0 the item still gets one unit,
+   * consumed, to hold its dates — an item always has a unit to read them from.
+   */
   async create(householdId: string, input: CreateItemInput): Promise<ItemRow> {
-    const [row] = await this.db
+    const { quantity, expiresAt, openedAt, periodAfterOpeningDays, ...fields } = input;
+
+    const [record] = await this.db
       .insert(items)
-      .values({ ...input, householdId })
-      .returning();
+      .values({ ...fields, householdId })
+      .returning({ id: items.id });
 
     // `.returning()` on a single-row insert always yields one row; the guard is
     // for the type, not for a case that can happen.
-    if (row === undefined) throw new Error('Insert returned no row');
-    return row;
+    if (record === undefined) throw new Error('Insert returned no row');
+
+    const state = {
+      expiresAt: expiresAt ?? null,
+      openedAt: openedAt ?? null,
+      periodAfterOpeningDays: periodAfterOpeningDays ?? null,
+    };
+    if (quantity > 0) {
+      await this.insertUnits(householdId, record.id, quantity, state);
+    } else {
+      await this.insertUnits(householdId, record.id, 1, state, ITEM_STATUS.Consumed);
+    }
+
+    return this.required(householdId, record.id);
   }
 
+  /**
+   * Writes the item's own fields, then its units: `quantity` adds units, copies
+   * of the lead unit, or consumes the ones that should go first; dates are set
+   * on every active unit — or, with none left, on the lead unit, whose dates the
+   * item shows. In that order, so a restock that sets a quantity and clears the
+   * dates in one patch leaves every new unit without them.
+   */
   async update(
     householdId: string,
     id: string,
@@ -174,13 +223,24 @@ export class ItemsRepository {
       return this.findById(householdId, id);
     }
 
-    const [row] = await this.db
-      .update(items)
-      .set(patch)
-      .where(this.live(householdId, id))
-      .returning();
+    const { quantity, expiresAt, openedAt, periodAfterOpeningDays, ...fields } = patch;
 
-    return row;
+    // Always written, units or not: `updated_at` has to move either way.
+    const [record] = await this.db
+      .update(items)
+      .set({ ...fields, updatedAt: new Date() })
+      .where(this.live(householdId, id))
+      .returning({ id: items.id });
+    if (record === undefined) return undefined;
+
+    if (quantity !== undefined) await this.setQuantity(householdId, id, quantity);
+
+    const state: Partial<ItemUnitState> = { expiresAt, openedAt, periodAfterOpeningDays };
+    if (UNIT_STATE_FIELDS.some((field) => state[field] !== undefined)) {
+      await this.setUnitState(householdId, id, state);
+    }
+
+    return this.findById(householdId, id);
   }
 
   /**
@@ -206,23 +266,37 @@ export class ItemsRepository {
    * them all — and returns the rows it changed. `updated_at` moves, so a delta
    * sync picks them up.
    */
-  clearDefaultShoppingList(householdId: string, listId: string): Promise<ItemRow[]> {
-    return this.db
+  async clearDefaultShoppingList(householdId: string, listId: string): Promise<ItemRow[]> {
+    const changed = await this.db
       .update(items)
       .set({ defaultShoppingListId: null })
       .where(and(eq(items.householdId, householdId), eq(items.defaultShoppingListId, listId)))
-      .returning();
+      .returning({ id: items.id });
+    if (changed.length === 0) return [];
+
+    return this.selectRows()
+      .query.where(
+        and(
+          eq(items.householdId, householdId),
+          inArray(
+            items.id,
+            changed.map((row) => row.id),
+          ),
+        ),
+      )
+      .orderBy(asc(items.id));
   }
 
   /** Soft delete: the row survives so the change still shows up in a delta sync. */
   async softDelete(householdId: string, id: string): Promise<ItemRow | undefined> {
-    const [row] = await this.db
+    const [record] = await this.db
       .update(items)
       .set({ deletedAt: sql`now()` })
       .where(this.live(householdId, id))
-      .returning();
+      .returning({ id: items.id });
+    if (record === undefined) return undefined;
 
-    return row;
+    return this.findAnyById(householdId, id);
   }
 
   async countActiveInLocation(householdId: string, locationId: string): Promise<number> {
@@ -239,16 +313,128 @@ export class ItemsRepository {
    * rows. Consumed, discarded and soft-deleted rows stay where they were: they
    * are history, and history records where things actually lived.
    */
-  moveActive(
+  async moveActive(
     householdId: string,
     fromLocationId: string,
     toLocationId: string,
   ): Promise<ItemRow[]> {
-    return this.db
+    const moved = await this.db
       .update(items)
       .set({ locationId: toLocationId })
       .where(this.activeIn(householdId, fromLocationId))
-      .returning();
+      .returning({ id: items.id });
+
+    return this.findByIds(
+      householdId,
+      moved.map((row) => row.id),
+    );
+  }
+
+  /** `SELECT` of `ItemRow`s, ready for a `WHERE`. */
+  private selectRows() {
+    const { activeUnits, leadUnit, fields } = itemRowSelection(this.db);
+
+    const query = this.db
+      .select(fields)
+      .from(items)
+      .leftJoinLateral(activeUnits, sql`true`)
+      .leftJoinLateral(leadUnit, sql`true`)
+      .$dynamic();
+
+    return { query, fields };
+  }
+
+  /** An item this call just wrote: missing would be a bug, not a request to refuse. */
+  private async required(householdId: string, id: string): Promise<ItemRow> {
+    const row = await this.findAnyById(householdId, id);
+    if (row === undefined) throw new Error(`Item ${id} vanished inside its own write`);
+    return row;
+  }
+
+  /**
+   * Makes the item's active units number `quantity`: new ones copy the lead
+   * unit's dates and fill, as a higher quantity always kept the item's dates;
+   * surplus ones are consumed, those that should go first first.
+   */
+  private async setQuantity(householdId: string, itemId: string, quantity: number): Promise<void> {
+    const active = await this.db
+      .select({ id: subItems.id })
+      .from(subItems)
+      .where(this.activeUnitsOf(householdId, itemId))
+      .orderBy(...CONSUME_ORDER);
+
+    if (quantity > active.length) {
+      const [lead] = await this.db
+        .select({
+          expiresAt: subItems.expiresAt,
+          openedAt: subItems.openedAt,
+          periodAfterOpeningDays: subItems.periodAfterOpeningDays,
+          fillPercent: subItems.fillPercent,
+        })
+        .from(subItems)
+        .where(this.unitsOf(householdId, itemId))
+        .orderBy(...LEAD_UNIT_ORDER)
+        .limit(1);
+
+      await this.insertUnits(
+        householdId,
+        itemId,
+        quantity - active.length,
+        lead ?? { expiresAt: null, openedAt: null, periodAfterOpeningDays: null },
+      );
+      return;
+    }
+
+    if (quantity < active.length) {
+      await this.db
+        .update(subItems)
+        .set({ status: ITEM_STATUS.Consumed })
+        .where(
+          inArray(
+            subItems.id,
+            active.slice(0, active.length - quantity).map((unit) => unit.id),
+          ),
+        );
+    }
+  }
+
+  /**
+   * Sets dates on every active unit. With none left, they go on the lead unit
+   * instead — the unit the item shows its dates from — so editing the dates of
+   * an item at quantity 0 still reads back as written.
+   */
+  private async setUnitState(
+    householdId: string,
+    itemId: string,
+    state: Partial<ItemUnitState>,
+  ): Promise<void> {
+    const updated = await this.db
+      .update(subItems)
+      .set(state)
+      .where(this.activeUnitsOf(householdId, itemId))
+      .returning({ id: subItems.id });
+    if (updated.length > 0) return;
+
+    const [lead] = await this.db
+      .select({ id: subItems.id })
+      .from(subItems)
+      .where(this.unitsOf(householdId, itemId))
+      .orderBy(...LEAD_UNIT_ORDER)
+      .limit(1);
+    if (lead === undefined) return;
+
+    await this.db.update(subItems).set(state).where(eq(subItems.id, lead.id));
+  }
+
+  private async insertUnits(
+    householdId: string,
+    itemId: string,
+    howMany: number,
+    state: ItemUnitState & { fillPercent?: number },
+    status: ItemStatus = ITEM_STATUS.Active,
+  ): Promise<void> {
+    const unit: NewSubItemRow = { householdId, itemId, ...state, status };
+    await this.db.insert(subItems).values(Array.from({ length: howMany }, () => ({ ...unit })));
   }
 
   private live(householdId: string, id: string) {
@@ -270,5 +456,17 @@ export class ItemsRepository {
       eq(items.status, ITEM_STATUS.Active),
       isNull(items.deletedAt),
     );
+  }
+
+  private unitsOf(householdId: string, itemId: string) {
+    return and(
+      eq(subItems.householdId, householdId),
+      eq(subItems.itemId, itemId),
+      isNull(subItems.deletedAt),
+    );
+  }
+
+  private activeUnitsOf(householdId: string, itemId: string) {
+    return and(this.unitsOf(householdId, itemId), eq(subItems.status, ITEM_STATUS.Active));
   }
 }

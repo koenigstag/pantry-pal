@@ -162,8 +162,12 @@ export const FALLBACK_LOCATION_NAME = 'Other';
 export const EXPIRY_WARNING_DAYS = 3;
 
 export const MAX_ITEM_NAME_LENGTH = 80;
-/** Quantities are whole numbers — how many — so this bounds an integer. */
-export const MAX_ITEM_QUANTITY = 10_000;
+/**
+ * Quantities are whole numbers — how many — so this bounds an integer. Every
+ * unit is a row of its own (`sub_items`), so the bound is also how many rows one
+ * item can hold. A larger count is a size: `1 box × 200 pcs`.
+ */
+export const MAX_ITEM_QUANTITY = 100;
 /**
  * A size is `numeric(10, 3)` (`1.5` kg): anything finer would be silently
  * rounded by Postgres. Quantities are integers and have no decimals.
