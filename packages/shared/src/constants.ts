@@ -193,6 +193,12 @@ export const MAX_SHOPPING_LISTS_PER_HOUSEHOLD = 20;
  * more than a selection of cards holds, so the limit only turns away abuse.
  */
 export const MAX_SHOPPING_LIST_BATCH = 200;
+/**
+ * How many of an item go on a list when nothing says otherwise: picked for a
+ * list, or put on its default list for running out. The offline mirror adds
+ * entries itself, so both apps need the same number.
+ */
+export const DEFAULT_SHOPPING_ENTRY_QUANTITY = 1;
 
 /**
  * The English name of the shopping list every household starts with. It is
@@ -216,6 +222,42 @@ export const DEFAULT_SHOPPING_LIST_TRANSLATIONS: Readonly<Record<string, string>
   'fr-CA': 'Ma liste d’épicerie',
   es: 'Mi lista de la compra',
 };
+
+/**
+ * What the offline mirror replicates, spelled as it appears in a sync URL.
+ *
+ * Reference data (units, categories) is left out: it is the same for every
+ * household and changes about never, so the frontend keeps reading it over REST.
+ */
+export const SYNC_COLLECTION = {
+  Items: 'items',
+  Locations: 'locations',
+  ShoppingLists: 'shopping-lists',
+  ShoppingListEntries: 'shopping-list-entries',
+} as const;
+export type SyncCollection = (typeof SYNC_COLLECTION)[keyof typeof SYNC_COLLECTION];
+export const SYNC_COLLECTIONS = Object.values(SYNC_COLLECTION);
+
+/**
+ * How many documents one pull answers with. A client asks again from the
+ * checkpoint it gets back until a pull returns fewer than it asked for.
+ */
+export const DEFAULT_SYNC_PULL_LIMIT = 200;
+export const MAX_SYNC_PULL_LIMIT = 500;
+
+/**
+ * What the mirror writes to: the everyday actions — stepping, using up, adding
+ * an item, ticking, adding to a list — touch nothing else. Storage spaces and
+ * lists are only read; their editors stay online.
+ */
+export const SYNC_PUSH_COLLECTIONS = [
+  SYNC_COLLECTION.Items,
+  SYNC_COLLECTION.ShoppingListEntries,
+] as const;
+export type SyncPushCollection = (typeof SYNC_PUSH_COLLECTIONS)[number];
+
+/** How many changed documents one push carries at most. */
+export const MAX_SYNC_PUSH_BATCH = 50;
 
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;

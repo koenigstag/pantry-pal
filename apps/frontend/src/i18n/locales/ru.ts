@@ -111,7 +111,9 @@ export const ru = {
     quantityNotSaved: 'Не удалось сохранить новое количество, поэтому показано сохранённое.',
     deleteFailed: (count: number) => items(count, 'Не удалось удалить ', '.'),
     moveFailed: (count: number) => items(count, 'Не удалось переместить ', '.'),
-    refreshFailed: 'Не удалось обновить, поэтому показаны последние полученные данные.',
+    unreachable: 'Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.',
+    changeRefused: (reason: string) => `Не удалось сохранить изменение: ${reason}`,
+    itemGone: 'Этот предмет тем временем удалили.',
   },
 
   categories: {
@@ -488,7 +490,6 @@ export const ru = {
     copied: 'Список скопирован. Вставьте его в сообщение.',
     shareFailed: 'Не удалось поделиться списком.',
     shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
-    loadFailed: 'Не удалось загрузить списки покупок.',
     noLists: 'Списков покупок пока нет.',
     createFirst: 'Создать список покупок',
     emptyList: (list: string) => `В списке «${list}» пока ничего нет.`,

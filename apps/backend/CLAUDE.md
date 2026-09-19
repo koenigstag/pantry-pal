@@ -50,6 +50,7 @@ src/
   locations/    per-household locations: CRUD, reorder, soft delete
   items/        per-household items and their event history; running out, restocking
   shopping-lists/ lists and their entries: the editor's save, archiving, putting away
+  sync/         the offline mirror: pulls since a checkpoint, pushes through the services
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
@@ -81,6 +82,8 @@ PATCH  DELETE          /households/:householdId/shopping-lists/:listId
 POST                   /households/:householdId/shopping-lists/:listId/entries           itemIds, quantity
 PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:entryId  quantity, checked
 POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
+GET                    /households/:householdId/sync/:collection      ?updatedAt=&id=&limit=
+POST                   /households/:householdId/sync/:collection/push rows: items, entries only
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
@@ -237,7 +240,8 @@ buy, and whether it is ticked off. Any member manages lists and entries.
   in the same transaction. `ItemsService.update` adds one of it when a patch takes
   it from in stock (active, quantity above 0) to not: consumed, discarded, or down
   to 0. An item already on the list stays as it is. Deleting an item is a
-  correction, and takes it off every list instead.
+  correction, and takes it off every list instead. A sync push skips this: the
+  offline mirror applies the same rule itself (see Offline sync).
 - **"I used it already"** sends `status` and `defaultShoppingListId` in one patch,
   so a list picked while using an item up becomes its default, atomically.
 - **Adding** (`POST .../entries`) skips items already on the list and answers with
@@ -269,6 +273,55 @@ buy, and whether it is ticked off. Any member manages lists and entries.
   `ItemsService` and `ShoppingListsService`, so the two cannot deadlock on each
   other. A deadlock that happens anyway (`40P01`) is rolled back whole and
   translated to a 409, so the request can simply be sent again.
+
+## Offline sync
+
+The frontend keeps an offline mirror of a household (RxDB, in
+`apps/frontend/src/offline`). It pulls `items`, `locations`, `shopping-lists` and `shopping-list-entries`
+(`SYNC_COLLECTION`), and pushes its own changes to items and entries only
+(`SYNC_PUSH_COLLECTIONS`): the everyday actions touch nothing else, and the
+space and list editors stay online.
+
+- **A page of changes after a checkpoint**, oldest first: `?updatedAt=&id=` names
+  the last document of the previous page (both or neither, 400 otherwise), and
+  `?limit=` caps the page (200 by default, 500 at most). A client pulls again
+  from the checkpoint it gets back until a page comes back short; an empty page
+  hands its own checkpoint back.
+- **Deleted rows are sent**, with `_deleted: true` beside the usual wire shape:
+  that is how a client that was away learns what to drop. Items of every status
+  are sent, since a used-up item can still be on a shopping list.
+- **The checkpoint's `updatedAt` is the database's text, to the microsecond.**
+  Pass it back untouched: a value round-tripped through a JS `Date` loses its
+  microseconds and sits before its own row.
+- **Reads only.** One query per call, no transaction: a row written during a
+  pull is in this page or, with a later `updated_at`, the next. Writes keep
+  going through the domain services, the push's included, so the mirror never
+  bypasses their rules.
+- **Units and categories are not synced**: the same for every household and
+  about never changed, so the frontend keeps reading them over REST.
+- **A push goes through the domain services** (`SyncPushService`), row by row,
+  oldest first: the same DTOs, locks, history and broadcasts as a REST write.
+  Two things are left to the client, which did them already:
+  - An item that runs out is not put on its default list
+    (`ItemsService.update(..., { listWhenRunOut: false })`): the mirror added
+    that entry itself and pushes it next, so the server adding one too would make
+    a duplicate.
+  - `isEdible` is dropped wherever a category other than the default one decides
+    it — on a create, and on a patch that changes the category — since the
+    client's copy is a guess. Sent alone against such a category, it is refused.
+  - A row without an assumed state is a create, made under the client's id
+    (`CreatePantryItemDto.id`, `ShoppingListsService.addEntry`). A replay of a
+    create that already landed passes; an entry for an item already on the list
+    comes back as a tombstone, dropping the client's duplicate quietly.
+  - Otherwise the row applies only if the assumed `updatedAt` is still the
+    server's, as the fields that differ between the two states. A stale base
+    comes back in `conflicts` with the server's version, for the client's
+    conflict handler to merge and push again.
+  - A 4xx from the services (invalid, archived list) comes back in `conflicts`
+    as the server's version — a tombstone for a refused create — and in
+    `refused` with the message, so the client can say why rather than retry.
+    Anything else fails the push, which the client sends again later.
+  - The answer is 200 whatever became of each row.
 
 ## Request flow
 

@@ -1,8 +1,20 @@
 import { ITEM_STATUS, type ItemStatus } from '@pantry-pal/shared';
-import { and, asc, count, eq, gt, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  ne,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 
 import type { Database } from '../client';
 import { items, type ItemRow, type NewItemRow } from '../schema';
+import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from './sync-window';
 
 /**
  * Everything the caller supplies; tenancy and identity are applied by the
@@ -10,7 +22,7 @@ import { items, type ItemRow, type NewItemRow } from '../schema';
  */
 export type CreateItemInput = Omit<
   NewItemRow,
-  'id' | 'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
+  'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
 >;
 
 export type UpdateItemInput = Partial<CreateItemInput>;
@@ -58,19 +70,40 @@ export class ItemsRepository {
   }
 
   /**
-   * Delta for a reconnecting WebSocket client. Soft-deleted rows are included
-   * on purpose: they are the tombstones that tell the client what to drop.
+   * Items changed since the checkpoint, in the order a sync pull walks them.
+   * Every status, and soft-deleted rows too: those are the tombstones that tell
+   * a client what to drop.
    */
-  listChangedSince(householdId: string, since: Date): Promise<ItemRow[]> {
+  changedSince(householdId: string, window: SyncWindow): Promise<WithSyncStamp<ItemRow>[]> {
     return this.db
-      .select()
+      .select({ ...getTableColumns(items), syncUpdatedAt: syncStamp(items.updatedAt) })
       .from(items)
-      .where(and(eq(items.householdId, householdId), gt(items.updatedAt, since)))
-      .orderBy(asc(items.updatedAt));
+      .where(
+        and(
+          eq(items.householdId, householdId),
+          syncWindowWhere(items.updatedAt, items.id, window.after),
+        ),
+      )
+      .orderBy(asc(items.updatedAt), asc(items.id))
+      .limit(window.limit);
   }
 
   async findById(householdId: string, id: string): Promise<ItemRow | undefined> {
     const [row] = await this.db.select().from(items).where(this.live(householdId, id)).limit(1);
+
+    return row;
+  }
+
+  /**
+   * The row whatever its state, deleted included: a sync push compares against
+   * it, and must tell an item deleted meanwhile from one that never existed.
+   */
+  async findAnyById(householdId: string, id: string): Promise<ItemRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(items)
+      .where(and(eq(items.householdId, householdId), eq(items.id, id)))
+      .limit(1);
 
     return row;
   }

@@ -351,3 +351,54 @@ export interface ShoppingListEntriesDeletedPayload {
   householdId: string;
   ids: string[];
 }
+
+/**
+ * Where a pull left off. Documents are ordered by when they last changed, with
+ * the id breaking ties, so this pair names one document exactly and a client
+ * asking again from it misses nothing and repeats at most that one.
+ */
+export interface SyncCheckpoint {
+  updatedAt: string;
+  id: string;
+}
+
+/**
+ * A document as the offline mirror holds it: the shape the API already returns,
+ * plus whether the row is gone. A deleted row is still sent — that is how a
+ * client that was away learns to drop it — so `_deleted` is what it reads,
+ * never the absence of a document.
+ */
+export type SyncDocument<T> = T & { _deleted: boolean };
+
+/**
+ * One local change on its way to the server: the document as the client last
+ * had it from the server (absent for one it created), and as it is now.
+ */
+export interface SyncPushRow<T> {
+  assumedMasterState?: SyncDocument<T>;
+  newDocumentState: SyncDocument<T>;
+}
+
+/** A change the server would not take, and why, in the server's words. */
+export interface SyncRefusal {
+  id: string;
+  message: string;
+}
+
+/** What a push answers. */
+export interface SyncPushResult<T> {
+  /**
+   * The server's version of every document whose change was not applied as
+   * sent: because the client's base was stale, or because it was refused.
+   */
+  conflicts: SyncDocument<T>[];
+  /** The refused ones among them, so the client can say why instead of retrying. */
+  refused: SyncRefusal[];
+}
+
+/** One pull: documents in checkpoint order, and where to continue. */
+export interface SyncPullPayload<T> {
+  documents: SyncDocument<T>[];
+  /** `null` only when the household has no documents at all in this collection. */
+  checkpoint: SyncCheckpoint | null;
+}

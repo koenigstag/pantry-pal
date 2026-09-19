@@ -3,6 +3,7 @@ import type { DevSignInDto, SignInDto, SignUpDto } from '@pantry-pal/shared/dto'
 import { makeAutoObservable } from 'mobx';
 
 import { messages } from '../i18n/messages';
+import { forgetMirrors } from '../offline/forget';
 import { ApiError, type AuthApi } from '../services/api';
 import { clearApiCache } from '../services/apiCache';
 import {
@@ -80,6 +81,11 @@ export class AuthStore {
     return this.begin(() => this.api.devSignIn(dto), { 404: messages.auth.dev.unavailable });
   }
 
+  /**
+   * Signs out on purpose, which takes the pantry off this device: the offline
+   * mirrors go too, with any change not sent yet. A session that merely ends
+   * keeps them (see `applySession`).
+   */
   async signOut(): Promise<void> {
     this.signingOut = true;
     try {
@@ -87,6 +93,7 @@ export class AuthStore {
     } finally {
       this.signingOut = false;
     }
+    await forgetMirrors();
   }
 
   private async begin(
@@ -114,7 +121,10 @@ export class AuthStore {
     const signedIn = session !== null;
     if (this.isSignedIn && !signedIn) {
       this.endedElsewhere = !this.signingOut;
-      // Signed out here or in another tab: the cached reads go with the session.
+      // Signed out, or the session ended: the cached reads go with it, since
+      // they are keyed by URL alone. The offline mirrors are kept unless this
+      // was a sign-out: they belong to one user, and hold changes that reach the
+      // server once the same person signs in again.
       void clearApiCache();
     }
     if (signedIn) this.endedElsewhere = false;

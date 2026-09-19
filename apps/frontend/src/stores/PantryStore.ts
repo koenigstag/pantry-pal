@@ -1,7 +1,10 @@
 import {
+  createId,
+  DEFAULT_CATEGORY,
+  DEFAULT_SHOPPING_ENTRY_QUANTITY,
+  effectiveExpiry,
   ITEM_STATUS,
   MAX_SHOPPING_LISTS_PER_HOUSEHOLD,
-  PANTRY_COMMAND,
   PANTRY_EVENT,
   QUANTITY_UNIT_KIND,
   type Category,
@@ -10,22 +13,9 @@ import {
   type HouseholdMemberRemovedPayload,
   type HouseholdPayload,
   type PantryItem,
-  type PantryItemDeletedPayload,
-  type PantryItemPayload,
   type PantryLocation,
-  type PantryLocationDeletedPayload,
-  type PantryLocationPayload,
-  type PantryLocationsReorderedPayload,
-  type PantryLocationsUpsertedPayload,
-  type PantrySnapshotPayload,
   type ShoppingList,
-  type ShoppingListDeletedPayload,
-  type ShoppingListEntriesDeletedPayload,
-  type ShoppingListEntriesUpsertedPayload,
   type ShoppingListEntry,
-  type ShoppingListPayload,
-  type ShoppingLists,
-  type ShoppingListsUpsertedPayload,
   type SupportedLocale,
   type Unit,
   type UserHousehold,
@@ -39,15 +29,18 @@ import type {
   UpsertLocationsDto,
   UpsertShoppingListsDto,
 } from '@pantry-pal/shared/dto';
-import { makeAutoObservable, observableRef } from 'mobx';
+import { makeAutoObservable, observableRef, when } from 'mobx';
+import { Subject, type Subscription } from 'rxjs';
 
 import { nameCollator } from '../i18n/format';
 import { switchLocale } from '../i18n/locale';
 import { messages } from '../i18n/messages';
+import type { Mirror, MirrorRefusal, MirrorTransport } from '../offline/mirror';
 import { ApiError, type PantryApi } from '../services/api';
+import { backendOrigin } from '../services/backendOrigin';
 import type { PantrySocket } from '../services/socket';
 import type { NoticeStore } from './NoticeStore';
-import { reconcileById, shallowEqual } from './reconcile';
+import { reconcileById } from './reconcile';
 
 export type ConnectionState = 'idle' | 'connecting' | 'online' | 'offline';
 export type LoadState = 'idle' | 'loading' | 'ready' | 'failed';
@@ -58,51 +51,89 @@ export type WriteResult<T> = { ok: true; value: T } | { ok: false; error: string
 const NO_ITEMS: readonly PantryItem[] = [];
 const NO_ENTRIES: readonly ShoppingListEntry[] = [];
 
-/**
- * How many times a shopping refetch starts over because changes landed while it
- * was out. Past that, it applies what it got; the next snapshot corrects it.
- */
-const MAX_SHOPPING_REFETCHES = 3;
+/** How long an online write that reads local changes waits for them to reach the server. */
+const PUSH_WAIT_MS = 5_000;
 
+/**
+ * How long a local write waits to show. The mirror's queries emit a moment after
+ * a write lands; one superseded meanwhile, by a pull say, never shows as written.
+ */
+const SHOW_WAIT_MS = 1_000;
+
+/**
+ * Broadcasts that mean the household's data changed on the server. Each only
+ * asks the mirror to pull: the pull brings the change, in order with the rest.
+ */
+const DATA_EVENTS = [
+  PANTRY_EVENT.ItemCreated,
+  PANTRY_EVENT.ItemUpdated,
+  PANTRY_EVENT.ItemDeleted,
+  PANTRY_EVENT.LocationCreated,
+  PANTRY_EVENT.LocationUpdated,
+  PANTRY_EVENT.LocationDeleted,
+  PANTRY_EVENT.LocationsReordered,
+  PANTRY_EVENT.LocationsUpserted,
+  PANTRY_EVENT.ShoppingListCreated,
+  PANTRY_EVENT.ShoppingListUpdated,
+  PANTRY_EVENT.ShoppingListDeleted,
+  PANTRY_EVENT.ShoppingListsUpserted,
+  PANTRY_EVENT.ShoppingListEntriesUpserted,
+  PANTRY_EVENT.ShoppingListEntriesDeleted,
+] as const;
+
+/**
+ * The message for a failed request. `fetch` rejects with a `TypeError` when no
+ * response arrives at all — offline, or the server down — and a proxy in front
+ * of a server that is down or restarting answers 502 to 504 for it.
+ */
 function toMessage(error: unknown): string {
+  if (error instanceof TypeError) return messages.errors.unreachable;
+  if (error instanceof ApiError && error.status >= 502 && error.status <= 504) {
+    return messages.errors.unreachable;
+  }
   return error instanceof Error ? error.message : messages.errors.loadFailed;
 }
 
 const isActive = (item: PantryItem): boolean => item.status === ITEM_STATUS.Active;
+
+/** On the shelf with some left. Running out is leaving this state. */
+const inStock = (item: PantryItem): boolean => isActive(item) && item.quantity > 0;
 
 const bySortOrder = (
   a: Pick<PantryLocation, 'sortOrder' | 'name'>,
   b: Pick<PantryLocation, 'sortOrder' | 'name'>,
 ): number => a.sortOrder - b.sortOrder || nameCollator.compare(a.name, b.name);
 
-/**
- * Whether `incoming` should replace `existing`: never an older copy, and not an
- * identical one. Server timestamps are ISO-8601 strings in one format, so they
- * compare chronologically as strings.
- */
-const replaces = <T extends { readonly updatedAt: string }>(
-  incoming: T,
-  existing: T | undefined,
-): boolean =>
-  existing === undefined ||
-  (existing.updatedAt <= incoming.updatedAt && !shallowEqual(existing, incoming));
+/** The order entries were put on their lists. Instants share one format, so they compare as strings. */
+const byArrival = (a: ShoppingListEntry, b: ShoppingListEntry): number =>
+  a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1;
+
+/** The fields a patch sets: `undefined` means untouched, while `null` clears a field. */
+function definedFields<T extends object>(patch: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
 
 /**
- * One household's pantry, kept in sync over REST and the socket.
+ * One household's pantry, as this device holds it: an offline mirror (RxDB, in
+ * IndexedDB) that replicates with the server whenever it can be reached.
  *
- * **Server state only.** Writes wait for the server and apply what it returns;
- * the matching broadcast then changes nothing. The UI's one optimistic edit,
- * stepping a quantity, is an overlay kept in `QuantityUpdates` and never
- * written here — so this store never disagrees with the server for longer than
- * a response takes to arrive.
+ * **The UI reads only the mirror.** Its collections flow into the observable
+ * fields here, so a change shows the same way whoever made it: this tab, another
+ * tab, or another member through the server.
  *
- * `items`, `locations`, `units` and `categories` are replaced rather than mutated, and hold
- * plain objects (`observableRef`). An entity that did not change keeps its
- * object identity across refetches and snapshots (`reconcileById`), so a
- * memoised card skips re-rendering.
+ * **Everyday writes are local first**: adding, editing, using up, moving and
+ * deleting items, and everything done to a shopping list's entries. They land in
+ * the mirror at once, offline too, and replication pushes them; the server
+ * applies each through its own rules, and a change it refuses comes back as a
+ * notice. The editors of storage spaces and shopping lists, "Bought", and the
+ * account's settings stay online-only REST writes.
  *
- * The socket delivers events for every household the user belongs to; those
- * for any household other than the one shown are ignored.
+ * `items`, `locations`, `units` and `categories` are replaced rather than
+ * mutated, and hold plain objects (`observableRef`). An entity that did not
+ * change keeps its object identity (`reconcileById`), so a memoised card skips
+ * re-rendering.
  *
  * Shopping lists name items rather than copying them, so an entry shows the item
  * it names: an active one from `items`, and one used up or thrown out — off the
@@ -115,6 +146,7 @@ export class PantryStore {
   private readonly notices: NoticeStore;
 
   user: CurrentUser | null = null;
+  /** Set once the mirror holds the household, which is what the pages wait for. */
   household: UserHousehold | null = null;
   items: readonly PantryItem[] = NO_ITEMS;
   locations: readonly PantryLocation[] = [];
@@ -124,36 +156,30 @@ export class PantryStore {
   shoppingEntries: readonly ShoppingListEntry[] = NO_ENTRIES;
   /** Items that are not active but are on a shopping list: never in `items` at the same time. */
   offShelfItems: readonly PantryItem[] = NO_ITEMS;
-  /** Shopping lists load beside the bootstrap, so the rest of the app works without them. */
-  shoppingLoadState: LoadState = 'idle';
   connection: ConnectionState = 'idle';
   loadState: LoadState = 'idle';
   error: string | null = null;
 
-  /*
-   * Refetch bookkeeping, deliberately not observable. A broadcast that lands
-   * while an item refetch is in flight is newer than that response, so the
-   * response must not overwrite what the broadcast touched; a snapshot makes
-   * the whole response stale.
-   */
-  private refreshInFlight: Promise<void> | null = null;
-  private refreshQueued = false;
-  private refreshSuperseded = false;
-  private readonly touchedDuringRefresh = new Set<string>();
+  /* Mirror bookkeeping, deliberately not observable. */
+  private mirror: Mirror | null = null;
+  /** Whose household the open mirror holds: `userId/householdId`. */
+  private mirrorKey: string | null = null;
+  private mirrorSubscriptions: Subscription[] = [];
+  /** Every item the mirror holds, of any status: `items` and `offShelfItems` come from these. */
+  private allItems: readonly PantryItem[] = NO_ITEMS;
+  /** Whether the open mirror holds the whole household. */
+  private synced = false;
+  /** The household the bootstrap found, shown once the mirror has it. */
+  private loadedHousehold: UserHousehold | null = null;
+  /** Nudges the mirror to pull: a broadcast arrived, or the socket reconnected. */
+  private readonly changes = new Subject<void>();
+  /** The last sync request that failed, as it failed: RxDB reports it wrapped. */
+  private lastSyncError: unknown = null;
 
   /** The bootstrap running now, which a second `load()` joins instead of repeating. */
   private loadInFlight: Promise<void> | null = null;
-
-  /*
-   * Shopping refetch bookkeeping, not observable either. A refetch that returns
-   * after a snapshot is stale and is dropped; one that returns after a broadcast
-   * may predate it, so it asks again.
-   */
-  private shoppingChanges = 0;
-  private shoppingSnapshots = 0;
-
-  /** Entries and lists deleted in this session: a late copy of one must not bring it back. */
-  private readonly goneShopping = new Set<string>();
+  /** Between `connect()` and `dispose()`: a mirror opening after that is closed again at once. */
+  private active = false;
 
   constructor(api: PantryApi, socket: PantrySocket, notices: NoticeStore) {
     this.api = api;
@@ -161,34 +187,37 @@ export class PantryStore {
     this.notices = notices;
 
     // Collaborators and bookkeeping are excluded: MobX must not try to make the
-    // socket instance deeply observable.
+    // socket, the mirror or RxJS objects deeply observable.
     makeAutoObservable<
       PantryStore,
       | 'api'
       | 'socket'
       | 'notices'
-      | 'refreshInFlight'
-      | 'refreshQueued'
-      | 'refreshSuperseded'
-      | 'touchedDuringRefresh'
+      | 'mirror'
+      | 'mirrorKey'
+      | 'mirrorSubscriptions'
+      | 'allItems'
+      | 'synced'
+      | 'loadedHousehold'
+      | 'changes'
+      | 'lastSyncError'
       | 'loadInFlight'
-      | 'shoppingChanges'
-      | 'shoppingSnapshots'
-      | 'goneShopping'
+      | 'active'
     >(
       this,
       {
         api: false,
         socket: false,
         notices: false,
-        refreshInFlight: false,
-        refreshQueued: false,
-        refreshSuperseded: false,
-        touchedDuringRefresh: false,
+        mirror: false,
+        mirrorKey: false,
+        mirrorSubscriptions: false,
+        synced: false,
+        loadedHousehold: false,
+        changes: false,
+        lastSyncError: false,
         loadInFlight: false,
-        shoppingChanges: false,
-        shoppingSnapshots: false,
-        goneShopping: false,
+        active: false,
         user: observableRef,
         household: observableRef,
         items: observableRef,
@@ -198,6 +227,7 @@ export class PantryStore {
         shoppingLists: observableRef,
         shoppingEntries: observableRef,
         offShelfItems: observableRef,
+        allItems: observableRef,
       },
       { autoBind: true },
     );
@@ -279,7 +309,7 @@ export class PantryStore {
     return this.shoppingLists.filter((list) => list.archivedAt === null);
   }
 
-  /** Each list's entries, in the order they arrived. */
+  /** Each list's entries, in the order they were put on it. */
   get entriesByList(): ReadonlyMap<string, readonly ShoppingListEntry[]> {
     const groups = new Map<string, ShoppingListEntry[]>();
     for (const entry of this.shoppingEntries) {
@@ -307,67 +337,55 @@ export class PantryStore {
     return this.shoppingLists.filter((list) => listIds.has(list.id));
   }
 
+  /** Each item's `updatedAt`, whatever its status: how a local write is seen to show. */
+  private get itemVersions(): ReadonlyMap<string, string> {
+    return new Map(this.allItems.map((item) => [item.id, item.updatedAt]));
+  }
+
+  private get entryVersions(): ReadonlyMap<string, string> {
+    return new Map(this.shoppingEntries.map((entry) => [entry.id, entry.updatedAt]));
+  }
+
   /* -------------------------------------------------------------- lifecycle */
 
   connect(): void {
+    this.active = true;
     this.connection = 'connecting';
 
     this.socket.on('connect', this.handleConnect);
     this.socket.on('disconnect', this.handleDisconnect);
     this.socket.on('connect_error', this.handleConnectError);
-    this.socket.on(PANTRY_EVENT.Snapshot, this.handleSnapshot);
-    this.socket.on(PANTRY_EVENT.ItemCreated, this.handleItemUpserted);
-    this.socket.on(PANTRY_EVENT.ItemUpdated, this.handleItemUpserted);
-    this.socket.on(PANTRY_EVENT.ItemDeleted, this.handleItemDeleted);
-    this.socket.on(PANTRY_EVENT.LocationCreated, this.handleLocationUpserted);
-    this.socket.on(PANTRY_EVENT.LocationUpdated, this.handleLocationUpserted);
-    this.socket.on(PANTRY_EVENT.LocationDeleted, this.handleLocationDeleted);
-    this.socket.on(PANTRY_EVENT.LocationsReordered, this.handleLocationsReordered);
-    this.socket.on(PANTRY_EVENT.LocationsUpserted, this.handleLocationsUpserted);
+    for (const event of DATA_EVENTS) this.socket.on(event, this.handleDataChanged);
     this.socket.on(PANTRY_EVENT.HouseholdUpdated, this.handleHouseholdUpdated);
     this.socket.on(PANTRY_EVENT.HouseholdDeleted, this.handleHouseholdDeleted);
     this.socket.on(PANTRY_EVENT.MemberRemoved, this.handleMemberRemoved);
-    this.socket.on(PANTRY_EVENT.ShoppingListCreated, this.handleShoppingListUpserted);
-    this.socket.on(PANTRY_EVENT.ShoppingListUpdated, this.handleShoppingListUpserted);
-    this.socket.on(PANTRY_EVENT.ShoppingListDeleted, this.handleShoppingListDeleted);
-    this.socket.on(PANTRY_EVENT.ShoppingListsUpserted, this.handleShoppingListsUpserted);
-    this.socket.on(PANTRY_EVENT.ShoppingListEntriesUpserted, this.handleShoppingEntriesUpserted);
-    this.socket.on(PANTRY_EVENT.ShoppingListEntriesDeleted, this.handleShoppingEntriesDeleted);
 
     this.socket.connect();
   }
 
   dispose(): void {
+    this.active = false;
+
     this.socket.off('connect', this.handleConnect);
     this.socket.off('disconnect', this.handleDisconnect);
     this.socket.off('connect_error', this.handleConnectError);
-    this.socket.off(PANTRY_EVENT.Snapshot, this.handleSnapshot);
-    this.socket.off(PANTRY_EVENT.ItemCreated, this.handleItemUpserted);
-    this.socket.off(PANTRY_EVENT.ItemUpdated, this.handleItemUpserted);
-    this.socket.off(PANTRY_EVENT.ItemDeleted, this.handleItemDeleted);
-    this.socket.off(PANTRY_EVENT.LocationCreated, this.handleLocationUpserted);
-    this.socket.off(PANTRY_EVENT.LocationUpdated, this.handleLocationUpserted);
-    this.socket.off(PANTRY_EVENT.LocationDeleted, this.handleLocationDeleted);
-    this.socket.off(PANTRY_EVENT.LocationsReordered, this.handleLocationsReordered);
-    this.socket.off(PANTRY_EVENT.LocationsUpserted, this.handleLocationsUpserted);
+    for (const event of DATA_EVENTS) this.socket.off(event, this.handleDataChanged);
     this.socket.off(PANTRY_EVENT.HouseholdUpdated, this.handleHouseholdUpdated);
     this.socket.off(PANTRY_EVENT.HouseholdDeleted, this.handleHouseholdDeleted);
     this.socket.off(PANTRY_EVENT.MemberRemoved, this.handleMemberRemoved);
-    this.socket.off(PANTRY_EVENT.ShoppingListCreated, this.handleShoppingListUpserted);
-    this.socket.off(PANTRY_EVENT.ShoppingListUpdated, this.handleShoppingListUpserted);
-    this.socket.off(PANTRY_EVENT.ShoppingListDeleted, this.handleShoppingListDeleted);
-    this.socket.off(PANTRY_EVENT.ShoppingListsUpserted, this.handleShoppingListsUpserted);
-    this.socket.off(PANTRY_EVENT.ShoppingListEntriesUpserted, this.handleShoppingEntriesUpserted);
-    this.socket.off(PANTRY_EVENT.ShoppingListEntriesDeleted, this.handleShoppingEntriesDeleted);
     this.socket.disconnect();
+
+    void this.detachMirror()?.close();
   }
 
   /* ------------------------------------------------------------------ reads */
 
   /**
-   * REST bootstrap, so the page populates even if the socket never connects:
-   * the user, their first household (created if they have none), its
-   * locations and items, and the unit list.
+   * The bootstrap: the user, their first household (created if they have none)
+   * and the units over REST, which the service worker answers from its cache
+   * when offline; then the household's mirror. The pages wait until the mirror
+   * holds the household: at once when an earlier session synced it, else after
+   * a first pull, which needs the server.
    *
    * A call while one runs joins it. StrictMode's development remount calls this
    * twice at once, and two runs for a new account would each create a household.
@@ -380,8 +398,7 @@ export class PantryStore {
   }
 
   private async runLoad(): Promise<void> {
-    this.loadState = 'loading';
-    this.error = null;
+    this.startLoad();
     void this.refreshCategories();
 
     try {
@@ -392,21 +409,14 @@ export class PantryStore {
       ]);
       const household =
         households[0] ?? (await this.api.createHousehold({ name: messages.household.defaultName }));
-      const [locations, items] = await Promise.all([
-        this.api.listLocations(household.id),
-        this.api.listItems(household.id),
-      ]);
 
-      this.applyLoaded({ user, household, units, locations, items });
-      void this.refreshShopping();
+      await this.openMirror(user.id, household.id);
+      this.applyBootstrap(user, household, units);
       // The account's language outranks this browser's copy of it — on a new
       // device, say. When they differ, the page reloads in the account's.
       switchLocale(user.locale);
-      // A socket that connected before the household was known could not ask
-      // for a snapshot yet; ask now.
-      this.requestSync();
     } catch (error) {
-      this.failLoad(error);
+      this.failLoad(toMessage(error));
     }
   }
 
@@ -424,90 +434,52 @@ export class PantryStore {
     }
   }
 
-  /** Background refetch of everything shown: no loading state, and only what changed repaints. */
+  /** Pulls whatever the server has that the mirror does not, in the background. */
   async refresh(): Promise<void> {
-    await Promise.all([this.refreshLocations(), this.refreshItems(), this.refreshShopping()]);
-  }
-
-  /**
-   * Fetches the shopping lists, their entries and the items those name. Like
-   * categories, beside the bootstrap: a failure — a backend older than shopping
-   * lists, say — leaves everything else working. Only the first load shows a
-   * loading state; later ones repaint what changed.
-   *
-   * A snapshot that arrives meanwhile is newer and complete, so the response is
-   * dropped. A broadcast that arrives meanwhile may be newer than the response
-   * but is only a part, so the fetch starts over, a few times at most.
-   */
-  async refreshShopping(attempt = 1): Promise<void> {
-    const householdId = this.householdId;
-    if (householdId === null) return;
-
-    const changes = this.shoppingChanges;
-    const snapshots = this.shoppingSnapshots;
-    if (this.shoppingLoadState !== 'ready') this.setShoppingLoadState('loading');
-
-    let shopping: ShoppingLists;
-    try {
-      shopping = await this.api.listShoppingLists(householdId);
-    } catch {
-      if (this.shoppingLoadState === 'ready') this.notices.error(messages.errors.refreshFailed);
-      else this.setShoppingLoadState('failed');
-      return;
-    }
-
-    if (this.shoppingSnapshots !== snapshots) return;
-    if (this.shoppingChanges !== changes && attempt < MAX_SHOPPING_REFETCHES) {
-      await this.refreshShopping(attempt + 1);
-      return;
-    }
-    this.applyShopping(householdId, shopping);
-  }
-
-  async refreshLocations(): Promise<void> {
-    const householdId = this.householdId;
-    if (householdId === null) return;
-
-    try {
-      this.applyLocations(householdId, await this.api.listLocations(householdId));
-    } catch {
-      this.notices.error(messages.errors.refreshFailed);
-    }
-  }
-
-  /**
-   * Refetches the household's items in the background. Calls made while one
-   * is in flight collapse into a single follow-up request.
-   */
-  refreshItems(): Promise<void> {
-    if (this.refreshInFlight !== null) {
-      this.refreshQueued = true;
-      return this.refreshInFlight;
-    }
-
-    const run = this.runItemRefreshes().finally(() => {
-      this.refreshInFlight = null;
-    });
-    this.refreshInFlight = run;
-    return run;
-  }
-
-  /** Asks the server to re-send the household's snapshot over the socket. */
-  requestSync(): void {
-    const householdId = this.householdId;
-    if (householdId === null || !this.socket.connected) return;
-    this.socket.emit(PANTRY_COMMAND.Sync, { householdId });
+    this.mirror?.reSync();
+    await this.refreshCategories();
   }
 
   /* ----------------------------------------------------------------- writes */
 
-  /** Returns the server's error message, or `null` once the item exists. */
+  /**
+   * Adds an item on this device, under an id made here; the server gets it once
+   * it can be reached. Returns the message to show, or `null`.
+   */
   async addItem(dto: CreatePantryItemDto): Promise<string | null> {
+    const mirror = this.mirror;
     const householdId = this.householdId;
-    if (householdId === null) return messages.errors.loadFailed;
+    if (mirror === null || householdId === null) return messages.errors.loadFailed;
 
+    const id = createId();
+    const now = new Date().toISOString();
+    const fields = {
+      expiresAt: dto.expiresAt ?? null,
+      openedAt: dto.openedAt ?? null,
+      periodAfterOpeningDays: dto.periodAfterOpeningDays ?? null,
+    };
     try {
-      this.acceptItem(await this.api.createItem(householdId, dto));
+      await mirror.insertItem({
+        id,
+        householdId,
+        locationId: dto.locationId,
+        productId: null,
+        name: dto.name,
+        category: dto.category,
+        isEdible: this.edibleFor(dto.category, dto.isEdible),
+        quantity: dto.quantity,
+        unit: dto.unit,
+        sizeValue: dto.sizeValue ?? null,
+        sizeUnit: dto.sizeUnit ?? null,
+        ...fields,
+        effectiveExpiresAt: effectiveExpiry(fields),
+        notes: dto.notes ?? null,
+        status: ITEM_STATUS.Active,
+        defaultShoppingListId: dto.defaultShoppingListId ?? null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await this.shown(() => this.itemVersions.has(id));
       return null;
     } catch (error) {
       return toMessage(error);
@@ -515,53 +487,59 @@ export class PantryStore {
   }
 
   /**
-   * Applies a partial update once the server accepts it. Returns the server's
-   * error message, or `null`: callers inside a modal dialog show it there, where
-   * a notice would be hidden behind the dialog.
+   * Changes an item on this device; the server gets the change once it can be
+   * reached. An item that runs out goes on its default shopping list, as the
+   * server would put it. Returns the message to show, or `null`: callers inside
+   * a modal dialog show it there, where a notice would be hidden behind it.
    */
   async updateItem(id: string, dto: UpdatePantryItemDto): Promise<string | null> {
-    const householdId = this.householdId;
-    if (householdId === null) return messages.errors.loadFailed;
+    const mirror = this.mirror;
+    if (mirror === null) return messages.errors.loadFailed;
 
     try {
-      this.acceptItem(await this.api.updateItem(householdId, id, dto));
+      const change = await mirror.patchItem(id, (item) => this.itemPatch(item, dto));
+      if (change === undefined) return messages.errors.itemGone;
+      const entryId =
+        inStock(change.before) && !inStock(change.after)
+          ? await this.putOnDefaultList(mirror, change.after)
+          : undefined;
+      await this.shown(
+        () =>
+          this.itemVersions.get(id) === change.after.updatedAt &&
+          (entryId === undefined || this.entryVersions.has(entryId)),
+      );
       return null;
     } catch (error) {
       return toMessage(error);
     }
   }
 
-  /**
-   * One DELETE per item, until the bulk endpoint from the backend spec
-   * (`POST .../items/bulk-delete`) replaces this loop with a single call.
-   */
+  /** Deletes items on this device, taking them off every list, as the server does. */
   async deleteItems(ids: readonly string[]): Promise<void> {
-    const householdId = this.householdId;
-    if (householdId === null || ids.length === 0) return;
+    const mirror = this.mirror;
+    if (mirror === null || ids.length === 0) return;
 
-    const results = await Promise.allSettled(ids.map((id) => this.api.removeItem(householdId, id)));
-    this.forgetItems(
-      householdId,
-      ids.filter((_, index) => results[index]?.status === 'fulfilled'),
-    );
-    this.reportFailures(results, messages.errors.deleteFailed);
+    try {
+      await mirror.removeItems(ids);
+      const entries = await mirror.entriesNaming(ids);
+      await mirror.removeEntries(entries.map((entry) => entry.id));
+      await this.shown(() => ids.every((id) => !this.itemVersions.has(id)));
+    } catch {
+      this.notices.error(messages.errors.deleteFailed(ids.length));
+    }
   }
 
-  /**
-   * One PATCH per item, until the bulk endpoint from the backend spec
-   * (`POST .../items/bulk-move`) replaces this loop with a single call.
-   */
   async moveItems(ids: readonly string[], locationId: string): Promise<void> {
-    const householdId = this.householdId;
-    if (householdId === null || ids.length === 0) return;
+    const mirror = this.mirror;
+    if (mirror === null || ids.length === 0) return;
 
+    const updatedAt = new Date().toISOString();
     const results = await Promise.allSettled(
-      ids.map((id) => this.api.updateItem(householdId, id, { locationId })),
+      ids.map((id) => mirror.patchItem(id, () => ({ locationId, updatedAt }))),
     );
-    this.acceptItems(
-      results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
-    );
-    this.reportFailures(results, messages.errors.moveFailed);
+    await this.shown(() => ids.every((id) => this.itemVersions.get(id) === updatedAt));
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (failed > 0) this.notices.error(messages.errors.moveFailed(failed));
   }
 
   /**
@@ -620,40 +598,44 @@ export class PantryStore {
   }
 
   /**
-   * Saves the locations editor in one request: renames, additions, deletions
-   * and order. Returns `null` once saved, or the message the editor shows.
+   * Saves the locations editor in one request, online: renames, additions,
+   * deletions and order. Returns `null` once saved, or the message the editor
+   * shows.
    *
    * A 409 means the list changed on the server while the user edited it. The
-   * latest data is fetched before this returns, the editor's draft rebases onto
-   * it, and the user saves again.
+   * latest is fetched before this returns, the editor's draft rebases onto it,
+   * and the user saves again.
    */
   async saveLocations(dto: UpsertLocationsDto): Promise<string | null> {
+    const mirror = this.mirror;
     const householdId = this.householdId;
-    if (householdId === null) return messages.errors.loadFailed;
+    if (mirror === null || householdId === null) return messages.errors.loadFailed;
 
     try {
-      this.applyLocations(householdId, await this.api.upsertLocations(householdId, dto));
-      // Items moved out of deleted locations. Broadcasts announce them too, but
-      // the socket may be down.
-      if ((dto.removed?.length ?? 0) > 0) void this.refreshItems();
+      await mirror.acceptLocations(await this.api.upsertLocations(householdId, dto), true);
+      // Items moved out of deleted locations: the pull brings them.
+      mirror.reSync();
       return null;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        await this.refresh();
+        await this.fetchLocations(mirror, householdId);
         return messages.locationEditor.changedElsewhere;
       }
       return toMessage(error);
     }
   }
 
-  /** Creates a shopping list, appended after the others. */
+  /** Creates a shopping list, online, appended after the others. */
   async createShoppingList(name: string): Promise<WriteResult<ShoppingList>> {
+    const mirror = this.mirror;
     const householdId = this.householdId;
-    if (householdId === null) return { ok: false, error: messages.errors.loadFailed };
+    if (mirror === null || householdId === null) {
+      return { ok: false, error: messages.errors.loadFailed };
+    }
 
     try {
       const list = await this.api.createShoppingList(householdId, { name });
-      this.acceptShoppingList(list);
+      await mirror.acceptShoppingLists([list], false);
       return { ok: true, value: list };
     } catch (error) {
       return { ok: false, error: this.shoppingListError(error) };
@@ -661,7 +643,7 @@ export class PantryStore {
   }
 
   /**
-   * Saves the shopping lists editor in one request: additions, renames,
+   * Saves the shopping lists editor in one request, online: additions, renames,
    * archiving, deletions and order. Returns `null` once saved, or the message
    * the editor shows.
    *
@@ -670,168 +652,314 @@ export class PantryStore {
    * them, and the user saves again.
    */
   async saveShoppingLists(dto: UpsertShoppingListsDto): Promise<string | null> {
+    const mirror = this.mirror;
     const householdId = this.householdId;
-    if (householdId === null) return messages.errors.loadFailed;
+    if (mirror === null || householdId === null) return messages.errors.loadFailed;
 
     try {
-      this.applyShoppingLists(householdId, await this.api.upsertShoppingLists(householdId, dto));
-      // Items lose a deleted list as their default. Broadcasts announce them too,
-      // but the socket may be down.
-      if ((dto.removed?.length ?? 0) > 0) void this.refreshItems();
+      await mirror.acceptShoppingLists(await this.api.upsertShoppingLists(householdId, dto), true);
+      // A deleted list's entries went with it, and its items lost it as their
+      // default: the pull brings both.
+      mirror.reSync();
       return null;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        await this.refreshShopping();
+        await this.fetchShoppingLists(mirror, householdId);
         return messages.shoppingListEditor.changedElsewhere;
       }
       return toMessage(error);
     }
   }
 
-  /** Puts items on a list; those already on it stay as they are. Answers how many were added. */
+  /**
+   * Puts items on a list, on this device; those already on it stay as they
+   * are. Answers how many were added.
+   */
   async addToShoppingList(
     listId: string,
     itemIds: readonly string[],
   ): Promise<WriteResult<number>> {
+    const mirror = this.mirror;
     const householdId = this.householdId;
-    if (householdId === null) return { ok: false, error: messages.errors.loadFailed };
+    if (mirror === null || householdId === null) {
+      return { ok: false, error: messages.errors.loadFailed };
+    }
 
     try {
-      const change = await this.api.addShoppingListEntries(householdId, listId, {
-        itemIds: [...itemIds],
-      });
-      this.acceptShoppingEntries(householdId, change.entries, change.items);
-      return { ok: true, value: change.entries.length };
+      const onIt = new Set((await mirror.entriesOn(listId)).map((entry) => entry.itemId));
+      const entries = [...new Set(itemIds)]
+        .filter((itemId) => !onIt.has(itemId))
+        .map((itemId) => newEntry(householdId, listId, itemId));
+      await mirror.insertEntries(entries);
+      await this.shown(() => entries.every((entry) => this.entryVersions.has(entry.id)));
+      return { ok: true, value: entries.length };
     } catch (error) {
       return { ok: false, error: toMessage(error) };
     }
   }
 
-  /** How many to buy, or ticked off. Returns `null` once saved, or the message to show. */
+  /** How many to buy, or ticked off, on this device. Returns `null` once saved, or the message to show. */
   async updateShoppingEntry(
     entry: ShoppingListEntry,
     dto: UpdateShoppingListEntryDto,
   ): Promise<string | null> {
-    const householdId = this.householdId;
-    if (householdId === null) return messages.errors.loadFailed;
+    const mirror = this.mirror;
+    if (mirror === null) return messages.errors.loadFailed;
 
+    const now = new Date().toISOString();
     try {
-      const saved = await this.api.updateShoppingListEntry(
-        householdId,
-        entry.listId,
-        entry.id,
-        dto,
-      );
-      this.acceptShoppingEntries(householdId, [saved], []);
+      const found = await mirror.patchEntry(entry.id, (current) => ({
+        ...(dto.quantity === undefined ? {} : { quantity: dto.quantity }),
+        ...(dto.checked === undefined
+          ? {}
+          : { checkedAt: dto.checked ? (current.checkedAt ?? now) : null }),
+        updatedAt: now,
+      }));
+      // One taken off the list meanwhile is gone from the page too: nothing to say.
+      if (found) await this.shown(() => this.entryVersions.get(entry.id) === now);
       return null;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        // Taken off the list elsewhere meanwhile.
-        this.forgetShoppingEntries(householdId, [entry.id]);
-      }
       return toMessage(error);
     }
   }
 
   async removeShoppingEntry(entry: ShoppingListEntry): Promise<string | null> {
-    const householdId = this.householdId;
-    if (householdId === null) return messages.errors.loadFailed;
+    const mirror = this.mirror;
+    if (mirror === null) return messages.errors.loadFailed;
 
     try {
-      await this.api.removeShoppingListEntry(householdId, entry.listId, entry.id);
-      this.forgetShoppingEntries(householdId, [entry.id]);
+      await mirror.removeEntries([entry.id]);
+      await this.shown(() => !this.entryVersions.has(entry.id));
       return null;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        this.forgetShoppingEntries(householdId, [entry.id]);
-        return null;
-      }
       return toMessage(error);
     }
   }
 
   /**
-   * Puts ticked-off entries away: the server restocks their items and takes the
-   * entries off the list, all or nothing. A 409 means the list changed while it
-   * was shown; the latest is fetched before this returns, for the user to check.
+   * Puts ticked-off entries away, online: the server restocks their items and
+   * takes the entries off the list, all or nothing. A 409 means the list changed
+   * while it was shown; the latest is pulled before this returns, for the user
+   * to check.
+   *
+   * The entries leave the mirror at once, so the list empties without waiting
+   * for the pull; the pushes that follow find them gone already, and change
+   * nothing.
    */
   async putAwayShopping(listId: string, entryIds: readonly string[]): Promise<string | null> {
+    const mirror = this.mirror;
     const householdId = this.householdId;
-    if (householdId === null) return messages.errors.loadFailed;
+    if (mirror === null || householdId === null) return messages.errors.loadFailed;
 
     try {
-      const items = await this.api.putAwayShoppingListEntries(householdId, listId, {
+      // The server checks the ticks, and ticks made here may still be on their way.
+      if (this.isOnline) await mirror.pushed(PUSH_WAIT_MS);
+      await this.api.putAwayShoppingListEntries(householdId, listId, {
         entryIds: [...entryIds],
       });
-      this.forgetShoppingEntries(householdId, entryIds);
-      this.acceptItems(items);
+      await mirror.removeEntries(entryIds);
+      mirror.reSync();
+      await this.shown(() => entryIds.every((id) => !this.entryVersions.has(id)));
       return null;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        await this.refreshShopping();
+        mirror.reSync();
         return messages.shopping.changedElsewhere;
       }
       return toMessage(error);
     }
   }
 
-  /**
-   * Applies items the server just returned — a write's response or a broadcast.
-   * Never regresses to an older copy (`replaces`).
-   *
-   * Only active items are listed, so consuming or discarding one takes it out
-   * of `items`; if a shopping list names it, it moves to `offShelfItems`, and
-   * restocking brings it back.
-   */
-  acceptItem(item: PantryItem): void {
-    if (item.householdId !== this.householdId) return;
-    this.touch(item.id);
-
-    const index = this.items.findIndex((candidate) => candidate.id === item.id);
-    const offShelfIndex = this.offShelfItems.findIndex((candidate) => candidate.id === item.id);
-    const existing = this.items[index] ?? this.offShelfItems[offShelfIndex];
-    if (!replaces(item, existing)) return;
-
-    if (isActive(item)) {
-      if (offShelfIndex !== -1) this.offShelfItems = this.offShelfItems.toSpliced(offShelfIndex, 1);
-      this.items = index === -1 ? [...this.items, item] : this.items.with(index, item);
-      return;
-    }
-
-    if (index !== -1) this.items = this.items.toSpliced(index, 1);
-    if (offShelfIndex !== -1) {
-      this.offShelfItems = this.offShelfItems.with(offShelfIndex, item);
-    } else if (this.listedItemIds.has(item.id)) {
-      this.offShelfItems = [...this.offShelfItems, item];
-    }
-  }
-
-  acceptItems(items: readonly PantryItem[]): void {
-    for (const item of items) this.acceptItem(item);
-  }
-
   /* --------------------------------------------------------------- internal */
 
-  private applyLoaded(loaded: {
-    user: CurrentUser;
-    household: UserHousehold;
-    units: Unit[];
-    locations: PantryLocation[];
-    items: PantryItem[];
-  }): void {
-    // Another household than before (the last one was deleted): its lists are not this one's.
-    if (this.household !== null && this.household.id !== loaded.household.id) {
-      this.shoppingLists = [];
-      this.shoppingEntries = NO_ENTRIES;
-      this.offShelfItems = NO_ITEMS;
-      this.shoppingLoadState = 'idle';
+  /** What `dto` changes on `item`, with what the server would work out from it. */
+  private itemPatch(item: PantryItem, dto: UpdatePantryItemDto): Partial<PantryItem> {
+    const patch: Partial<PantryItem> = definedFields(dto);
+    const next = { ...item, ...patch };
+
+    if (dto.category !== undefined || dto.isEdible !== undefined) {
+      patch.isEdible = this.edibleFor(next.category, dto.isEdible ?? item.isEdible);
     }
-    this.user = loaded.user;
-    this.household = loaded.household;
-    this.units = loaded.units;
-    this.locations = loaded.locations.toSorted(bySortOrder);
-    this.items = reconcileById(this.items, loaded.items.filter(isActive));
+    if (
+      dto.expiresAt !== undefined ||
+      dto.openedAt !== undefined ||
+      dto.periodAfterOpeningDays !== undefined
+    ) {
+      patch.effectiveExpiresAt = effectiveExpiry(next);
+    }
+    patch.updatedAt = new Date().toISOString();
+    return patch;
+  }
+
+  /**
+   * An item's `isEdible`: its category's, except in the default category, where
+   * the item decides. The server resolves it the same way, so this is its value
+   * as soon as categories have loaded.
+   */
+  private edibleFor(category: string, requested: boolean | undefined): boolean {
+    if (category === DEFAULT_CATEGORY) return requested ?? this.categoryEdible(category);
+    return this.categoryEdible(category);
+  }
+
+  /**
+   * Puts an item that just ran out on its default list, unless it is on it
+   * already or the list is archived — the server's rule, applied here so it
+   * holds offline. The server leaves it to the entry pushed from here.
+   */
+  private async putOnDefaultList(mirror: Mirror, item: PantryItem): Promise<string | undefined> {
+    const listId = item.defaultShoppingListId;
+    if (listId === null) return undefined;
+
+    const list = await mirror.shoppingList(listId);
+    if (list === undefined || list.archivedAt !== null) return undefined;
+    if ((await mirror.entriesOn(listId, item.id)).length > 0) return undefined;
+
+    const entry = newEntry(item.householdId, listId, item.id);
+    await mirror.insertEntries([entry]);
+    return entry.id;
+  }
+
+  /** Resolves once `condition` holds, or after `SHOW_WAIT_MS`: a local write, seen by the pages. */
+  private async shown(condition: () => boolean): Promise<void> {
+    try {
+      await when(condition, { timeout: SHOW_WAIT_MS });
+    } catch {
+      // Superseded meanwhile: what shows now is newer.
+    }
+  }
+
+  /** The storage spaces as the server has them now, after the editor's save was refused. */
+  private async fetchLocations(mirror: Mirror, householdId: string): Promise<void> {
+    try {
+      await mirror.acceptLocations(await this.api.listLocations(householdId), true);
+    } catch {
+      mirror.reSync();
+    }
+  }
+
+  /** The shopping lists as the server has them now; see `fetchLocations`. */
+  private async fetchShoppingLists(mirror: Mirror, householdId: string): Promise<void> {
+    try {
+      const { lists } = await this.api.listShoppingLists(householdId);
+      await mirror.acceptShoppingLists(lists, true);
+    } catch {
+      // The pull below still brings them.
+    }
+    mirror.reSync();
+  }
+
+  /**
+   * A 409 is a name another list has, or one list too many; the catalog says
+   * either better than the server's English.
+   */
+  private shoppingListError(error: unknown): string {
+    if (!(error instanceof ApiError) || error.status !== 409) return toMessage(error);
+    return this.shoppingLists.length >= MAX_SHOPPING_LISTS_PER_HOUSEHOLD
+      ? messages.shopping.limitReached(MAX_SHOPPING_LISTS_PER_HOUSEHOLD)
+      : messages.shopping.nameTaken;
+  }
+
+  /**
+   * Opens the household's mirror, unless it is open already. Another household
+   * than before means the last one is gone for this user — deleted, or they
+   * left it — so its mirror is deleted from the device.
+   */
+  private async openMirror(userId: string, householdId: string): Promise<void> {
+    const key = `${userId}/${householdId}`;
+    if (this.mirror !== null && this.mirrorKey === key) return;
+
+    const previous = this.detachMirror();
+    if (previous !== null) {
+      try {
+        await previous.remove();
+      } catch {
+        // Left on the device, where nothing opens it again: its user lost access.
+      }
+    }
+
+    const { Mirror } = await import('../offline/mirror');
+    const mirror = await Mirror.open({
+      userId,
+      householdId,
+      origin: backendOrigin || window.location.origin,
+      transport: this.transportFor(householdId),
+      changes$: this.changes,
+    });
+    // Signed out, or unmounted, while it opened.
+    if (!this.active) {
+      await mirror.close();
+      return;
+    }
+    this.attachMirror(key, mirror);
+  }
+
+  private transportFor(householdId: string): MirrorTransport {
+    const recorded = <T>(request: Promise<T>): Promise<T> =>
+      request.catch((error: unknown) => {
+        this.lastSyncError = error;
+        throw error;
+      });
+
+    return {
+      pull: (collection, checkpoint, limit) =>
+        recorded(this.api.syncPull(householdId, collection, checkpoint, limit)),
+      push: (collection, rows) => recorded(this.api.syncPush(householdId, collection, rows)),
+    };
+  }
+
+  private attachMirror(key: string, mirror: Mirror): void {
+    this.mirror = mirror;
+    this.mirrorKey = key;
+    this.synced = false;
+    this.mirrorSubscriptions = [
+      mirror.items$.subscribe(this.applyItems),
+      mirror.locations$.subscribe(this.applyLocations),
+      mirror.shoppingLists$.subscribe(this.applyShoppingLists),
+      mirror.shoppingEntries$.subscribe(this.applyShoppingEntries),
+      mirror.synced$.subscribe(this.applySynced),
+      mirror.errors$.subscribe(this.handleSyncError),
+      mirror.refused$.subscribe(this.handleRefusal),
+    ];
+  }
+
+  /**
+   * Stops showing the open mirror, and hands it over to be closed or removed.
+   * The pages wait again until another mirror holds a household.
+   */
+  private detachMirror(): Mirror | null {
+    const mirror = this.mirror;
+    for (const subscription of this.mirrorSubscriptions) subscription.unsubscribe();
+    this.mirrorSubscriptions = [];
+    this.mirror = null;
+    this.mirrorKey = null;
+    this.synced = false;
+    this.household = null;
+    return mirror;
+  }
+
+  private startLoad(): void {
+    this.loadState = 'loading';
+    this.error = null;
+  }
+
+  private applyBootstrap(user: CurrentUser, household: UserHousehold, units: Unit[]): void {
+    this.user = user;
+    this.units = units;
+    this.loadedHousehold = household;
+    this.showIfSynced();
+  }
+
+  /** Shows the household once both the bootstrap and the mirror have it. */
+  private showIfSynced(): void {
+    if (!this.synced || this.loadedHousehold === null) return;
+    this.household = this.loadedHousehold;
     this.loadState = 'ready';
+    this.error = null;
+  }
+
+  private applySynced(synced: boolean): void {
+    this.synced = synced;
+    this.showIfSynced();
   }
 
   private applyUser(user: CurrentUser): void {
@@ -846,203 +974,55 @@ export class PantryStore {
     this.categories = categories;
   }
 
-  private failLoad(error: unknown): void {
-    this.error = toMessage(error);
+  private failLoad(message: string): void {
+    this.error = message;
     this.loadState = 'failed';
   }
 
-  private applyLocations(householdId: string, locations: readonly PantryLocation[]): void {
-    if (householdId !== this.householdId) return;
+  private applyItems(all: readonly PantryItem[]): void {
+    this.allItems = all;
+    this.items = reconcileById(this.items, all.filter(isActive));
+    this.applyOffShelf();
+  }
+
+  private applyLocations(locations: readonly PantryLocation[]): void {
     this.locations = reconcileById(this.locations, locations.toSorted(bySortOrder));
   }
 
-  private setShoppingLoadState(state: LoadState): void {
-    this.shoppingLoadState = state;
+  private applyShoppingLists(lists: readonly ShoppingList[]): void {
+    this.shoppingLists = reconcileById(this.shoppingLists, lists.toSorted(bySortOrder));
   }
 
-  /** Replaces every list, entry and off-shelf item with a complete copy: a refetch or a snapshot. */
-  private applyShopping(householdId: string, shopping: ShoppingLists): void {
-    if (householdId !== this.householdId) return;
+  private applyShoppingEntries(entries: readonly ShoppingListEntry[]): void {
+    this.shoppingEntries = reconcileById(this.shoppingEntries, entries.toSorted(byArrival));
+    this.applyOffShelf();
+  }
 
-    // Ids never come back, so anything deleted here since is left out even of a late copy.
-    const gone = this.goneShopping;
-    this.shoppingLists = reconcileById(
-      this.shoppingLists,
-      shopping.lists.filter((list) => !gone.has(list.id)).toSorted(bySortOrder),
-    );
-    this.shoppingEntries = reconcileById(
-      this.shoppingEntries,
-      shopping.entries.filter((entry) => !gone.has(entry.id) && !gone.has(entry.listId)),
-    );
+  /** The items off the shelf that some entry names: they change with either. */
+  private applyOffShelf(): void {
     const listed = this.listedItemIds;
     this.offShelfItems = reconcileById(
       this.offShelfItems,
-      shopping.items.filter((item) => !isActive(item) && listed.has(item.id)),
-    );
-    // Active ones may be newer than the copies in `items`, never older.
-    this.acceptItems(shopping.items.filter(isActive));
-    this.shoppingLoadState = 'ready';
-  }
-
-  private acceptShoppingList(list: ShoppingList): void {
-    if (list.householdId !== this.householdId || this.goneShopping.has(list.id)) return;
-    this.shoppingChanges += 1;
-
-    const index = this.shoppingLists.findIndex((candidate) => candidate.id === list.id);
-    if (!replaces(list, this.shoppingLists[index])) return;
-
-    const others = index === -1 ? this.shoppingLists : this.shoppingLists.toSpliced(index, 1);
-    this.shoppingLists = [...others, list].toSorted(bySortOrder);
-  }
-
-  /**
-   * Replaces the lists with the complete set the editor saved, and drops the
-   * entries of every list missing from it, which it deleted.
-   */
-  private applyShoppingLists(householdId: string, lists: readonly ShoppingList[]): void {
-    if (householdId !== this.householdId) return;
-    this.shoppingChanges += 1;
-
-    const kept = new Set(lists.map((list) => list.id));
-    for (const list of this.shoppingLists) {
-      if (!kept.has(list.id)) this.goneShopping.add(list.id);
-    }
-    this.shoppingLists = reconcileById(this.shoppingLists, lists.toSorted(bySortOrder));
-    this.forgetShoppingEntries(
-      householdId,
-      this.shoppingEntries.filter((entry) => !kept.has(entry.listId)).map((entry) => entry.id),
+      this.allItems.filter((item) => !isActive(item) && listed.has(item.id)),
     );
   }
 
-  /** Drops a deleted list with everything on it. */
-  private forgetShoppingList(householdId: string, listId: string): void {
-    if (householdId !== this.householdId) return;
-    this.shoppingChanges += 1;
-    this.goneShopping.add(listId);
+  /* ------------------------------------------------- mirror and socket events */
 
-    this.shoppingLists = this.shoppingLists.filter((list) => list.id !== listId);
-    this.forgetShoppingEntries(
-      householdId,
-      this.entriesOn(listId).map((entry) => entry.id),
-    );
+  /** Before the first sync, a failure means there is nothing to show; after it, replication retries quietly. */
+  private handleSyncError(error: unknown): void {
+    if (import.meta.env.DEV) console.warn('Offline mirror: replication failed', error);
+    if (!this.synced) this.failLoad(toMessage(this.lastSyncError ?? error));
   }
 
-  /**
-   * Applies entries a write created or changed, with the items they name. The
-   * entries go first, so an item that is off the shelf is known to be listed
-   * when it arrives.
-   */
-  private acceptShoppingEntries(
-    householdId: string,
-    entries: readonly ShoppingListEntry[],
-    items: readonly PantryItem[],
-  ): void {
-    if (householdId !== this.householdId) return;
-    this.shoppingChanges += 1;
-
-    let next = this.shoppingEntries;
-    for (const entry of entries) {
-      if (this.goneShopping.has(entry.id) || this.goneShopping.has(entry.listId)) continue;
-      const index = next.findIndex((candidate) => candidate.id === entry.id);
-      if (!replaces(entry, next[index])) continue;
-      next = index === -1 ? [...next, entry] : next.with(index, entry);
-    }
-    this.shoppingEntries = next;
-
-    this.acceptItems(items);
+  private handleRefusal(refusal: MirrorRefusal): void {
+    this.notices.error(messages.errors.changeRefused(refusal.message));
   }
-
-  /** Drops entries taken off their lists, and any off-shelf item no list names any more. */
-  private forgetShoppingEntries(householdId: string, ids: readonly string[]): void {
-    if (householdId !== this.householdId || ids.length === 0) return;
-    this.shoppingChanges += 1;
-
-    const gone = new Set(ids);
-    for (const id of ids) this.goneShopping.add(id);
-    this.shoppingEntries = this.shoppingEntries.filter((entry) => !gone.has(entry.id));
-
-    const listed = this.listedItemIds;
-    const offShelf = this.offShelfItems.filter((item) => listed.has(item.id));
-    if (offShelf.length !== this.offShelfItems.length) this.offShelfItems = offShelf;
-  }
-
-  /**
-   * A 409 is a name another list has, or one list too many; the catalog says
-   * either better than the server's English.
-   */
-  private shoppingListError(error: unknown): string {
-    if (!(error instanceof ApiError) || error.status !== 409) return toMessage(error);
-    return this.shoppingLists.length >= MAX_SHOPPING_LISTS_PER_HOUSEHOLD
-      ? messages.shopping.limitReached(MAX_SHOPPING_LISTS_PER_HOUSEHOLD)
-      : messages.shopping.nameTaken;
-  }
-
-  private async runItemRefreshes(): Promise<void> {
-    do {
-      this.refreshQueued = false;
-      this.refreshSuperseded = false;
-      this.touchedDuringRefresh.clear();
-
-      const householdId = this.householdId;
-      if (householdId === null) return;
-
-      try {
-        // Sequential on purpose: a queued refetch must start after the previous
-        // response is applied, or it could finish first and be overwritten.
-        // oxlint-disable-next-line no-await-in-loop
-        this.applyRefreshedItems(householdId, await this.api.listItems(householdId));
-      } catch {
-        this.notices.error(messages.errors.refreshFailed);
-        return;
-      }
-    } while (this.refreshQueued);
-  }
-
-  private applyRefreshedItems(householdId: string, fetched: readonly PantryItem[]): void {
-    if (householdId !== this.householdId || this.refreshSuperseded) return;
-
-    const touched = this.touchedDuringRefresh;
-    const next = fetched.filter((item) => isActive(item) && !touched.has(item.id));
-    for (const item of this.items) {
-      if (touched.has(item.id)) next.push(item);
-    }
-    this.items = reconcileById(this.items, next);
-
-    // A listed item that left the shelf without its broadcast reaching this tab
-    // is in neither list now; the shopping lists' refetch brings it back.
-    const held = this.itemsById;
-    if ([...this.listedItemIds].some((id) => !held.has(id))) void this.refreshShopping();
-  }
-
-  private forgetItems(householdId: string, ids: readonly string[]): void {
-    if (householdId !== this.householdId || ids.length === 0) return;
-
-    for (const id of ids) this.touch(id);
-    const gone = new Set(ids);
-    this.items = this.items.filter((item) => !gone.has(item.id));
-  }
-
-  private touch(id: string): void {
-    if (this.refreshInFlight !== null) this.touchedDuringRefresh.add(id);
-  }
-
-  private reportFailures(
-    results: readonly PromiseSettledResult<unknown>[],
-    message: (count: number) => string,
-  ): void {
-    const failed = results.filter((result) => result.status === 'rejected').length;
-    if (failed === 0) return;
-
-    this.notices.error(message(failed));
-    // Some of those may have succeeded after all (a timeout, say): trust the server.
-    void this.refreshItems();
-  }
-
-  /* --------------------------------------------------------- socket handlers */
 
   private handleConnect(): void {
     this.connection = 'online';
-    this.requestSync();
+    // Whatever changed while the socket was down.
+    this.changes.next();
   }
 
   private handleDisconnect(): void {
@@ -1053,47 +1033,12 @@ export class PantryStore {
     this.connection = 'offline';
   }
 
-  /** In order with the broadcasts, so it is current — and any REST response still in flight is not. */
-  private handleSnapshot(payload: PantrySnapshotPayload): void {
-    if (payload.householdId !== this.householdId) return;
-
-    if (this.refreshInFlight !== null) this.refreshSuperseded = true;
-    this.items = reconcileById(this.items, payload.items.filter(isActive));
-    this.locations = reconcileById(this.locations, payload.locations.toSorted(bySortOrder));
-
-    // A backend older than shopping lists sends snapshots without them.
-    if (payload.shopping !== undefined) {
-      this.shoppingSnapshots += 1;
-      this.applyShopping(payload.householdId, payload.shopping);
-    }
-  }
-
-  private handleItemUpserted({ item }: PantryItemPayload): void {
-    this.acceptItem(item);
-  }
-
-  private handleItemDeleted({ householdId, id }: PantryItemDeletedPayload): void {
-    this.forgetItems(householdId, [id]);
-  }
-
-  private handleLocationUpserted({ location }: PantryLocationPayload): void {
-    if (location.householdId !== this.householdId) return;
-
-    const others = this.locations.filter((candidate) => candidate.id !== location.id);
-    this.locations = [...others, location].toSorted(bySortOrder);
-  }
-
-  private handleLocationDeleted(payload: PantryLocationDeletedPayload): void {
-    if (payload.householdId !== this.householdId) return;
-    this.locations = this.locations.filter((location) => location.id !== payload.id);
-  }
-
-  private handleLocationsReordered(payload: PantryLocationsReorderedPayload): void {
-    this.applyLocations(payload.householdId, payload.locations);
-  }
-
-  private handleLocationsUpserted(payload: PantryLocationsUpsertedPayload): void {
-    this.applyLocations(payload.householdId, payload.locations);
+  /**
+   * Any household's: the socket follows all of the user's, and a pull for this
+   * one that finds nothing new costs one small request.
+   */
+  private handleDataChanged(): void {
+    this.changes.next();
   }
 
   private handleHouseholdUpdated({ household }: HouseholdPayload): void {
@@ -1112,27 +1057,19 @@ export class PantryStore {
       void this.load();
     }
   }
+}
 
-  private handleShoppingListUpserted({ list }: ShoppingListPayload): void {
-    this.acceptShoppingList(list);
-  }
-
-  private handleShoppingListDeleted({ householdId, id }: ShoppingListDeletedPayload): void {
-    this.forgetShoppingList(householdId, id);
-  }
-
-  private handleShoppingListsUpserted({ householdId, lists }: ShoppingListsUpsertedPayload): void {
-    this.applyShoppingLists(householdId, lists);
-  }
-
-  private handleShoppingEntriesUpserted(payload: ShoppingListEntriesUpsertedPayload): void {
-    this.acceptShoppingEntries(payload.householdId, payload.entries, payload.items);
-  }
-
-  private handleShoppingEntriesDeleted({
+/** A new entry, made on this device: one of the item, still to buy. */
+function newEntry(householdId: string, listId: string, itemId: string): ShoppingListEntry {
+  const now = new Date().toISOString();
+  return {
+    id: createId(),
     householdId,
-    ids,
-  }: ShoppingListEntriesDeletedPayload): void {
-    this.forgetShoppingEntries(householdId, ids);
-  }
+    listId,
+    itemId,
+    quantity: DEFAULT_SHOPPING_ENTRY_QUANTITY,
+    checkedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
 }

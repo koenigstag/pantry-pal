@@ -72,18 +72,6 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
     );
   }
 
-  if (pantry.shoppingLists.length === 0 && pantry.shoppingLoadState !== 'ready') {
-    return pantry.shoppingLoadState === 'failed' ? (
-      <PageStatus
-        tone="error"
-        title={messages.shopping.loadFailed}
-        action={{ label: messages.common.retry, onClick: () => void pantry.refreshShopping() }}
-      />
-    ) : (
-      <PageStatus title={messages.common.loading} />
-    );
-  }
-
   const lists = pantry.activeShoppingLists;
   const list = lists.find((candidate) => candidate.id === listId);
   const first = lists[0];

@@ -115,7 +115,6 @@ export const frCA = {
     nameTaken: 'Une autre liste d’épicerie porte déjà ce nom.',
     limitReached: (max: number) =>
       `Un foyer peut avoir jusqu’à ${formatNumber(max)} listes d’épicerie.`,
-    loadFailed: 'Impossible de charger les listes d’épicerie.',
     noLists: 'Aucune liste d’épicerie pour l’instant.',
     createFirst: 'Créer une liste d’épicerie',
     emptyHint:

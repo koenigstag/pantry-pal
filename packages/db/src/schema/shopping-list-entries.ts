@@ -37,6 +37,11 @@ export const shoppingListEntries = pgTable(
     quantity: integer('quantity').notNull(),
     /** Ticked off while shopping. Putting the shopping away restocks ticked entries and deletes them. */
     checkedAt: timestamp('checked_at', { withTimezone: true }),
+    /**
+     * Soft-deleted, like its list: taken off the list, put away, or its item
+     * deleted. The row stays as the tombstone a syncing client reads.
+     */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -59,11 +64,19 @@ export const shoppingListEntries = pgTable(
       columns: [t.householdId, t.itemId],
       foreignColumns: [items.householdId, items.id],
     }).onDelete('cascade'),
-    /** An item is on a list once; adding it again leaves the entry as it is (`ON CONFLICT DO NOTHING`). */
-    uniqueIndex('shopping_list_entries_list_item_idx').on(t.listId, t.itemId),
+    /**
+     * An item is on a list once; adding it again leaves the entry as it is
+     * (`ON CONFLICT DO NOTHING`). Entries taken off the list are excluded, so
+     * the item can go back on later, as a new entry beside the old tombstone.
+     */
+    uniqueIndex('shopping_list_entries_list_item_idx')
+      .on(t.listId, t.itemId)
+      .where(sql`deleted_at is null`),
     /** Taking an item off every list when it is deleted. */
     index('shopping_list_entries_item_idx').on(t.itemId),
     index('shopping_list_entries_household_idx').on(t.householdId),
+    /** A sync pull walks a household's entries in this order, from its checkpoint. */
+    index('shopping_list_entries_household_sync_idx').on(t.householdId, t.updatedAt, t.id),
     check('shopping_list_entries_quantity_positive', sql`quantity > 0`),
   ],
 );

@@ -93,10 +93,14 @@ export default defineConfig(({ mode }) => {
           cleanupOutdatedCaches: true,
           runtimeCaching: [
             {
-              // Reads only. A write must reach the server, and fails offline as before.
+              // Reads only: a write reaches the server or fails. Sync pulls stay out
+              // too, since the offline mirror keeps its own copy, and a stale page
+              // answering for the server would skip changes it has not seen.
               // The path is spelled out again because this function becomes source.
               urlPattern: ({ url, request }) =>
-                request.method === 'GET' && url.pathname.startsWith('/api/v1/'),
+                request.method === 'GET' &&
+                url.pathname.startsWith('/api/v1/') &&
+                !url.pathname.includes('/sync/'),
               handler: 'NetworkFirst',
               options: {
                 cacheName: API_CACHE_NAME,

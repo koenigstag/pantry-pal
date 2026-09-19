@@ -112,4 +112,6 @@ changes that name at runtime, so it needs no table.
   checked for existence by the server. Only `COUNT_UNIT` and `DEFAULT_CATEGORY`
   are fixed, as the codes that can never be deleted.
 - Expiry maths reads `effectiveExpiresAt`, never `expiresAt` — the database
-  folds opened + period-after-opening into it.
+  folds opened + period-after-opening into it. `effectiveExpiry()` works it out
+  the same way for a change the frontend's offline mirror has not synced yet;
+  the database's value replaces it once the change arrives.

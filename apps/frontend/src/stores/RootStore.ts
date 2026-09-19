@@ -36,7 +36,7 @@ export class SessionStores {
 
   constructor(notices: NoticeStore) {
     this.pantry = new PantryStore(pantryApi, createPantrySocket(), notices);
-    this.quantities = new QuantityUpdates(this.pantry, pantryApi, notices);
+    this.quantities = new QuantityUpdates(this.pantry, notices);
   }
 
   dispose(): void {

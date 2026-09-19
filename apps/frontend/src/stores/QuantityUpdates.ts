@@ -2,56 +2,46 @@ import { MAX_ITEM_QUANTITY, type PantryItem } from '@pantry-pal/shared';
 import { makeAutoObservable, observable } from 'mobx';
 
 import { messages } from '../i18n/messages';
-import type { PantryApi } from '../services/api';
 import type { NoticeStore } from './NoticeStore';
 import type { PantryStore } from './PantryStore';
 
-/** How long after the last tap on a card its quantity is sent. */
+/** How long after the last tap on a card its quantity is saved. */
 export const QUANTITY_SAVE_DELAY_MS = 600;
 
 /**
- * Optimistic quantity steps: **the only optimistic state in the app.**
+ * Quantity steps, shown under the finger and saved once the tapping stops.
  *
  * A tap records the wanted quantity in `pending` at once, and cards render
- * `quantityOf(item)`, so the number changes under the finger. The PATCH goes
- * out once taps on that item stop for `QUANTITY_SAVE_DELAY_MS`, one request per
- * item at a time and always with the newest value.
+ * `quantityOf(item)`, so the number changes as it is tapped. The item itself
+ * changes once taps on it stop for `QUANTITY_SAVE_DELAY_MS`: a run of taps is
+ * one write to the offline mirror, and so one change pushed to the server, and
+ * a list sorted by quantity does not reshuffle while a card is being tapped.
  *
- * When the server has confirmed the value the user last asked for, the overlay
- * is dropped — the server's copy now shows the same number, so nothing moves —
- * and the item list is refetched in the background. A failed request drops the
- * overlay too, so the card falls back to the server's quantity, and says so.
- *
- * `PantryStore` is never written optimistically: the overlay is the only place
- * a not-yet-confirmed value exists, which is why a broadcast from another
- * client can never be clobbered by, or clobber, an unsent tap.
+ * The write resolves once the pantry shows the new quantity, so dropping the
+ * overlay then moves nothing. A write that fails drops the overlay too, so the
+ * card falls back to the saved quantity, and says so.
  */
 export class QuantityUpdates {
   private readonly pantry: PantryStore;
-  private readonly api: PantryApi;
   private readonly notices: NoticeStore;
 
-  /** Item id -> the quantity the user asked for and the server has not confirmed. */
+  /** Item id -> the quantity the user asked for and the pantry does not show yet. */
   private readonly pending = observable.map<string, number>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly inFlight = new Set<string>();
 
-  constructor(pantry: PantryStore, api: PantryApi, notices: NoticeStore) {
+  constructor(pantry: PantryStore, notices: NoticeStore) {
     this.pantry = pantry;
-    this.api = api;
     this.notices = notices;
 
-    makeAutoObservable<
-      QuantityUpdates,
-      'pantry' | 'api' | 'notices' | 'pending' | 'timers' | 'inFlight'
-    >(
+    makeAutoObservable<QuantityUpdates, 'pantry' | 'notices' | 'pending' | 'timers' | 'inFlight'>(
       this,
-      { pantry: false, api: false, notices: false, pending: false, timers: false, inFlight: false },
+      { pantry: false, notices: false, pending: false, timers: false, inFlight: false },
       { autoBind: true },
     );
   }
 
-  /** What a card shows: the unconfirmed quantity if there is one, else the server's. */
+  /** What a card shows: the quantity being tapped if there is one, else the saved one. */
   quantityOf(item: PantryItem): number {
     return this.pending.get(item.id) ?? item.quantity;
   }
@@ -69,7 +59,7 @@ export class QuantityUpdates {
     this.schedule(item.id);
   }
 
-  /** Forgets an unsent step, e.g. for an item about to be deleted. */
+  /** Forgets an unsaved step, e.g. for an item about to be deleted. */
   discard(itemId: string): void {
     this.clearTimer(itemId);
     this.pending.delete(itemId);
@@ -86,7 +76,7 @@ export class QuantityUpdates {
       itemId,
       setTimeout(() => {
         this.timers.delete(itemId);
-        void this.send(itemId);
+        void this.save(itemId);
       }, QUANTITY_SAVE_DELAY_MS),
     );
   }
@@ -96,40 +86,37 @@ export class QuantityUpdates {
     this.timers.delete(itemId);
   }
 
-  private async send(itemId: string): Promise<void> {
-    // One request per item: the one running re-checks for a newer value when it returns.
+  private async save(itemId: string): Promise<void> {
+    // One write per item at a time: the one running re-checks for a newer value when it returns.
     if (this.inFlight.has(itemId)) return;
 
-    const householdId = this.pantry.householdId;
     const quantity = this.pending.get(itemId);
-    if (householdId === null || quantity === undefined) return;
+    if (quantity === undefined) return;
 
     this.inFlight.add(itemId);
+    let failure: string | null;
     try {
-      this.pantry.acceptItem(await this.api.updateItem(householdId, itemId, { quantity }));
-    } catch {
-      this.fail(itemId);
-      return;
+      failure = await this.pantry.updateItem(itemId, { quantity });
     } finally {
       this.inFlight.delete(itemId);
     }
 
-    this.settle(itemId, quantity);
+    if (failure === null) this.settle(itemId, quantity);
+    else this.fail(itemId);
   }
 
-  private settle(itemId: string, sent: number): void {
-    // More taps are waiting out their own delay; that timer sends them.
+  private settle(itemId: string, saved: number): void {
+    // More taps are waiting out their own delay; that timer saves them.
     if (this.timers.has(itemId)) return;
 
-    // Tapped again while the request was out, and that delay has already
-    // passed (its send found this one in flight): send the newer value now.
-    if (this.pending.has(itemId) && this.pending.get(itemId) !== sent) {
-      void this.send(itemId);
+    // Tapped again while the write was out, and that delay has already passed
+    // (its save found this one in flight): save the newer value now.
+    if (this.pending.has(itemId) && this.pending.get(itemId) !== saved) {
+      void this.save(itemId);
       return;
     }
 
     this.pending.delete(itemId);
-    void this.pantry.refreshItems();
   }
 
   private fail(itemId: string): void {
@@ -138,6 +125,5 @@ export class QuantityUpdates {
 
     this.discard(itemId);
     this.notices.error(messages.errors.quantityNotSaved);
-    void this.pantry.refreshItems();
   }
 }

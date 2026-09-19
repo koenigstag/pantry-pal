@@ -20,6 +20,7 @@ import {
 import {
   COUNT_UNIT,
   DEFAULT_CATEGORY,
+  DEFAULT_SHOPPING_ENTRY_QUANTITY,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
   MAX_ITEM_QUANTITY,
@@ -41,9 +42,6 @@ import { toPantryItem } from './item.mapper';
 
 type ItemField = keyof UpdateItemInput;
 type Changes = Partial<Record<ItemField, { from: unknown; to: unknown }>>;
-
-/** How many of an item go on its default shopping list when it runs out. */
-const RAN_OUT_QUANTITY = 1;
 
 /** On the shelf with some left. Running out is leaving this state. */
 const inStock = (row: ItemRow): boolean => row.status === ITEM_STATUS.Active && row.quantity > 0;
@@ -106,6 +104,8 @@ export class ItemsService {
     }
 
     const row = await this.items.create(householdId, {
+      // The client's own id when it chose one (the offline mirror does); else the database's.
+      id: dto.id,
       name: dto.name,
       locationId: dto.locationId,
       category: dto.category,
@@ -139,10 +139,16 @@ export class ItemsService {
    * changed. A patch that changes nothing writes nothing and announces nothing.
    *
    * A patch that runs the item out puts it on its default shopping list — the
-   * one the same patch names, if it names one.
+   * one the same patch names, if it names one — unless `listWhenRunOut` is
+   * false: the offline mirror adds that entry itself, and pushes it next.
    */
   @Transactional()
-  async update(membership: Membership, id: string, dto: UpdatePantryItemDto): Promise<PantryItem> {
+  async update(
+    membership: Membership,
+    id: string,
+    dto: UpdatePantryItemDto,
+    { listWhenRunOut = true }: { listWhenRunOut?: boolean } = {},
+  ): Promise<PantryItem> {
     const { householdId } = membership;
 
     // Locked, so the before/after recorded in the event is exactly what this
@@ -201,7 +207,9 @@ export class ItemsService {
     const item = toPantryItem(after);
     this.changes.publish({ type: 'item.updated', item });
 
-    if (inStock(before) && !inStock(after)) await this.putOnDefaultList(after, item);
+    if (listWhenRunOut && inStock(before) && !inStock(after)) {
+      await this.putOnDefaultList(after, item);
+    }
     return item;
   }
 
@@ -291,7 +299,7 @@ export class ItemsService {
       householdId,
       listId,
       [after.id],
-      RAN_OUT_QUANTITY,
+      DEFAULT_SHOPPING_ENTRY_QUANTITY,
     );
     if (entries.length === 0) return;
 

@@ -18,6 +18,7 @@ import {
   type ShoppingListRow,
 } from '@pantry-pal/db';
 import {
+  DEFAULT_SHOPPING_ENTRY_QUANTITY,
   ITEM_EVENT_TYPE,
   MAX_SHOPPING_LISTS_PER_HOUSEHOLD,
   type PantryItem,
@@ -40,9 +41,6 @@ import { toPantryItem } from '../items/item.mapper';
 import { ItemsService } from '../items/items.service';
 import { ChangeFeed } from '../realtime/change-feed';
 import { toShoppingList, toShoppingListEntry } from './shopping-list.mapper';
-
-/** How many of each item an add puts on a list when the request does not say. */
-const DEFAULT_ENTRY_QUANTITY = 1;
 
 /**
  * Any member may manage shopping lists and what is on them.
@@ -255,7 +253,7 @@ export class ShoppingListsService {
       householdId,
       listId,
       dto.itemIds,
-      dto.quantity ?? DEFAULT_ENTRY_QUANTITY,
+      dto.quantity ?? DEFAULT_SHOPPING_ENTRY_QUANTITY,
     );
     const added = new Set(rows.map((row) => row.itemId));
     const change: ShoppingListEntriesChange = {
@@ -267,6 +265,38 @@ export class ShoppingListsService {
       this.changes.publish({ type: 'shopping-list-entries.upserted', householdId, ...change });
     }
     return change;
+  }
+
+  /**
+   * Puts one item on a list as the entry the client created, id and all: the
+   * offline mirror names entries before the server has seen them. Returns
+   * `undefined` when the item is on the list already, under another entry; the
+   * caller then drops its duplicate. Locks as `addEntries` does.
+   */
+  @Transactional()
+  async addEntry(
+    membership: Membership,
+    listId: string,
+    entry: { id: string; itemId: string; quantity: number },
+  ): Promise<ShoppingListEntry | undefined> {
+    const { householdId } = membership;
+
+    const [item] = await this.items.lockMany(householdId, [entry.itemId], 'share');
+    if (item === undefined) throw new NotFoundException(`Items not found: ${entry.itemId}`);
+
+    await this.lockOpenList(householdId, listId);
+
+    const row = await this.entries.addOne(householdId, listId, entry);
+    if (row === undefined) return undefined;
+
+    const added = toShoppingListEntry(row);
+    this.changes.publish({
+      type: 'shopping-list-entries.upserted',
+      householdId,
+      entries: [added],
+      items: [toPantryItem(item)],
+    });
+    return added;
   }
 
   /** Changes how many to buy, or ticks the entry off; a no-op patch writes nothing. */
@@ -388,6 +418,9 @@ export class ShoppingListsService {
     if ((await this.lists.delete(householdId, id)) === undefined) {
       throw new NotFoundException('Shopping list not found');
     }
+    // Lists and entries are soft-deleted, so nothing cascades: the entries go
+    // here, and a client learns of them through the list's own deletion.
+    await this.entries.deleteForList(householdId, id);
     return cleared;
   }
 

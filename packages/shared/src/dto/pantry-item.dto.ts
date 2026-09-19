@@ -43,6 +43,15 @@ import { IsIsoDate, IsOmittable, Trim } from './decorators';
  * as a pair.
  */
 export class CreatePantryItemDto {
+  /**
+   * Chosen by the client, which needs the item's identity before the server
+   * has seen it: the offline mirror creates items locally, and a shopping entry
+   * made offline must name one. Omitted, the database picks one.
+   */
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
   @Trim()
   @IsString()
   @Length(1, MAX_ITEM_NAME_LENGTH)

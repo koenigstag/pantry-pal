@@ -98,7 +98,10 @@ export const es = {
         one: 'No se ha podido mover # artículo.',
         other: 'No se han podido mover # artículos.',
       }),
-    refreshFailed: 'No se ha podido actualizar, así que se muestran los últimos datos recibidos.',
+    unreachable:
+      'No se ha podido conectar con el servidor. Comprueba la conexión y vuelve a intentarlo.',
+    changeRefused: (reason: string) => `No se ha podido guardar un cambio: ${reason}`,
+    itemGone: 'Este artículo se ha eliminado mientras tanto.',
   },
 
   categories: {
@@ -463,7 +466,6 @@ export const es = {
     copied: 'Lista copiada. Pégala en un mensaje.',
     shareFailed: 'No se ha podido compartir la lista.',
     shareLine: (name: string, amount: string) => `• ${name} — ${amount}`,
-    loadFailed: 'No se han podido cargar las listas de la compra.',
     noLists: 'Aún no hay listas de la compra.',
     createFirst: 'Crear una lista de la compra',
     emptyList: (list: string) => `Todavía no hay nada en «${list}».`,

@@ -179,8 +179,12 @@ export const items = pgTable(
     index('items_location_idx')
       .on(t.householdId, t.locationId)
       .where(sql`deleted_at is null`),
-    /** Reconnect delta sync: `?since=<updated_at>`, tombstones included. */
-    index('items_sync_idx').on(t.householdId, t.updatedAt),
+    /**
+     * A sync pull walks a household's items in this order, from its checkpoint,
+     * with the id breaking ties. Tombstones (`deleted_at`) are included: they
+     * are how a client that was away learns what to drop.
+     */
+    index('items_sync_idx').on(t.householdId, t.updatedAt, t.id),
     index('items_product_idx')
       .on(t.householdId, t.productId)
       .where(sql`deleted_at is null`),
