@@ -338,7 +338,9 @@ would refuse a contradicting value.
   plain heading. A modal form therefore shows its own Cancel/Save row only from
   `md` up (`hidden md:flex`), and the header action submits it through
   `form={formId}`. Keep a dialog mounted and toggle `open`, so focus can return
-  to the opener.
+  to the opener. The box is centred by its margins, which needs its height to
+  fit the content (`md:h-fit`): a fixed `<dialog>` with `h-auto` stretches to its
+  maximum and leaves a short box at the top.
 - **A dialog never closes itself.** Escape (its `cancel` event is prevented), the
   backdrop and the close button only call `onClose`; the owner closes it by
   setting `open` to false or unmounting it, and may decline — a blocked
