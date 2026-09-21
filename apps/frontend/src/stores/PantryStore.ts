@@ -3,7 +3,10 @@ import {
   DEFAULT_CATEGORY,
   DEFAULT_SHOPPING_ENTRY_QUANTITY,
   effectiveExpiry,
+  IMPORT_ERROR,
   ITEM_STATUS,
+  MAX_IMPORT_FILE_BYTES,
+  MAX_IMPORT_ROWS,
   MAX_SHOPPING_LISTS_PER_HOUSEHOLD,
   PANTRY_EVENT,
   QUANTITY_UNIT_KIND,
@@ -12,6 +15,8 @@ import {
   type HouseholdDeletedPayload,
   type HouseholdMemberRemovedPayload,
   type HouseholdPayload,
+  type ImportSource,
+  type ImportSummary,
   type PantryItem,
   type PantryLocation,
   type ShoppingList,
@@ -93,6 +98,30 @@ function toMessage(error: unknown): string {
   }
   return error instanceof Error ? error.message : messages.errors.loadFailed;
 }
+
+/**
+ * Why an import failed. The server names what was wrong with a file in the
+ * error's `code`, which the catalog words; a 413 may come from a proxy in front
+ * of it, with no code at all.
+ */
+function importError(source: ImportSource, error: unknown): string {
+  if (!(error instanceof ApiError)) return toMessage(error);
+
+  const t = messages.data.errors;
+  if (error.status === 413) return t.tooLarge(MAX_IMPORT_FILE_BYTES / BYTES_PER_MB);
+  switch (error.code) {
+    case IMPORT_ERROR.NotAWorkbook:
+      return t.notAWorkbook;
+    case IMPORT_ERROR.WrongFormat:
+      return t.wrongFormat[source];
+    case IMPORT_ERROR.TooManyRows:
+      return t.tooManyRows(MAX_IMPORT_ROWS);
+    default:
+      return toMessage(error);
+  }
+}
+
+const BYTES_PER_MB = 1024 * 1024;
 
 const isActive = (item: PantryItem): boolean => item.status === ITEM_STATUS.Active;
 
@@ -767,6 +796,47 @@ export class PantryStore {
         return messages.shopping.changedElsewhere;
       }
       return toMessage(error);
+    }
+  }
+
+  /**
+   * Adds a file's storage spaces, items and units to the household, online.
+   * This device's changes go up first, so the file meets the items as they are;
+   * the pull that follows brings everything the import wrote.
+   */
+  async importFile(source: ImportSource, file: File): Promise<WriteResult<ImportSummary>> {
+    const mirror = this.mirror;
+    const householdId = this.householdId;
+    if (mirror === null || householdId === null) {
+      return { ok: false, error: messages.errors.loadFailed };
+    }
+
+    try {
+      if (this.isOnline) await mirror.pushed(PUSH_WAIT_MS);
+      const summary = await this.api.importFile(householdId, source, file);
+      mirror.reSync();
+      return { ok: true, value: summary };
+    } catch (error) {
+      return { ok: false, error: importError(source, error) };
+    }
+  }
+
+  /**
+   * The household's backup, online, once this device's changes are up: an
+   * .xlsx that importing a Pantry Pal backup reads back.
+   */
+  async exportBackup(): Promise<WriteResult<Blob>> {
+    const mirror = this.mirror;
+    const householdId = this.householdId;
+    if (mirror === null || householdId === null) {
+      return { ok: false, error: messages.errors.loadFailed };
+    }
+
+    try {
+      if (this.isOnline) await mirror.pushed(PUSH_WAIT_MS);
+      return { ok: true, value: await this.api.exportBackup(householdId) };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
     }
   }
 

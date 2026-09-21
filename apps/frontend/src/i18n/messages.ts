@@ -1,6 +1,6 @@
-import type { SupportedLocale, UnitKind } from '@pantry-pal/shared';
+import type { ImportSkipReason, ImportSource, SupportedLocale, UnitKind } from '@pantry-pal/shared';
 
-import { formatNumber, plural, type PluralForms } from './format';
+import { formatList, formatNumber, plural, type PluralForms } from './format';
 import { LOCALE } from './locale';
 import { de } from './locales/de';
 import { es } from './locales/es';
@@ -580,6 +580,84 @@ const en = {
     saveFailed: 'Couldn’t save the shopping lists.',
     changedElsewhere:
       'Someone else changed the shopping lists while you were editing. Their changes are in the list now: check it and save again.',
+  },
+
+  /** The Data sheet, from the Storage page's ⋮ menu: a backup out, a file in. */
+  data: {
+    title: 'Data',
+    import: 'Import',
+    importHint: 'Add items from a backup, or from another app',
+    export: 'Export',
+    exportHint: 'Save your storage spaces and everything in them to an Excel file',
+    exporting: 'Preparing the file…',
+    exported: 'Saved to your downloads.',
+    exportFailed: 'Couldn’t export your pantry.',
+    /** Above the list of sources to import from. */
+    importFrom: 'Import from',
+    sources: {
+      'pantry-pal': {
+        name: 'Pantry Pal backup',
+        hint: 'A file saved with Export',
+        steps: [
+          'In Pantry Pal, open Data from the ⋮ menu and choose Export.',
+          'Bring the .xlsx file it saves to this device.',
+          'Choose it below.',
+        ],
+        note: 'Nothing is replaced: what is here stays as it is, and items deleted since the backup come back.',
+      },
+      'kitchen-pal': {
+        name: 'KitchenPal',
+        hint: 'The Excel file KitchenPal exports',
+        steps: [
+          'In KitchenPal, export your pantry inventory as an Excel file.',
+          'Bring the .xlsx file to this device.',
+          'Choose it below.',
+        ],
+        note: 'Nothing is replaced: everything is added to what you have, so a file imported twice adds its things twice.',
+      },
+    } satisfies Record<ImportSource, unknown>,
+    chooseFile: 'Choose a file',
+    fileHint: 'An Excel file (.xlsx)',
+    fileSize: (kilobytes: number) => `${formatNumber(kilobytes)}\u00A0KB`,
+    submit: 'Import',
+    submitting: 'Importing…',
+    done: 'Done',
+    summary: {
+      title: 'Imported',
+      createdItems: 'New items',
+      updatedItems: 'Topped-up items',
+      restoredItems: 'Restored items',
+      unchangedItems: 'Items already here',
+      addedUnits: 'Units added',
+      nothingNew: 'Nothing new: everything in the file is here already.',
+      newLocations: (names: readonly string[]) =>
+        `${plural(names.length, { one: 'New storage space:', other: 'New storage spaces:' })} ${formatList(names.map((name) => `“${name}”`))}`,
+      capped: (max: number) => `An item holds up to ${formatNumber(max)}, so these were left out:`,
+      cappedItem: (name: string, count: number) => `${name}: ${formatNumber(count)}`,
+      skipped: (count: number) =>
+        plural(count, { one: '# row was left out', other: '# rows were left out' }),
+      /** `reason` is one of `reasons`. */
+      skippedRow: (sheet: string, row: number, name: string | null, reason: string) =>
+        `${sheet}, row ${formatNumber(row)}${name === null ? '' : ` (“${name}”)`}: ${reason}`,
+      reasons: {
+        'no-name': 'no name',
+        'no-quantity': 'no quantity',
+        'nothing-left': 'nothing left of it',
+        'unknown-item': 'names an item the file doesn’t have',
+        'invalid-value': 'a value that can’t be read',
+      } satisfies Record<ImportSkipReason, string>,
+    },
+    errors: {
+      notAWorkbook: 'This isn’t an Excel file (.xlsx). Choose the file the app exported.',
+      wrongFormat: {
+        'pantry-pal': 'This file isn’t a Pantry Pal backup, or a newer Pantry Pal made it.',
+        'kitchen-pal': 'This file isn’t a KitchenPal export: it has no Product and Pieces columns.',
+      } satisfies Record<ImportSource, string>,
+      tooManyRows: (max: number) =>
+        `This file has more than ${formatNumber(max)} rows, more than one import takes.`,
+      tooLarge: (megabytes: number) =>
+        `This file is too large: an import takes up to ${formatNumber(megabytes)}\u00A0MB.`,
+    },
   },
 
   planner: {

@@ -1,5 +1,7 @@
 import type {
   HOUSEHOLD_ROLE,
+  ImportSkipReason,
+  ImportSource,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
   SUPPORTED_LOCALES,
@@ -401,4 +403,43 @@ export interface SyncPullPayload<T> {
   documents: SyncDocument<T>[];
   /** `null` only when the household has no documents at all in this collection. */
   checkpoint: SyncCheckpoint | null;
+}
+
+/** A row an import left out, while it took the rest of the file. */
+export interface ImportSkippedRow {
+  /** The sheet the row is on: a backup has several. */
+  sheet: string;
+  /** Numbered as a spreadsheet numbers it, the header being row 1. */
+  row: number;
+  /** What the row names, when it names anything. */
+  name: string | null;
+  reason: ImportSkipReason;
+}
+
+/**
+ * What an import did. Nothing is ever replaced: the file's storage spaces,
+ * items and units join what the household has.
+ *
+ * The item counts are of the household's items, each counted once, in one of
+ * the four. Rows of one file can land in one item — the same name in the same
+ * storage space — which is then counted as what happened to it first: two
+ * rows making one new item are one created item.
+ */
+export interface ImportSummary {
+  source: ImportSource;
+  /** Items the household did not have. */
+  createdItems: number;
+  /** Items it had — the same one, or one of that name in that storage space — which took units from the file. */
+  updatedItems: number;
+  /** Items of a backup of this household that had been deleted since, back on their shelf. */
+  restoredItems: number;
+  /** Items it had with nothing to add: every unit the file lists is there, or there is no room for more. */
+  unchangedItems: number;
+  /** Units written, across all of them. */
+  addedUnits: number;
+  /** Storage spaces the import created, as named, in the order it created them. */
+  createdLocations: string[];
+  /** Items that reached `MAX_ITEM_QUANTITY`, by name, with how many of the file's units did not fit. */
+  capped: Array<{ name: string; units: number }>;
+  skipped: ImportSkippedRow[];
 }

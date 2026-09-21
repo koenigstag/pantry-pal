@@ -5,6 +5,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { CategoriesModule } from './categories/categories.module';
 import { configuration } from './config/configuration';
+import { DataModule } from './data/data.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { HouseholdsModule } from './households/households.module';
@@ -35,6 +36,7 @@ import { UnitsModule } from './units/units.module';
     ItemsModule,
     ShoppingListsModule,
     SyncModule,
+    DataModule,
     AdminModule,
     RealtimeModule,
   ],

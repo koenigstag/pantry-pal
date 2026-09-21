@@ -1,5 +1,5 @@
 import type { PantryItem } from '@pantry-pal/shared';
-import { CheckCheck, PackagePlus, RefreshCw, SquarePen } from 'lucide-react';
+import { ArrowDownUp, CheckCheck, PackagePlus, RefreshCw, SquarePen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { Navigate, Outlet } from 'react-router';
@@ -7,6 +7,7 @@ import { Navigate, Outlet } from 'react-router';
 import { messages } from '../../i18n/messages';
 import { usePantryStore } from '../../stores/StoreContext';
 import type { MenuItem } from '../../ui/Menu';
+import { DataDialog } from '../data/DataDialog';
 import { PageStatus } from '../shell/PageStatus';
 import { AddToListSheet, type ListPick } from '../shopping/AddToListSheet';
 import { AddItemDialog } from './AddItemDialog';
@@ -28,7 +29,8 @@ type OpenSheet =
   | { kind: 'move'; itemIds: readonly string[] }
   | { kind: 'pick-list'; pick: ListPick }
   | { kind: 'add' }
-  | { kind: 'locations' };
+  | { kind: 'locations' }
+  | { kind: 'data' };
 
 /** A selection belongs to the location it was made in; switching tabs leaves it behind. */
 interface Selection {
@@ -148,6 +150,12 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
       onSelect: () => setSheet({ kind: 'locations' }),
     },
     {
+      key: 'data',
+      label: messages.data.title,
+      icon: ArrowDownUp,
+      onSelect: () => setSheet({ kind: 'data' }),
+    },
+    {
       key: 'refresh',
       label: messages.storage.refresh,
       icon: RefreshCw,
@@ -253,6 +261,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         defaultLocationId={location.id}
       />
       <LocationEditorDialog open={sheet.kind === 'locations'} onClose={closeSheet} />
+      <DataDialog open={sheet.kind === 'data'} onClose={closeSheet} />
     </div>
   );
 });

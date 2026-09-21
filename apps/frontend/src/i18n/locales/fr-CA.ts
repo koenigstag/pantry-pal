@@ -139,6 +139,11 @@ export const frCA = {
       'Quelqu’un d’autre a modifié les listes d’épicerie pendant votre modification. Ses changements figurent maintenant dans la liste\u00A0: vérifiez-la et enregistrez à nouveau.',
   },
 
+  data: {
+    ...fr.data,
+    exportFailed: 'Impossible d’exporter votre garde-manger.',
+  },
+
   planner: {
     ...fr.planner,
     title: 'Planification',

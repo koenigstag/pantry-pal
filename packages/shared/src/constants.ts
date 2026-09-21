@@ -269,6 +269,51 @@ export type SyncPushCollection = (typeof SYNC_PUSH_COLLECTIONS)[number];
 /** How many changed documents one push carries at most. */
 export const MAX_SYNC_PUSH_BATCH = 50;
 
+/**
+ * Where an import's file comes from, spelled as in its URL:
+ * `POST /households/:householdId/import/kitchen-pal`. `pantry-pal` is a backup
+ * this app exported.
+ */
+export const IMPORT_SOURCE = {
+  PantryPal: 'pantry-pal',
+  KitchenPal: 'kitchen-pal',
+} as const;
+export type ImportSource = (typeof IMPORT_SOURCE)[keyof typeof IMPORT_SOURCE];
+export const IMPORT_SOURCES = Object.values(IMPORT_SOURCE);
+
+/** The multipart field an import's file travels in. */
+export const IMPORT_FILE_FIELD = 'file';
+/** The largest file an import takes: a backup of several hundred items is well under it. */
+export const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+/** The most rows one sheet of an import may hold, so the import stays one modest transaction. */
+export const MAX_IMPORT_ROWS = 2000;
+
+/** Why an import turned a whole file away: the `code` of its 400 or 413. */
+export const IMPORT_ERROR = {
+  /** Not an .xlsx workbook at all: a CSV, an old .xls, a damaged file. */
+  NotAWorkbook: 'not-a-workbook',
+  /** A workbook, but not what the chosen source exports. */
+  WrongFormat: 'wrong-format',
+  /** More rows than `MAX_IMPORT_ROWS` in a sheet. */
+  TooManyRows: 'too-many-rows',
+  /** Larger than `MAX_IMPORT_FILE_BYTES`, or unpacking to far more than an export would. */
+  TooLarge: 'too-large',
+} as const;
+export type ImportErrorCode = (typeof IMPORT_ERROR)[keyof typeof IMPORT_ERROR];
+
+/** Why an import left a row out, while taking the rest of the file. */
+export const IMPORT_SKIP_REASON = {
+  NoName: 'no-name',
+  NoQuantity: 'no-quantity',
+  /** Nothing of it is left: a single piece at 0%. */
+  NothingLeft: 'nothing-left',
+  /** A unit naming an item the file does not have. */
+  UnknownItem: 'unknown-item',
+  /** A value that cannot be what its column holds: a date that is not one, a fill of 250%. */
+  InvalidValue: 'invalid-value',
+} as const;
+export type ImportSkipReason = (typeof IMPORT_SKIP_REASON)[keyof typeof IMPORT_SKIP_REASON];
+
 export const MAX_UNIT_CODE_LENGTH = 16;
 export const MAX_UNIT_LABEL_LENGTH = 16;
 

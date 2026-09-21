@@ -430,15 +430,22 @@ opened tube at 60%, and Pantry, holding the spare. Each item has one sub-item.
   whose dates the row shows. Writing a quantity adds copies of the lead unit or
   consumes the units that should go first (opened, then soonest to expire, then
   oldest); writing dates sets them on every active unit, or with none left on the
-  lead unit. So in step 1 an item's active units always share one state, and the
-  backend services, the sync layer and the offline mirror read items as before.
+  lead unit. So the backend services, the sync layer and the offline mirror read
+  items as before.
+- **Units in states of their own come from imports** (the backend's Data sheet):
+  `createWithUnits` and `addUnits` write each unit's dates and fill as given, so
+  two units of one item can expire on different days or one can be opened. The
+  row shows the lead unit's, and a later date write sets every unit's again.
+  `undelete` brings back a soft-deleted item for a restored backup, its units as
+  they were; `listActiveUnits`, `findUnitIds` and `findAnyByIds` serve the export
+  and the restore.
 - **Any unit write touches `items.updated_at`**, because a sync pull finds changed
   items by that column alone. `ItemsRepository.update` always writes the `items`
-  row, units or not.
+  row, units or not, and so does `addUnits`.
 - **Fill** is `smallint NOT NULL DEFAULT 100`, `BETWEEN 1 AND 100` — an empty unit
   is consumed, not kept at 0 — with `fill_percent = 100 OR opened_at IS NOT NULL`,
-  because a partly used unit has been opened. Nothing writes it yet: the API has
-  no per-unit fields.
+  because a partly used unit has been opened. Only imports write it so far; the
+  API has no per-unit fields yet.
 - **Tenancy is a key:** `(household_id, item_id)` references
   `items(household_id, id)` (`items_household_id_id_unique`), `ON DELETE CASCADE`.
 - **`item_events.sub_item_id`** (nullable) names the unit an event is about. Step 1

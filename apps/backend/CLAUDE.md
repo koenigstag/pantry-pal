@@ -51,6 +51,7 @@ src/
   items/        per-household items and their event history; running out, restocking
   shopping-lists/ lists and their entries: the editor's save, archiving, putting away
   sync/         the offline mirror: pulls since a checkpoint, pushes through the services
+  data/         the Data sheet: an .xlsx backup out; imports in, from a backup or KitchenPal
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
@@ -84,6 +85,8 @@ PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:
 POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
 GET                    /households/:householdId/sync/:collection      ?updatedAt=&id=&limit=
 POST                   /households/:householdId/sync/:collection/push rows: items, entries only
+GET                    /households/:householdId/export                an .xlsx backup
+POST                   /households/:householdId/import/:source        multipart `file`; pantry-pal, kitchen-pal
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
@@ -323,6 +326,62 @@ space and list editors stay online.
     `refused` with the message, so the client can say why rather than retry.
     Anything else fails the push, which the client sends again later.
   - The answer is 200 whatever became of each row.
+
+## Backups and imports
+
+The frontend's Data sheet (`src/data/`): any member exports the household or
+imports a file into it. Files are .xlsx, read and written with **exceljs**.
+
+**The export is a backup** (`GET .../export`): storage spaces, the active items
+and their active units, in the sheets `backup-format.ts` describes — `Pantry Pal`
+(format and version), `Storage spaces`, `Items`, `Units` — under English
+headers, which are the format. Categories and units are codes. It is read in one
+`repeatable read` snapshot, so no unit names an item the file lacks, and it is
+sent `no-store`; the frontend's service worker keeps it out of its read cache
+too.
+
+**An import** (`POST .../import/:source`, the file in the multipart field `file`)
+never replaces anything: what the file holds joins what the household has, in
+one transaction (`ImportService`).
+
+- **Parsers first, outside the transaction.** Each source turns the workbook into
+  an `ImportPlan` (`pantry-pal-backup.ts`, `kitchen-pal.ts`); a file that cannot be
+  read fails before anything is written. A row that cannot be read is left out
+  and listed in the answer with a reason (`IMPORT_SKIP_REASON`); a file that
+  cannot be read at all is a 400 whose `code` names why (`IMPORT_ERROR`).
+- **Storage spaces** match the household's own by id, then by name, then by any
+  name of the default space they were copied from, so KitchenPal's "Fridge" finds
+  "Холодильник" and "Other" finds the fallback. Anything else is created, named as
+  the file has it — or, for a default the household deleted, in the member's
+  language — until `MAX_LOCATIONS_PER_HOUSEHOLD`, and the fallback takes the rest.
+  Creating them takes the household lock, as the locations service does.
+- **Items** match by id (a backup of this household), a deleted one coming back
+  (`ItemsRepository.undelete`, recorded as `restored`); else an active item of the
+  same name in the same space takes the file's units; else one is created. Rows of
+  one file that share a name and a space land in one item, so the summary counts
+  the household's items, not rows.
+- **Units keep their own state** — expiry, opened date, fill — through
+  `ItemsRepository.createWithUnits` and `addUnits`. A partly used unit without an
+  opened date takes the day of the import, as `sub_items_fill_needs_opened`
+  requires. A unit whose id the household holds already is skipped, so importing
+  a backup into the household it came from a second time adds nothing; into
+  another household it adds everything again. Units past `MAX_ITEM_QUANTITY` are
+  left out and reported (`capped`).
+- **KitchenPal** exports one sheet, a row per thing on a shelf. `Quantity_metric`
+  is what is left of all the pieces together, so the size recorded is one full
+  piece's: a whisky at 20% holding 150 ml is a 750 ml bottle. The open piece
+  becomes a unit at that fill, the rest full ones. Its categories map to ours
+  (`CATEGORIES` in `kitchen-pal.ts`), the rest land in `other`; brand, store,
+  price and barcode go into the notes. Photos are not imported.
+- **Announced as usual**: `location.created`, `item.created` and `item.updated`
+  per write, so clients, the offline mirror's pulls included, need nothing new.
+  Every item written records an event whose payload names the source.
+- **Limits**: 2 MB per file (`MAX_IMPORT_FILE_BYTES`, a 413 from multer),
+  `MAX_IMPORT_ROWS` rows per sheet, and a zip whose central directory claims more
+  than 64 MB or 1000 parts is refused before exceljs unpacks it (`workbook.ts`). A
+  directory that lies about its sizes is bounded by the upload limit alone.
+- **exceljs pulls in `uuid@8`**, which `pnpm audit` flags (bounds check in v3, v5
+  and v6 with a buffer). exceljs only calls `v4()`, so it is not reachable.
 
 ## Request flow
 

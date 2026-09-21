@@ -95,12 +95,15 @@ export default defineConfig(({ mode }) => {
             {
               // Reads only: a write reaches the server or fails. Sync pulls stay out
               // too, since the offline mirror keeps its own copy, and a stale page
-              // answering for the server would skip changes it has not seen.
+              // answering for the server would skip changes it has not seen. So
+              // does the export: an old backup passed off as today's is worse
+              // than none.
               // The path is spelled out again because this function becomes source.
               urlPattern: ({ url, request }) =>
                 request.method === 'GET' &&
                 url.pathname.startsWith('/api/v1/') &&
-                !url.pathname.includes('/sync/'),
+                !url.pathname.includes('/sync/') &&
+                !url.pathname.endsWith('/export'),
               handler: 'NetworkFirst',
               options: {
                 cacheName: API_CACHE_NAME,
