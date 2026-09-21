@@ -448,6 +448,9 @@ opened tube at 60%, and Pantry, holding the spare. Each item has one sub-item.
   uses the constant only to clamp merged quantities, not in its RxDB schema, so
   existing mirrors open unchanged. `ItemsService.restock` never clamps an item
   below what it holds, so one filled past 100 before the change keeps its units.
+  Sizes kept the old bound under a name of their own, `MAX_SIZE_VALUE` (10,000): the
+  DTOs first held `size_value` to `MAX_ITEM_QUANTITY` too, so a 250 g pack was
+  refused once that dropped to 100.
 
 ### Sub-items: still to build
 

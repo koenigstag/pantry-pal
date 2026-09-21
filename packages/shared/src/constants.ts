@@ -169,6 +169,12 @@ export const MAX_ITEM_NAME_LENGTH = 80;
  */
 export const MAX_ITEM_QUANTITY = 100;
 /**
+ * The largest size, what is inside one: `250` g, `1.5` l. It has a bound of its
+ * own because `MAX_ITEM_QUANTITY` counts rows and so stays small; this is the
+ * 10,000 that sizes were held to before that dropped to 100.
+ */
+export const MAX_SIZE_VALUE = 10_000;
+/**
  * A size is `numeric(10, 3)` (`1.5` kg): anything finer would be silently
  * rounded by Postgres. Quantities are integers and have no decimals.
  */

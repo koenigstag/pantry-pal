@@ -2,6 +2,7 @@ import {
   MAX_ITEM_NOTES_LENGTH,
   MAX_ITEM_QUANTITY,
   MAX_PERIOD_AFTER_OPENING_DAYS,
+  MAX_SIZE_VALUE,
   SIZE_DECIMAL_PLACES,
 } from '@pantry-pal/shared';
 import type { FieldError } from '@pantry-pal/shared/dto';
@@ -30,7 +31,7 @@ export function itemFieldErrors(
     category: t.category,
     quantity: t.quantity(minQuantity, MAX_ITEM_QUANTITY),
     unit: t.unit,
-    sizeValue: t.sizeValue(MAX_ITEM_QUANTITY, SIZE_DECIMAL_PLACES),
+    sizeValue: t.sizeValue(MAX_SIZE_VALUE, SIZE_DECIMAL_PLACES),
     sizeUnit: t.sizeUnit,
     expiresAt: t.date,
     openedAt: t.date,
