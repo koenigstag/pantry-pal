@@ -249,7 +249,8 @@ buy, and whether it is ticked off. Any member manages lists and entries.
 - **Putting the shopping away** (`POST .../put-away`, the frontend's "Bought"
   button) restocks each named entry's item (`ItemsService.restock`) and deletes
   the entries, all or nothing.
-  - An item in stock gains the quantity.
+  - An item in stock gains the quantity, up to `MAX_ITEM_QUANTITY` — and never
+    loses any: one filled past the limit before it was lowered keeps what it has.
   - One that ran out starts over as a new batch: active, just the bought quantity,
     dates cleared, in its own location, or in the fallback if that was deleted.
   - An entry not on the list, or no longer ticked off, is a 409: the client acted

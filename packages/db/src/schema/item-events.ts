@@ -5,6 +5,7 @@ import { check, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'dr
 import { inList } from './_sql';
 import { households } from './households';
 import { items } from './items';
+import { subItems } from './sub-items';
 import { users } from './users';
 
 /** Append-only. Feeds the activity feed, waste statistics and undo. */
@@ -18,12 +19,18 @@ export const itemEvents = pgTable(
     itemId: uuid('item_id')
       .notNull()
       .references(() => items.id, { onDelete: 'cascade' }),
+    /**
+     * The unit the event is about, when it is about one: opening one bottle of
+     * three. Null for events about the whole item, and for every event written
+     * before units existed.
+     */
+    subItemId: uuid('sub_item_id').references(() => subItems.id, { onDelete: 'cascade' }),
     /** Null survives a member leaving the household; the history stays intact. */
     userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     type: text('type').$type<ItemEventType>().notNull(),
     /**
      * Negative when consumed or discarded, so waste reports are a plain SUM.
-     * An integer, like the `items.quantity` it is the change of.
+     * An integer: a number of units, the item's quantity changing.
      */
     quantityDelta: integer('quantity_delta'),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),

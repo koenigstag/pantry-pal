@@ -57,6 +57,13 @@
       "when": 1789720361066,
       "tag": "0007_offline_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789751588163,
+      "tag": "0008_sub_items",
+      "breakpoints": true
     }
   ]
 }

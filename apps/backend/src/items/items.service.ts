@@ -229,7 +229,14 @@ export class ItemsService {
     if (before === undefined) throw new NotFoundException('Item not found');
 
     const patch: UpdateItemInput = inStock(before)
-      ? { quantity: Math.min(before.quantity + quantity, MAX_ITEM_QUANTITY) }
+      ? {
+          // Up to the limit, and never below what the item holds already: one filled
+          // past today's limit before it was lowered would otherwise lose units.
+          quantity: Math.max(
+            before.quantity,
+            Math.min(before.quantity + quantity, MAX_ITEM_QUANTITY),
+          ),
+        }
       : {
           status: ITEM_STATUS.Active,
           quantity,
