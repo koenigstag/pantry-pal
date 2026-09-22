@@ -25,6 +25,7 @@ import {
   seedUnits,
   ShoppingListEntriesRepository,
   ShoppingListsRepository,
+  SubItemsRepository,
   UnitsRepository,
   UsersRepository,
   type Database,
@@ -45,6 +46,7 @@ const REPOSITORIES = [
   RefreshTokensRepository,
   ShoppingListEntriesRepository,
   ShoppingListsRepository,
+  SubItemsRepository,
   UnitsRepository,
   UsersRepository,
 ];

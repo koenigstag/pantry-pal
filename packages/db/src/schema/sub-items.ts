@@ -1,4 +1,10 @@
-import { ITEM_STATUS, ITEM_STATUSES, type ItemStatus } from '@pantry-pal/shared';
+import {
+  FULL_FILL_PERCENT,
+  ITEM_STATUS,
+  ITEM_STATUSES,
+  MIN_FILL_PERCENT,
+  type ItemStatus,
+} from '@pantry-pal/shared';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -58,7 +64,7 @@ export const subItems = pgTable(
      * How full the unit is, in percent. An empty unit is consumed rather than
      * kept at 0, and a partly used one has been opened: see the two checks.
      */
-    fillPercent: smallint('fill_percent').notNull().default(100),
+    fillPercent: smallint('fill_percent').notNull().default(FULL_FILL_PERCENT),
 
     status: text('status').$type<ItemStatus>().notNull().default(ITEM_STATUS.Active),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -82,8 +88,14 @@ export const subItems = pgTable(
     }).onDelete('cascade'),
 
     check('sub_items_status_check', sql`status in (${inList(ITEM_STATUSES)})`),
-    check('sub_items_fill_range', sql`fill_percent between 1 and 100`),
-    check('sub_items_fill_needs_opened', sql`fill_percent = 100 or opened_at is not null`),
+    check(
+      'sub_items_fill_range',
+      sql`fill_percent between ${sql.raw(String(MIN_FILL_PERCENT))} and ${sql.raw(String(FULL_FILL_PERCENT))}`,
+    ),
+    check(
+      'sub_items_fill_needs_opened',
+      sql`fill_percent = ${sql.raw(String(FULL_FILL_PERCENT))} or opened_at is not null`,
+    ),
 
     /** An item's units: counting the active ones, and finding the one that goes first. */
     index('sub_items_item_idx')

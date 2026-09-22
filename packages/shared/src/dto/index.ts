@@ -19,6 +19,7 @@ export * from './location.dto';
 export * from './me.dto';
 export * from './pantry-item.dto';
 export * from './shopping-list.dto';
+export * from './sub-item.dto';
 export * from './sync.dto';
 export * from './unit.dto';
 export * from './validate';

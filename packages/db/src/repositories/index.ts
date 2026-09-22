@@ -8,6 +8,7 @@ export * from './locations.repository';
 export * from './refresh-tokens.repository';
 export * from './shopping-list-entries.repository';
 export * from './shopping-lists.repository';
+export * from './sub-items.repository';
 export * from './units.repository';
 export * from './users.repository';
 export type { SyncCheckpointRow, SyncWindow, WithSyncStamp } from './sync-window';

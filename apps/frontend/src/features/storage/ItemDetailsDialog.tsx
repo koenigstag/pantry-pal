@@ -15,7 +15,6 @@ import {
   ruleErrors,
   toDraft,
   toPatch,
-  todayIsoDate,
   type DraftField,
   type ItemDraft,
 } from './itemDraft';
@@ -163,21 +162,11 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
 
     setServerError(null);
     setBusy(true);
-    // The typed quantity replaces any stepper tap still waiting to be sent.
-    if (patch.quantity !== undefined) quantities.discard(item.id);
     const error = await pantry.updateItem(item.id, result.value);
     setBusy(false);
 
     if (error === null) setEdit(null);
     else setServerError(error);
-  };
-
-  const markOpened = async (): Promise<void> => {
-    setServerError(null);
-    setBusy(true);
-    const error = await pantry.updateItem(item.id, { openedAt: todayIsoDate() });
-    setBusy(false);
-    if (error !== null) setServerError(error);
   };
 
   const isDiscardSheetOpen = blocker.state === 'blocked' || isConfirmingCancel;
@@ -253,8 +242,6 @@ export const ItemDetailsDialog = observer(function ItemDetailsDialog(): ReactEle
         {edit === null ? (
           <ItemDetailsView
             item={item}
-            isBusy={isBusy}
-            onMarkOpened={() => void markOpened()}
             onRemove={openRemoveSheet}
             onAddToList={() => openListPicker({ kind: 'add', itemIds: [item.id] })}
           />

@@ -1,5 +1,6 @@
-import { ITEM_STATUS } from '@pantry-pal/shared';
+import { ITEM_STATUS, type ItemStatus } from '@pantry-pal/shared';
 import { and, asc, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { items, subItems, type ItemRecord } from '../schema';
 import type { Executor } from '../transaction';
@@ -12,18 +13,31 @@ export interface ItemUnitState {
 }
 
 /**
+ * One active unit, as an `ItemRow` carries it: read in the same query as its
+ * item, as JSON, so its instants are already ISO-8601 text.
+ */
+export interface ItemRowSubItem extends ItemUnitState {
+  id: string;
+  effectiveExpiresAt: string | null;
+  fillPercent: number;
+  status: ItemStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * An item as every caller reads it: the `items` row, its quantity — the count of
- * its active units — and the dates of its lead unit, with that unit's
- * `effective_expires_at`.
+ * its active units — the dates of its lead unit, with that unit's
+ * `effective_expires_at`, and the active units themselves, oldest first.
  *
- * This is the shape the API has always served, one set of dates per item, so the
- * services, the sync pull and the offline mirror read items exactly as they did
- * before units had rows of their own.
+ * The quantity and the dates are the shape the API always served, one set of
+ * dates per item; `subItems` is what lets the units differ.
  */
 export type ItemRow = ItemRecord &
   ItemUnitState & {
     quantity: number;
     effectiveExpiresAt: string | null;
+    subItems: ItemRowSubItem[];
   };
 
 /**
@@ -39,6 +53,10 @@ export const LEAD_UNIT_ORDER = [
   asc(subItems.id),
 ];
 
+/** An instant as JavaScript's `toISOString()` writes it: UTC, to the millisecond. */
+const isoInstant = (column: PgColumn) =>
+  sql`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+
 /**
  * The two lateral subqueries an `ItemRow` is read with, and its fields. Join
  * both to `items` with `leftJoinLateral(…, sql\`true\`)`, then select `fields`.
@@ -47,8 +65,23 @@ export const LEAD_UNIT_ORDER = [
  * fixture reads its items back inside its own transaction the same way.
  */
 export function itemRowSelection(db: Executor) {
+  // Aggregates always yield a row, so an item without active units still gets
+  // its count, 0, and its units, `[]` (`json_agg` of no rows is NULL).
   const activeUnits = db
-    .select({ quantity: sql<number>`count(*)::int`.as('quantity') })
+    .select({
+      quantity: sql<number>`count(*)::int`.as('quantity'),
+      subItems: sql<ItemRowSubItem[]>`coalesce(json_agg(json_build_object(
+        'id', ${subItems.id},
+        'expiresAt', ${subItems.expiresAt},
+        'openedAt', ${subItems.openedAt},
+        'periodAfterOpeningDays', ${subItems.periodAfterOpeningDays},
+        'effectiveExpiresAt', ${subItems.effectiveExpiresAt},
+        'fillPercent', ${subItems.fillPercent},
+        'status', ${subItems.status},
+        'createdAt', ${isoInstant(subItems.createdAt)},
+        'updatedAt', ${isoInstant(subItems.updatedAt)}
+      ) order by ${subItems.createdAt}, ${subItems.id}), '[]'::json)`.as('units'),
+    })
     .from(subItems)
     .where(
       and(
@@ -74,13 +107,13 @@ export function itemRowSelection(db: Executor) {
 
   const fields = {
     ...getTableColumns(items),
-    // An aggregate always yields a row, so the count is never null; the
-    // COALESCE is for the type the outer join gives it.
+    // Never null, as above; the COALESCEs are for the types the outer join gives them.
     quantity: sql<number>`coalesce(${activeUnits.quantity}, 0)`.mapWith(Number),
     expiresAt: leadUnit.expiresAt,
     openedAt: leadUnit.openedAt,
     periodAfterOpeningDays: leadUnit.periodAfterOpeningDays,
     effectiveExpiresAt: leadUnit.effectiveExpiresAt,
+    subItems: sql<ItemRowSubItem[]>`coalesce(${activeUnits.subItems}, '[]'::json)`,
   };
 
   return { activeUnits, leadUnit, fields };

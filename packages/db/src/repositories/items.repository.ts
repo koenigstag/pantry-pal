@@ -3,6 +3,7 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   getTableColumns,
   inArray,
@@ -24,7 +25,7 @@ import {
 import { itemRowSelection, LEAD_UNIT_ORDER, type ItemRow, type ItemUnitState } from './item-rows';
 import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from './sync-window';
 
-export type { ItemRow, ItemUnitState } from './item-rows';
+export type { ItemRow, ItemRowSubItem, ItemUnitState } from './item-rows';
 
 /**
  * The item's own fields: everything the caller supplies but its units.
@@ -50,6 +51,11 @@ export type UpdateItemInput = Partial<CreateItemInput>;
  * lead unit. Written active.
  */
 export interface NewUnitInput extends ItemUnitState {
+  /**
+   * Chosen by the client, which names units before the server has seen them:
+   * the offline mirror does. Omitted, the database picks one.
+   */
+  id?: string;
   /** 1–100. Below 100 the unit must have been opened: see `sub_items_fill_needs_opened`. */
   fillPercent: number;
 }
@@ -75,6 +81,19 @@ const CONSUME_ORDER = [
 ];
 
 /**
+ * Whose printed date and period after opening the units a higher quantity adds
+ * take: the newest active unit's, the last one bought — or, with none active,
+ * the lead unit's, whose dates the item shows. `freshSubItemState` in
+ * `@pantry-pal/shared` is the same rule, for the offline mirror.
+ */
+const FRESH_UNIT_SOURCE_ORDER = [
+  sql`(${subItems.status} = ${ITEM_STATUS.Active}) desc`,
+  sql`case when ${subItems.status} = ${ITEM_STATUS.Active} then ${subItems.createdAt} end desc nulls last`,
+  desc(subItems.updatedAt),
+  asc(subItems.id),
+];
+
+/**
  * Plain class, no decorators: `apps/backend` bridges it into Nest DI with a
  * `useFactory`, which is what keeps this package free of `@nestjs/*`.
  *
@@ -82,14 +101,15 @@ const CONSUME_ORDER = [
  * these methods participate in an ambient transaction without knowing it — no
  * executor parameter is threaded through, and none should be added.
  *
- * **Units.** An item's units are rows of `sub_items`, but every method here
- * reads and writes the item as one row (`ItemRow`), as callers always have: a
- * quantity, and one set of dates. Writing a quantity adds or consumes units;
- * writing dates sets them on every unit on the shelf. Only `createWithUnits`
- * and `addUnits` write units in states of their own, as an import brings them;
- * the row then shows the lead unit's, and a later date write evens them out.
- * Anything a unit write changes also moves the item's `updated_at`, which is
- * how a sync pull finds it.
+ * **Units.** An item's units are rows of `sub_items`. Every method here reads
+ * and writes the item as a whole (`ItemRow`): a quantity and one set of dates,
+ * with its active units beside them. Writing a quantity adds fresh units or
+ * consumes the ones that should go first; writing dates sets them on every unit
+ * on the shelf. `createWithUnits` and `addUnits` write units in states of their
+ * own, as an import or the offline mirror brings them, and `SubItemsRepository`
+ * changes them one at a time; the row then shows the lead unit's. Anything a unit
+ * write changes also moves the item's `updated_at`, which is how a sync pull
+ * finds it.
  */
 export class ItemsRepository {
   constructor(private readonly db: Database) {}
@@ -483,9 +503,10 @@ export class ItemsRepository {
   }
 
   /**
-   * Makes the item's active units number `quantity`: new ones copy the lead
-   * unit's dates and fill, as a higher quantity always kept the item's dates;
-   * surplus ones are consumed, those that should go first first.
+   * Makes the item's active units number `quantity`. New ones are fresh — just
+   * bought: unopened and full, with the printed date and period after opening of
+   * the newest unit (`FRESH_UNIT_SOURCE_ORDER`). Surplus ones are consumed, those
+   * that should go first first.
    */
   private async setQuantity(householdId: string, itemId: string, quantity: number): Promise<void> {
     const active = await this.db
@@ -495,24 +516,21 @@ export class ItemsRepository {
       .orderBy(...CONSUME_ORDER);
 
     if (quantity > active.length) {
-      const [lead] = await this.db
+      const [source] = await this.db
         .select({
           expiresAt: subItems.expiresAt,
-          openedAt: subItems.openedAt,
           periodAfterOpeningDays: subItems.periodAfterOpeningDays,
-          fillPercent: subItems.fillPercent,
         })
         .from(subItems)
         .where(this.unitsOf(householdId, itemId))
-        .orderBy(...LEAD_UNIT_ORDER)
+        .orderBy(...FRESH_UNIT_SOURCE_ORDER)
         .limit(1);
 
-      await this.insertUnits(
-        householdId,
-        itemId,
-        quantity - active.length,
-        lead ?? { expiresAt: null, openedAt: null, periodAfterOpeningDays: null },
-      );
+      await this.insertUnits(householdId, itemId, quantity - active.length, {
+        expiresAt: source?.expiresAt ?? null,
+        openedAt: null,
+        periodAfterOpeningDays: source?.periodAfterOpeningDays ?? null,
+      });
       return;
     }
 
@@ -590,6 +608,7 @@ export class ItemsRepository {
 
     await this.db.insert(subItems).values(
       units.map((unit): NewSubItemRow => ({
+        ...(unit.id !== undefined && { id: unit.id }),
         householdId,
         itemId,
         expiresAt: unit.expiresAt,

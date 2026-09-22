@@ -1,5 +1,5 @@
 import { daysUntil, getExpiryStatus, type PantryItem, type ShoppingList } from '@pantry-pal/shared';
-import { Clock, ListPlus, MapPin, PackageOpen, Tag, Trash, type LucideIcon } from 'lucide-react';
+import { Clock, ListPlus, MapPin, Tag, Trash, type LucideIcon } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import type { ReactElement, ReactNode } from 'react';
 
@@ -11,12 +11,10 @@ import { DETAILS_GRID, DetailsSection, ItemPhoto } from './detailsLayout';
 import { amountText, EXPIRY_TONES } from './itemDisplay';
 import { locationName } from './locationName';
 import { QuantityStepper } from './QuantityStepper';
+import { SubItemsSection } from './SubItemsSection';
 
 interface ItemDetailsViewProps {
   item: PantryItem;
-  /** A save or quick action is in flight. */
-  isBusy: boolean;
-  onMarkOpened: () => void;
   onRemove: (item: PantryItem) => void;
   /** Opens the shopping-list picker for this item. */
   onAddToList: () => void;
@@ -25,8 +23,6 @@ interface ItemDetailsViewProps {
 /** The read-only side of the item modal, with the edits that need no form. */
 export const ItemDetailsView = observer(function ItemDetailsView({
   item,
-  isBusy,
-  onMarkOpened,
   onRemove,
   onAddToList,
 }: ItemDetailsViewProps): ReactElement {
@@ -61,46 +57,7 @@ export const ItemDetailsView = observer(function ItemDetailsView({
 
         <DetailsSection title={messages.itemDetails.expiry}>
           <ExpirySummary item={item} />
-          <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-            <DetailRow
-              term={messages.itemDetails.printedDate}
-              value={
-                item.expiresAt === null
-                  ? messages.itemDetails.notSet
-                  : formatCalendarDate(item.expiresAt)
-              }
-            />
-            <DetailRow
-              term={messages.itemDetails.opened}
-              value={
-                item.openedAt === null
-                  ? messages.itemDetails.notOpened
-                  : formatCalendarDate(item.openedAt)
-              }
-            />
-            <DetailRow
-              term={messages.itemDetails.useWithin}
-              value={
-                item.periodAfterOpeningDays === null
-                  ? messages.itemDetails.notSet
-                  : messages.itemDetails.useWithinDays(item.periodAfterOpeningDays)
-              }
-            />
-          </dl>
-          {openingBroughtExpiryForward(item) && (
-            <p className="mt-3 text-sm text-ink-muted">{messages.itemDetails.openedSooner}</p>
-          )}
-          {item.openedAt === null && (
-            <button
-              type="button"
-              onClick={onMarkOpened}
-              disabled={isBusy}
-              className="focus-ring mt-4 inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-line px-4 text-sm font-medium transition-colors hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <PackageOpen aria-hidden="true" className="size-4" />
-              {messages.itemDetails.markOpened}
-            </button>
-          )}
+          <SubItemsSection item={item} onRemove={onRemove} />
         </DetailsSection>
 
         <DetailsSection title={messages.itemDetails.shopping}>
@@ -175,15 +132,6 @@ function ExpirySummary({ item }: { item: PantryItem }): ReactElement {
       )}
       <span className="text-sm text-ink-muted">{formatCalendarDate(item.effectiveExpiresAt)}</span>
     </div>
-  );
-}
-
-/** True when an opened item's use-within period ends before its printed date. */
-function openingBroughtExpiryForward(item: PantryItem): boolean {
-  return (
-    item.expiresAt !== null &&
-    item.effectiveExpiresAt !== null &&
-    item.effectiveExpiresAt < item.expiresAt
   );
 }
 

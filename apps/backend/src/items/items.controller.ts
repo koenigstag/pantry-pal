@@ -14,9 +14,11 @@ import {
 } from '@nestjs/common';
 import type { PantryItem } from '@pantry-pal/shared';
 import {
+  AddSubItemsDto,
   CreatePantryItemDto,
   ListPantryItemsQueryDto,
   UpdatePantryItemDto,
+  UpdateSubItemDto,
 } from '@pantry-pal/shared/dto';
 
 import { CurrentMembership, type Membership } from '../common/request-context';
@@ -70,5 +72,37 @@ export class ItemsController {
     @Param('itemId', ParseUUIDPipe) id: string,
   ): Promise<void> {
     return this.items.remove(membership, id);
+  }
+
+  /** Puts units on the item's shelf, each in a state of its own. Answers with the item. */
+  @Post(':itemId/sub-items')
+  @HttpCode(HttpStatus.CREATED)
+  addSubItems(
+    @CurrentMembership() membership: Membership,
+    @Param('itemId', ParseUUIDPipe) id: string,
+    @Body() dto: AddSubItemsDto,
+  ): Promise<PantryItem> {
+    return this.items.changeSubItems(membership, id, { add: dto.subItems });
+  }
+
+  /** One unit's dates, how much is left, or its status: used up, thrown out. Answers with the item. */
+  @Patch(':itemId/sub-items/:subItemId')
+  updateSubItem(
+    @CurrentMembership() membership: Membership,
+    @Param('itemId', ParseUUIDPipe) id: string,
+    @Param('subItemId', ParseUUIDPipe) subItemId: string,
+    @Body() dto: UpdateSubItemDto,
+  ): Promise<PantryItem> {
+    return this.items.changeSubItems(membership, id, { update: [{ id: subItemId, patch: dto }] });
+  }
+
+  /** A unit added by mistake. The item keeps at least one unit (409). Answers with the item. */
+  @Delete(':itemId/sub-items/:subItemId')
+  removeSubItem(
+    @CurrentMembership() membership: Membership,
+    @Param('itemId', ParseUUIDPipe) id: string,
+    @Param('subItemId', ParseUUIDPipe) subItemId: string,
+  ): Promise<PantryItem> {
+    return this.items.changeSubItems(membership, id, { remove: [subItemId] });
   }
 }

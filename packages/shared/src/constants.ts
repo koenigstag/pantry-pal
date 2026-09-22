@@ -182,6 +182,15 @@ export const SIZE_DECIMAL_PLACES = 3;
 export const MAX_ITEM_NOTES_LENGTH = 2000;
 export const MAX_PERIOD_AFTER_OPENING_DAYS = 3650;
 
+/**
+ * How full one unit of an item is, in percent (`SubItem.fillPercent`). A unit
+ * starts full; an empty one is used up rather than kept at 0, so the least is
+ * 1; and one below full has been opened. `@pantry-pal/db` builds its CHECK
+ * constraints from these two.
+ */
+export const FULL_FILL_PERCENT = 100;
+export const MIN_FILL_PERCENT = 1;
+
 export const MAX_HOUSEHOLD_NAME_LENGTH = 80;
 export const MAX_EMAIL_LENGTH = 254;
 export const MAX_DISPLAY_NAME_LENGTH = 80;

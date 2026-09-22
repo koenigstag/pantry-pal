@@ -16,6 +16,13 @@ export function formatNumber(value: number): string {
   return numberFormat.format(value);
 }
 
+const percentFormat = new Intl.NumberFormat(LOCALE, { style: 'percent', maximumFractionDigits: 0 });
+
+/** A share out of 100 — how much of a unit is left — as the language writes it: `60%`, `60 %`. */
+export function formatPercent(percent: number): string {
+  return percentFormat.format(percent / 100);
+}
+
 const listFormat = new Intl.ListFormat(LOCALE, { style: 'long', type: 'conjunction' });
 
 /** `['Name', 'Notes']` -> `"Name and Notes"`, with the locale's own conjunction. */

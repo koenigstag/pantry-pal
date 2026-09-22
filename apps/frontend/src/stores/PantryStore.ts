@@ -1,15 +1,20 @@
 import {
+  consumeOrder,
   createId,
   DEFAULT_CATEGORY,
   DEFAULT_SHOPPING_ENTRY_QUANTITY,
   effectiveExpiry,
+  freshSubItemState,
+  FULL_FILL_PERCENT,
   IMPORT_ERROR,
+  isActiveSubItem,
   ITEM_STATUS,
   MAX_IMPORT_FILE_BYTES,
   MAX_IMPORT_ROWS,
   MAX_SHOPPING_LISTS_PER_HOUSEHOLD,
   PANTRY_EVENT,
   QUANTITY_UNIT_KIND,
+  withSubItems,
   type Category,
   type CurrentUser,
   type HouseholdDeletedPayload,
@@ -17,10 +22,13 @@ import {
   type HouseholdPayload,
   type ImportSource,
   type ImportSummary,
+  type ItemStatus,
   type PantryItem,
   type PantryLocation,
   type ShoppingList,
   type ShoppingListEntry,
+  type SubItem,
+  type SubItemState,
   type SupportedLocale,
   type Unit,
   type UserHousehold,
@@ -136,6 +144,9 @@ const bySortOrder = (
 /** The order entries were put on their lists. Instants share one format, so they compare as strings. */
 const byArrival = (a: ShoppingListEntry, b: ShoppingListEntry): number =>
   a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1;
+
+/** What changing some of an item's units may set: their state, and whether they are still on the shelf. */
+export type SubItemPatch = Partial<SubItemState> & { status?: ItemStatus };
 
 /** The fields a patch sets: `undefined` means untouched, while `null` clears a field. */
 function definedFields<T extends object>(patch: T): Partial<T> {
@@ -482,32 +493,41 @@ export class PantryStore {
 
     const id = createId();
     const now = new Date().toISOString();
-    const fields = {
+    const dates = {
       expiresAt: dto.expiresAt ?? null,
       openedAt: dto.openedAt ?? null,
       periodAfterOpeningDays: dto.periodAfterOpeningDays ?? null,
     };
+    // `quantity` units, each with the dates given: the server makes them the same way.
+    const state: SubItemState = { ...dates, fillPercent: FULL_FILL_PERCENT };
+    const units = Array.from({ length: dto.quantity }, () => newSubItem(state, now));
     try {
-      await mirror.insertItem({
-        id,
-        householdId,
-        locationId: dto.locationId,
-        productId: null,
-        name: dto.name,
-        category: dto.category,
-        isEdible: this.edibleFor(dto.category, dto.isEdible),
-        quantity: dto.quantity,
-        unit: dto.unit,
-        sizeValue: dto.sizeValue ?? null,
-        sizeUnit: dto.sizeUnit ?? null,
-        ...fields,
-        effectiveExpiresAt: effectiveExpiry(fields),
-        notes: dto.notes ?? null,
-        status: ITEM_STATUS.Active,
-        defaultShoppingListId: dto.defaultShoppingListId ?? null,
-        createdAt: now,
-        updatedAt: now,
-      });
+      await mirror.insertItem(
+        withSubItems(
+          {
+            id,
+            householdId,
+            locationId: dto.locationId,
+            productId: null,
+            name: dto.name,
+            category: dto.category,
+            isEdible: this.edibleFor(dto.category, dto.isEdible),
+            quantity: dto.quantity,
+            unit: dto.unit,
+            sizeValue: dto.sizeValue ?? null,
+            sizeUnit: dto.sizeUnit ?? null,
+            ...dates,
+            effectiveExpiresAt: effectiveExpiry(dates),
+            subItems: [],
+            notes: dto.notes ?? null,
+            status: ITEM_STATUS.Active,
+            defaultShoppingListId: dto.defaultShoppingListId ?? null,
+            createdAt: now,
+            updatedAt: now,
+          },
+          units,
+        ),
+      );
       await this.shown(() => this.itemVersions.has(id));
       return null;
     } catch (error) {
@@ -522,25 +542,68 @@ export class PantryStore {
    * a modal dialog show it there, where a notice would be hidden behind it.
    */
   async updateItem(id: string, dto: UpdatePantryItemDto): Promise<string | null> {
-    const mirror = this.mirror;
-    if (mirror === null) return messages.errors.loadFailed;
+    return this.writeItem(id, (item, now) => this.itemPatch(item, dto, now));
+  }
 
-    try {
-      const change = await mirror.patchItem(id, (item) => this.itemPatch(item, dto));
-      if (change === undefined) return messages.errors.itemGone;
-      const entryId =
-        inStock(change.before) && !inStock(change.after)
-          ? await this.putOnDefaultList(mirror, change.after)
-          : undefined;
-      await this.shown(
-        () =>
-          this.itemVersions.get(id) === change.after.updatedAt &&
-          (entryId === undefined || this.entryVersions.has(entryId)),
-      );
-      return null;
-    } catch (error) {
-      return toMessage(error);
-    }
+  /**
+   * Makes an item's quantity `quantity`, on this device: the stepper's write. A
+   * higher one adds fresh units — unopened, full, with the newest unit's printed
+   * date — and a lower one uses up those that should go first, as the server
+   * would.
+   */
+  async setQuantity(itemId: string, quantity: number): Promise<string | null> {
+    return this.writeItem(itemId, (item, now) =>
+      withSubItems(item, unitsForQuantity(item, quantity, now)),
+    );
+  }
+
+  /** Puts `count` units on an item's shelf, on this device, each in `state`. */
+  async addSubItems(itemId: string, count: number, state: SubItemState): Promise<string | null> {
+    return this.writeItem(itemId, (item, now) =>
+      withSubItems(item, [
+        ...item.subItems,
+        ...Array.from({ length: count }, () => newSubItem(state, now)),
+      ]),
+    );
+  }
+
+  /**
+   * Changes some of an item's units, on this device: their dates, how much is
+   * left, or their status — used up, thrown out. A unit no longer opened is full
+   * again, as the server makes it, unless `patch` says how full.
+   */
+  async changeSubItems(
+    itemId: string,
+    ids: readonly string[],
+    patch: SubItemPatch,
+  ): Promise<string | null> {
+    const chosen = new Set(ids);
+    const refill =
+      patch.openedAt === null && patch.fillPercent === undefined
+        ? { fillPercent: FULL_FILL_PERCENT }
+        : {};
+    return this.writeItem(itemId, (item, now) =>
+      withSubItems(
+        item,
+        item.subItems.map((unit) =>
+          chosen.has(unit.id) ? stamped({ ...unit, ...patch, ...refill }, now) : unit,
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Deletes a unit added by mistake, on this device. Using one up or throwing it
+   * out is `changeSubItems` with a status. An item keeps at least one unit: the
+   * server refuses deleting the last, and the item comes back with it.
+   */
+  async deleteSubItem(itemId: string, id: string): Promise<string | null> {
+    return this.writeItem(itemId, (item) =>
+      withSubItems(
+        item,
+        item.subItems.filter((unit) => unit.id !== id),
+      ),
+    );
   }
 
   /** Deletes items on this device, taking them off every list, as the server does. */
@@ -842,23 +905,69 @@ export class PantryStore {
 
   /* --------------------------------------------------------------- internal */
 
-  /** What `dto` changes on `item`, with what the server would work out from it. */
-  private itemPatch(item: PantryItem, dto: UpdatePantryItemDto): Partial<PantryItem> {
-    const patch: Partial<PantryItem> = definedFields(dto);
-    const next = { ...item, ...patch };
+  /**
+   * `item` as `dto` leaves it, with what the server would work out from it. A
+   * quantity and dates are the units', as the server takes a patch that names
+   * them: a quantity adds or uses up units, and dates go on every unit on the
+   * shelf — or, with none left, on the item, which shows them.
+   */
+  private itemPatch(item: PantryItem, dto: UpdatePantryItemDto, now: string): PantryItem {
+    const { quantity, expiresAt, openedAt, periodAfterOpeningDays, ...fields } = definedFields(dto);
+    let next: PantryItem = { ...item, ...fields };
 
     if (dto.category !== undefined || dto.isEdible !== undefined) {
-      patch.isEdible = this.edibleFor(next.category, dto.isEdible ?? item.isEdible);
+      next.isEdible = this.edibleFor(next.category, dto.isEdible ?? item.isEdible);
     }
-    if (
-      dto.expiresAt !== undefined ||
-      dto.openedAt !== undefined ||
-      dto.periodAfterOpeningDays !== undefined
-    ) {
-      patch.effectiveExpiresAt = effectiveExpiry(next);
+
+    let units = quantity === undefined ? item.subItems : unitsForQuantity(item, quantity, now);
+    const dates = definedFields({ expiresAt, openedAt, periodAfterOpeningDays });
+    if (Object.keys(dates).length > 0) {
+      if (units.some(isActiveSubItem)) {
+        units = units.map((unit) =>
+          isActiveSubItem(unit) ? stamped({ ...unit, ...dates }, now) : unit,
+        );
+      } else {
+        next = { ...next, ...dates };
+        next.effectiveExpiresAt = effectiveExpiry(next);
+      }
     }
-    patch.updatedAt = new Date().toISOString();
-    return patch;
+    return withSubItems(next, units);
+  }
+
+  /**
+   * Changes an item on this device, as `change` leaves it; the server gets the
+   * change once it can be reached. An item that runs out goes on its default
+   * shopping list, as the server would put it. Returns the message to show, or
+   * `null` once the page shows the change: callers inside a modal dialog show
+   * it there, where a notice would be hidden behind it.
+   */
+  private async writeItem(
+    id: string,
+    change: (item: PantryItem, now: string) => PantryItem,
+  ): Promise<string | null> {
+    const mirror = this.mirror;
+    if (mirror === null) return messages.errors.loadFailed;
+
+    try {
+      const now = new Date().toISOString();
+      const result = await mirror.patchItem(id, (item) => ({
+        ...change(item, now),
+        updatedAt: now,
+      }));
+      if (result === undefined) return messages.errors.itemGone;
+      const entryId =
+        inStock(result.before) && !inStock(result.after)
+          ? await this.putOnDefaultList(mirror, result.after)
+          : undefined;
+      await this.shown(
+        () =>
+          this.itemVersions.get(id) === result.after.updatedAt &&
+          (entryId === undefined || this.entryVersions.has(entryId)),
+      );
+      return null;
+    } catch (error) {
+      return toMessage(error);
+    }
   }
 
   /**
@@ -1127,6 +1236,45 @@ export class PantryStore {
       void this.load();
     }
   }
+}
+
+/** A unit made on this device, on the shelf, in `state`. */
+function newSubItem(state: SubItemState, now: string): SubItem {
+  return {
+    id: createId(),
+    ...state,
+    effectiveExpiresAt: effectiveExpiry(state),
+    status: ITEM_STATUS.Active,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** A unit changed on this device just now, its effective expiry worked out again. */
+function stamped(unit: SubItem, now: string): SubItem {
+  return { ...unit, effectiveExpiresAt: effectiveExpiry(unit), updatedAt: now };
+}
+
+/**
+ * An item's units with `quantity` of them on the shelf: fresh ones added, or
+ * the ones that should go first used up — the server's rules for a quantity.
+ */
+function unitsForQuantity(item: PantryItem, quantity: number, now: string): SubItem[] {
+  const active = consumeOrder(item.subItems);
+  if (quantity > active.length) {
+    const state = freshSubItemState(item);
+    return [
+      ...item.subItems,
+      ...Array.from({ length: quantity - active.length }, () => newSubItem(state, now)),
+    ];
+  }
+  if (quantity < active.length) {
+    const going = new Set(active.slice(0, active.length - quantity).map((unit) => unit.id));
+    return item.subItems.map((unit) =>
+      going.has(unit.id) ? { ...unit, status: ITEM_STATUS.Consumed, updatedAt: now } : unit,
+    );
+  }
+  return item.subItems;
 }
 
 /** A new entry, made on this device: one of the item, still to buy. */

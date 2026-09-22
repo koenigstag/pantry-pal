@@ -1,5 +1,6 @@
 import {
   IMPORT_FILE_FIELD,
+  SYNC_COLLECTION,
   type AuthSession,
   type Category,
   type CurrentUser,
@@ -207,6 +208,9 @@ export const pantryApi = {
       query.set('updatedAt', checkpoint.updatedAt);
       query.set('id', checkpoint.id);
     }
+    // Items with their units. A server from before them refuses the parameter,
+    // so this mirror waits for one that has them rather than hold items without.
+    if (collection === SYNC_COLLECTION.Items) query.set('subItems', 'true');
     return request<SyncPullPayload<T>>(`${household(householdId)}/sync/${collection}?${query}`);
   },
 
