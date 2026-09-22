@@ -11,16 +11,21 @@ import {
   LocationsRepository,
   ShoppingListEntriesRepository,
   ShoppingListsRepository,
+  SubItemsRepository,
   Transactional,
   UnitsRepository,
   type ItemRow,
+  type NewUnitInput,
   type RecordEventInput,
+  type SubItemRow,
   type UpdateItemInput,
+  type UpdateSubItemInput,
 } from '@pantry-pal/db';
 import {
   COUNT_UNIT,
   DEFAULT_CATEGORY,
   DEFAULT_SHOPPING_ENTRY_QUANTITY,
+  FULL_FILL_PERCENT,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
   MAX_ITEM_QUANTITY,
@@ -32,7 +37,9 @@ import {
   ITEM_STATUS_FILTER_ALL,
   type CreatePantryItemDto,
   type ListPantryItemsQueryDto,
+  type NewSubItemDto,
   type UpdatePantryItemDto,
+  type UpdateSubItemDto,
 } from '@pantry-pal/shared/dto';
 
 import type { Membership } from '../common/request-context';
@@ -43,8 +50,44 @@ import { toPantryItem } from './item.mapper';
 type ItemField = keyof UpdateItemInput;
 type Changes = Partial<Record<ItemField, { from: unknown; to: unknown }>>;
 
+/** What a write to one unit may change. */
+type SubItemField = keyof UpdateSubItemInput;
+type SubItemChangeLog = Partial<Record<SubItemField, { from: unknown; to: unknown }>>;
+
+/**
+ * Changes to an item's units, applied in this order: units added, units
+ * changed, units deleted as mistakes.
+ */
+export interface SubItemChanges {
+  add?: readonly NewSubItemDto[];
+  update?: readonly { id: string; patch: UpdateSubItemDto }[];
+  remove?: readonly string[];
+}
+
+/** A change to an item as a whole: its own fields, then its units. */
+export interface ItemChanges {
+  patch?: UpdatePantryItemDto;
+  subItems?: SubItemChanges;
+}
+
+interface WriteOptions {
+  /**
+   * Whether an item that runs out goes on its default shopping list. The
+   * offline mirror puts it there itself, and pushes that entry next.
+   */
+  listWhenRunOut?: boolean;
+}
+
 /** On the shelf with some left. Running out is leaving this state. */
 const inStock = (row: ItemRow): boolean => row.status === ITEM_STATUS.Active && row.quantity > 0;
+
+const SUB_ITEM_FIELDS = [
+  'expiresAt',
+  'openedAt',
+  'periodAfterOpeningDays',
+  'fillPercent',
+  'status',
+] as const satisfies readonly SubItemField[];
 
 /**
  * Any member may manage items. Every write records an `item_events` row in the
@@ -61,6 +104,7 @@ const inStock = (row: ItemRow): boolean => row.status === ITEM_STATUS.Active && 
 export class ItemsService {
   constructor(
     private readonly items: ItemsRepository,
+    private readonly subItems: SubItemsRepository,
     private readonly events: ItemEventsRepository,
     private readonly locations: LocationsRepository,
     private readonly units: UnitsRepository,
@@ -88,6 +132,10 @@ export class ItemsService {
     return toPantryItem(row);
   }
 
+  /**
+   * With `subItems`, the item starts with those units, each as given; without,
+   * with `quantity` units alike, each with the dates given.
+   */
   @Transactional()
   async create(membership: Membership, dto: CreatePantryItemDto): Promise<PantryItem> {
     const { householdId } = membership;
@@ -95,6 +143,7 @@ export class ItemsService {
     const sizeUnit = dto.sizeUnit ?? null;
     const defaultShoppingListId = dto.defaultShoppingListId ?? null;
 
+    if (dto.subItems !== undefined) assertUnitsOnCreate(dto, dto.subItems);
     assertSizePair(sizeValue, sizeUnit);
     await this.assertUnits(dto.unit, sizeUnit);
     const isEdible = await this.resolveEdible(dto.category, dto.isEdible);
@@ -103,23 +152,29 @@ export class ItemsService {
       await this.lockShoppingList(householdId, defaultShoppingListId);
     }
 
-    const row = await this.items.create(householdId, {
+    const fields = {
       // The client's own id when it chose one (the offline mirror does); else the database's.
       id: dto.id,
       name: dto.name,
       locationId: dto.locationId,
       category: dto.category,
       isEdible,
-      quantity: dto.quantity,
       unit: dto.unit,
       sizeValue,
       sizeUnit,
-      expiresAt: dto.expiresAt ?? null,
-      openedAt: dto.openedAt ?? null,
-      periodAfterOpeningDays: dto.periodAfterOpeningDays ?? null,
       notes: dto.notes ?? null,
       defaultShoppingListId,
-    });
+    };
+    const row =
+      dto.subItems === undefined
+        ? await this.items.create(householdId, {
+            ...fields,
+            quantity: dto.quantity,
+            expiresAt: dto.expiresAt ?? null,
+            openedAt: dto.openedAt ?? null,
+            periodAfterOpeningDays: dto.periodAfterOpeningDays ?? null,
+          })
+        : await this.items.createWithUnits(householdId, fields, dto.subItems.map(toNewUnitInput));
 
     await this.events.record({
       householdId,
@@ -256,6 +311,142 @@ export class ItemsService {
     const item = toPantryItem(after);
     this.changes.publish({ type: 'item.updated', item });
     return item;
+  }
+
+  /**
+   * Changes an item's units one by one, each in a state of its own: units
+   * added, changed (dates, how much is left, used up or thrown out) and deleted
+   * as mistakes, in that order. Each change is recorded as an event naming its
+   * unit; the item is announced once.
+   *
+   * An item holds at most `MAX_ITEM_QUANTITY` units on the shelf, and keeps at
+   * least one unit whatever its status, so deleting the last is refused: delete
+   * the item instead. Running out puts the item on its default list, as `update`
+   * does.
+   */
+  @Transactional()
+  async changeSubItems(
+    membership: Membership,
+    itemId: string,
+    changes: SubItemChanges,
+    { listWhenRunOut = true }: WriteOptions = {},
+  ): Promise<PantryItem> {
+    const { householdId } = membership;
+
+    // The item's lock covers its units: every write to them takes it first.
+    const before = await this.items.lock(householdId, itemId);
+    if (before === undefined) throw new NotFoundException('Item not found');
+
+    const events: RecordEventInput[] = [];
+    const unitEvent = (
+      subItemId: string,
+      type: ItemEventType,
+      quantityDelta: number | null,
+      payload?: Record<string, unknown>,
+    ): void => {
+      events.push({
+        householdId,
+        itemId,
+        subItemId,
+        userId: membership.userId,
+        type,
+        quantityDelta,
+        ...(payload !== undefined && { payload }),
+      });
+    };
+
+    const added = changes.add ?? [];
+    if (added.length > 0) {
+      if (before.quantity + added.length > MAX_ITEM_QUANTITY) {
+        throw new BadRequestException(
+          `An item holds at most ${MAX_ITEM_QUANTITY} units: this one has ${before.quantity}`,
+        );
+      }
+      for (const unit of added) assertFill(unit);
+      const held = new Set(before.subItems.map((unit) => unit.id));
+      const grown = await this.items.addUnits(householdId, itemId, added.map(toNewUnitInput));
+      if (grown === undefined) throw new NotFoundException('Item not found');
+      // The new ones are those it did not hold: the database named some of them.
+      for (const unit of grown.subItems) {
+        if (!held.has(unit.id)) unitEvent(unit.id, ITEM_EVENT_TYPE.Added, 1);
+      }
+    }
+
+    // Unit after unit, in the order given, under the item's lock.
+    for (const { id, patch } of changes.update ?? []) {
+      // oxlint-disable-next-line no-await-in-loop
+      const unit = await this.subItems.find(householdId, itemId, id);
+      if (unit === undefined) throw new NotFoundException(`Item has no unit ${id}`);
+
+      const write = subItemWrite(unit, patch);
+      const changed = diffSubItem(unit, write);
+      if (Object.keys(changed).length === 0) continue;
+      assertFill({ ...unit, ...write });
+
+      // oxlint-disable-next-line no-await-in-loop
+      await this.subItems.update(householdId, itemId, id, write);
+      const { type, quantityDelta } = subItemEventType(unit, write);
+      unitEvent(id, type, quantityDelta, { changes: changed });
+    }
+
+    const removed = changes.remove ?? [];
+    for (const id of removed) {
+      // oxlint-disable-next-line no-await-in-loop
+      const unit = await this.subItems.softDelete(householdId, itemId, id);
+      if (unit === undefined) throw new NotFoundException(`Item has no unit ${id}`);
+      unitEvent(id, ITEM_EVENT_TYPE.Deleted, unit.status === ITEM_STATUS.Active ? -1 : null);
+    }
+    if (removed.length > 0 && (await this.subItems.countLive(householdId, itemId)) === 0) {
+      throw new ConflictException(
+        `"${before.name}" keeps at least one unit: delete the item instead`,
+      );
+    }
+
+    if (events.length === 0) return toPantryItem(before);
+
+    const after = await this.items.findById(householdId, itemId);
+    if (after === undefined) throw new NotFoundException('Item not found');
+
+    await this.events.recordMany(events);
+
+    const item = toPantryItem(after);
+    this.changes.publish({ type: 'item.updated', item });
+
+    if (listWhenRunOut && inStock(before) && !inStock(after)) {
+      await this.putOnDefaultList(after, item);
+    }
+    return item;
+  }
+
+  /**
+   * A change to an item and its units, all or nothing: its own fields as
+   * `update` applies them, then its units as `changeSubItems` does.
+   */
+  @Transactional()
+  async applyChanges(
+    membership: Membership,
+    id: string,
+    { patch, subItems }: ItemChanges,
+    options: WriteOptions = {},
+  ): Promise<void> {
+    if (patch !== undefined) await this.update(membership, id, patch, options);
+    if (subItems !== undefined) await this.changeSubItems(membership, id, subItems, options);
+  }
+
+  /**
+   * Creates an item and applies what has happened to it since, all or nothing:
+   * how the server takes an item made offline and changed there before it could
+   * be sent.
+   */
+  @Transactional()
+  async createAndApply(
+    membership: Membership,
+    dto: CreatePantryItemDto,
+    later: ItemChanges,
+    options: WriteOptions = {},
+  ): Promise<void> {
+    const item = await this.create(membership, dto);
+    await this.applyChanges(membership, item.id, later, options);
   }
 
   /**
@@ -492,4 +683,114 @@ function eventFor(
     quantityDelta: quantityDelta === 0 ? null : quantityDelta,
     payload: { changes },
   };
+}
+
+/**
+ * With `subItems`, the units are the item's quantity and hold its dates: the
+ * count has to agree, and the item's own dates are left out.
+ */
+function assertUnitsOnCreate(dto: CreatePantryItemDto, units: readonly NewSubItemDto[]): void {
+  if (dto.quantity !== units.length) {
+    throw new BadRequestException(`quantity must be the number of subItems, ${units.length}`);
+  }
+  if (
+    dto.expiresAt !== undefined ||
+    dto.openedAt !== undefined ||
+    dto.periodAfterOpeningDays !== undefined
+  ) {
+    throw new BadRequestException(
+      'With subItems, leave out expiresAt, openedAt and periodAfterOpeningDays: each unit has its own',
+    );
+  }
+  for (const unit of units) assertFill(unit);
+}
+
+/**
+ * Mirrors `sub_items_fill_needs_opened`, so the client gets a message naming
+ * its mistake rather than a constraint name: a unit below full has been opened.
+ */
+function assertFill(unit: { fillPercent?: number; openedAt?: string | null }): void {
+  const fillPercent = unit.fillPercent ?? FULL_FILL_PERCENT;
+  if (fillPercent < FULL_FILL_PERCENT && (unit.openedAt ?? null) === null) {
+    throw new BadRequestException(
+      'A unit that is not full has been opened: give the date it was opened (openedAt)',
+    );
+  }
+}
+
+function toNewUnitInput(unit: NewSubItemDto): NewUnitInput {
+  return {
+    ...(unit.id !== undefined && { id: unit.id }),
+    expiresAt: unit.expiresAt ?? null,
+    openedAt: unit.openedAt ?? null,
+    periodAfterOpeningDays: unit.periodAfterOpeningDays ?? null,
+    fillPercent: unit.fillPercent ?? FULL_FILL_PERCENT,
+  };
+}
+
+/**
+ * The fields a patch writes to a unit: those it sets. A unit no longer opened
+ * is full again, unless the same patch says how full.
+ */
+function subItemWrite(unit: SubItemRow, patch: UpdateSubItemDto): UpdateSubItemInput {
+  const write: UpdateSubItemInput = {};
+  if (patch.expiresAt !== undefined) write.expiresAt = patch.expiresAt;
+  if (patch.openedAt !== undefined) write.openedAt = patch.openedAt;
+  if (patch.periodAfterOpeningDays !== undefined) {
+    write.periodAfterOpeningDays = patch.periodAfterOpeningDays;
+  }
+  if (patch.fillPercent !== undefined) write.fillPercent = patch.fillPercent;
+  if (patch.status !== undefined) write.status = patch.status;
+
+  if (
+    write.openedAt === null &&
+    write.fillPercent === undefined &&
+    unit.fillPercent < FULL_FILL_PERCENT
+  ) {
+    write.fillPercent = FULL_FILL_PERCENT;
+  }
+  return write;
+}
+
+/** What `write` changes on `unit`: each field as it was and as it will be. */
+function diffSubItem(unit: SubItemRow, write: UpdateSubItemInput): SubItemChangeLog {
+  const changes: SubItemChangeLog = {};
+
+  for (const field of SUB_ITEM_FIELDS) {
+    const to: unknown = write[field];
+    if (to === undefined) continue;
+
+    const from: unknown = unit[field];
+    if (from !== to) changes[field] = { from, to };
+  }
+
+  return changes;
+}
+
+/**
+ * The event a write to one unit records, ranked as an item's are: a status
+ * change outranks opening, which outranks any other edit. Leaving the shelf
+ * takes one off the quantity, and coming back puts one on.
+ */
+function subItemEventType(
+  unit: SubItemRow,
+  write: UpdateSubItemInput,
+): { type: ItemEventType; quantityDelta: number | null } {
+  if (write.status !== undefined && write.status !== unit.status) {
+    if (write.status === ITEM_STATUS.Active) {
+      return { type: ITEM_EVENT_TYPE.Restored, quantityDelta: 1 };
+    }
+    return {
+      type:
+        write.status === ITEM_STATUS.Consumed
+          ? ITEM_EVENT_TYPE.Consumed
+          : ITEM_EVENT_TYPE.Discarded,
+      // Between two off-shelf statuses, nothing more leaves.
+      quantityDelta: unit.status === ITEM_STATUS.Active ? -1 : null,
+    };
+  }
+  if (unit.openedAt === null && typeof write.openedAt === 'string') {
+    return { type: ITEM_EVENT_TYPE.Opened, quantityDelta: null };
+  }
+  return { type: ITEM_EVENT_TYPE.Updated, quantityDelta: null };
 }

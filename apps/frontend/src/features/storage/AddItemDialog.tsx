@@ -142,7 +142,7 @@ export const AddItemDialog = observer(function AddItemDialog({
           errors={errors}
           conflicts={NO_CONFLICTS}
           disabled={isSubmitting}
-          minQuantity={1}
+          isNew
           onChange={setEdited}
           onSubmit={() => void submit()}
         />

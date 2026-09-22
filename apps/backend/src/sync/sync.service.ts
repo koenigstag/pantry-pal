@@ -20,12 +20,20 @@ import {
 import type { SyncPullQueryDto } from '@pantry-pal/shared/dto';
 
 import type { Membership } from '../common/request-context';
-import { toPantryItem } from '../items/item.mapper';
+import { toItemFields, toPantryItem } from '../items/item.mapper';
 import { toPantryLocation } from '../locations/location.mapper';
 import { toShoppingList, toShoppingListEntry } from '../shopping-lists/shopping-list.mapper';
 
-/** Any document the offline mirror holds. */
-export type SyncedDocument = PantryItem | PantryLocation | ShoppingList | ShoppingListEntry;
+/**
+ * Any document the offline mirror holds. Mirrors made before items had units
+ * hold items without them.
+ */
+export type SyncedDocument =
+  | PantryItem
+  | Omit<PantryItem, 'subItems'>
+  | PantryLocation
+  | ShoppingList
+  | ShoppingListEntry;
 
 /**
  * Feeds the frontend's offline mirror: each collection's changes after a
@@ -56,7 +64,12 @@ export class SyncService {
 
     switch (collection) {
       case SYNC_COLLECTION.Items:
-        return page(await this.items.changedSince(householdId, window), toPantryItem, after);
+        // Only mirrors that know about units get them: see `SyncPullQueryDto.subItems`.
+        return page(
+          await this.items.changedSince(householdId, window),
+          query.subItems === true ? toPantryItem : toItemFields,
+          after,
+        );
       case SYNC_COLLECTION.Locations:
         return page(
           await this.locations.changedSince(householdId, window),

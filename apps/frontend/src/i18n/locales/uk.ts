@@ -312,6 +312,7 @@ export const uk = {
       `Введіть ціле число днів від 1 до ${formatNumber(max)}.`,
     notes: (max: number) => `Нотатки можуть містити до ${formatNumber(max)} символів.`,
     defaultShoppingListId: 'Виберіть список покупок.',
+    fillPercent: 'Вкажіть, скільки залишилося.',
   },
 
   itemDetails: {
@@ -323,20 +324,6 @@ export const uk = {
     quantity: 'Кількість',
     expiry: 'Термін придатності',
     noExpiry: 'Без терміну придатності',
-    printedDate: 'Дата на упаковці',
-    opened: 'Відкрито',
-    notOpened: 'Ще не відкрито',
-    useWithin: 'Використати протягом',
-    useWithinDays: (days: number) =>
-      plural(days, {
-        one: '# день після відкриття',
-        few: '# дні після відкриття',
-        many: '# днів після відкриття',
-        other: '# дня після відкриття',
-      }),
-    notSet: 'Не вказано',
-    openedSooner: 'Після відкриття термін придатності настає раніше за дату на упаковці.',
-    markOpened: 'Позначити відкритим сьогодні',
     notes: 'Нотатки',
     added: 'Додано',
     updated: 'Оновлено',
@@ -348,6 +335,31 @@ export const uk = {
       `Коли закінчиться, ні до якого списку не потрапить, доки «${list}» в архіві.`,
     onLists: (lists: string) => `Зараз у списках: ${lists}.`,
     addToList: 'Додати до списку покупок',
+  },
+  subItems: {
+    group: (amount: string, state: string) => `${amount} · ${state}`,
+    unopened: 'Не відкрито',
+    opened: (date: string) => `Відкрито ${date}`,
+    left: (percent: string) => `Залишилося ${percent}`,
+    goodUntil: (date: string) => `Використати до ${date}`,
+    addMore: 'Додати ще',
+    // «1 з 3» rather than a numeral that would have to agree with the unit's noun.
+    openToday: (count: number) =>
+      count === 1 ? 'Відкрити сьогодні' : `Відкрити 1 з ${formatNumber(count)} сьогодні`,
+    howMuchLeft: 'Скільки залишилося',
+    opensToday: (full: string) => `Менше ніж ${full} означає, що відкрито сьогодні.`,
+    changeDates: 'Змінити дати',
+    usedUp: (count: number) =>
+      count === 1 ? 'Використано' : `Використано 1 з ${formatNumber(count)}`,
+    threwOut: (count: number) => (count === 1 ? 'Викинуто' : `Викинуто 1 з ${formatNumber(count)}`),
+    deleteOne: (count: number) =>
+      count === 1 ? 'Видалити' : `Видалити 1 з ${formatNumber(count)}`,
+    deleteHint: 'Додано помилково',
+    addTitle: 'Додати ще',
+    add: 'Додати',
+    changeTitle: 'Змінити дати',
+    applyTo: 'Застосувати до',
+    outOf: (total: number) => `Скільки з ${formatNumber(total)} у цьому рядку`,
   },
 
   discardSheet: {

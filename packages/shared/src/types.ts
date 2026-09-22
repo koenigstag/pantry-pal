@@ -158,7 +158,43 @@ export interface PantryLocation {
   updatedAt: string;
 }
 
-/** One physical package on a shelf, with its own expiry. */
+/**
+ * One unit of an item: a carton, a tube, a blister. An item's units can differ —
+ * one opened and half used, the others sealed with a later printed date — so
+ * each has dates and a fill level of its own.
+ */
+export interface SubItem {
+  id: string;
+  /** The printed date, `YYYY-MM-DD`. */
+  expiresAt: string | null;
+  openedAt: string | null;
+  /** The "12M" symbol on cosmetics and syrups, in days. */
+  periodAfterOpeningDays: number | null;
+  /**
+   * The earlier of the printed date and `openedAt + periodAfterOpeningDays`,
+   * computed by the database. **Read this for expiry status, never `expiresAt`.**
+   */
+  effectiveExpiresAt: string | null;
+  /**
+   * How much is left, in percent: `FULL_FILL_PERCENT` down to `MIN_FILL_PERCENT`.
+   * Below full, the unit has been opened. An empty one is used up instead.
+   */
+  fillPercent: number;
+  /**
+   * `active` for every unit the server sends: one used up, thrown out or
+   * deleted leaves its item's list. The offline mirror marks one `consumed` or
+   * `discarded` until the server has taken that change.
+   */
+  status: ItemStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Things of one kind in one place — milk in the fridge — as a whole: what they
+ * are, how many, and the dates of the one to use first. Each unit is a
+ * `SubItem`.
+ */
 export interface PantryItem {
   id: string;
   householdId: string;
@@ -173,13 +209,21 @@ export interface PantryItem {
    * (`other`), where each item is set on its own.
    */
   isEdible: boolean;
-  /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
+  /**
+   * How many, as a whole number: its active units. A fractional amount is a
+   * size: `1 × 1.5 kg`.
+   */
   quantity: number;
   /** The `Unit.code` of a count unit: what is counted, such as `pcs`, `bottle` or `can`. */
   unit: string;
   /** What is inside one, e.g. `300` for a 300 ml can. A unit of any kind. */
   sizeValue: number | null;
   sizeUnit: string | null;
+  /*
+   * The four dates below are the item's lead unit's: the active unit that
+   * expires first — or, with none active, the unit changed last, so an item
+   * used up keeps showing the dates it had. See `leadSubItem`.
+   */
   /** The printed date, `YYYY-MM-DD`. */
   expiresAt: string | null;
   openedAt: string | null;
@@ -191,6 +235,11 @@ export interface PantryItem {
    * — an opened jar would otherwise report fresh until its printed date.
    */
   effectiveExpiresAt: string | null;
+  /**
+   * Its units on the shelf, oldest first: every active one. An item used up or
+   * thrown out as a whole keeps its units, so restoring it brings them back.
+   */
+  subItems: SubItem[];
   notes: string | null;
   status: ItemStatus;
   /**

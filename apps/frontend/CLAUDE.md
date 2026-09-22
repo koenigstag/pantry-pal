@@ -146,9 +146,9 @@ or another member through the server.
   mirror and deletes the old one from the device.
 
 **Conflicts** (`offline/merge.ts`): a push whose base is stale comes back with
-the server's version, and what changed here goes on top of it, field by field. A
-quantity is a delta, not a value, so two people's steps add up; a change the
-server has already is not applied twice.
+the server's version, and what changed here goes on top of it, field by field —
+an item's units unit by unit (see Units). A quantity is a delta, not a value, so
+two people's steps add up; a change the server has already is not applied twice.
 
 **One tab replicates**, the leader (RxDB's leader election); the other tabs share
 its database and see its writes. RxDB would also replicate in the visible tab,
@@ -160,7 +160,13 @@ offline.
 
 **A schema change needs `MIRROR_VERSION` raised** (`offline/mirror.ts`): it is
 part of the database's name, so the next start pulls everything into a new
-database instead of migrating the old one.
+database instead of migrating the old one. The old one may still hold changes it
+never sent — made offline, the app closed before it was back online — so it is
+drained first (`offline/legacy.ts`): opened with a frozen copy of its schemas,
+which RxDB needs to open it, it pushes under its old replications' names, then
+is deleted. The server still takes that old shape. Whatever stops a drain — no
+network, the mirror closing — leaves the database for the next start. Version 2
+added units.
 
 Quantities are whole numbers (`@IsInt()` in the shared DTOs, `integer` in the
 database), counted in a count unit — `pcs` or a container such as `bottle` or
@@ -177,6 +183,32 @@ it, one write for a run of taps, so one change is pushed rather than one per
 tap, and a list sorted by quantity does not reshuffle while a card is tapped.
 The overlay is dropped once the store shows the saved number; a write that fails
 drops it too, with a notice.
+
+**Units.** An item's units ride inside its document (`PantryItem.subItems`,
+pulled with `?subItems=true`), so a unit changes with its item and is pushed with
+it. Every write the store makes changes units, then works out what the server
+would from them (`withSubItems` in shared): the quantity is how many are active,
+and the dates are the lead unit's.
+
+- **Stepping** adds fresh units — unopened, full, with the newest unit's printed
+  date and period after opening (`freshSubItemState`) — or uses up the ones that
+  should go first (`consumeOrder`), as the server does. `QuantityUpdates` saves
+  through `PantryStore.setQuantity`.
+- **The details show units by state** (`SubItemsSection`): a row per state — ten
+  unopened eggs are one row — the one to use first at the top, each with its own
+  expiry. A row's sheet (`GroupSheet`) opens, measures (`FillSheet`), re-dates,
+  uses up, throws out or deletes one of its units, the first. Each does one thing:
+  measuring works on any row, and below full an unopened unit counts as opened
+  today; the dates sheet (`UnitsFormSheet`) changes dates only, for all of the row
+  or some of it, which splits it. Add more puts units with dates of their own on
+  the shelf, partly used if they come opened. An item's last unit on the shelf
+  leaves with the item, through the remove sheet, as from the card.
+- **The edit form** sets how many and the dates only for a new item (`isNew`):
+  an existing item's units each keep their own.
+- **Conflicts merge units by id** when units changed here (`itemConflictHandler`):
+  units added here join theirs, units deleted here leave, and a unit's changed
+  fields go on top of their copy — unless it is gone there, when the change goes
+  with it. The quantity and dates then follow from the merged units.
 
 The mirror holds items of every status, and the store splits them: `items` is the
 active ones, and those used up or thrown out leave it. Values are plain objects,

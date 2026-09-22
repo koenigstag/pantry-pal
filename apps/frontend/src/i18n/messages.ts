@@ -353,6 +353,7 @@ const en = {
       `Enter a whole number of days from 1 to ${formatNumber(max)}.`,
     notes: (max: number) => `Keep notes to ${formatNumber(max)} characters.`,
     defaultShoppingListId: 'Choose a shopping list.',
+    fillPercent: 'Choose how much is left.',
   },
 
   itemDetails: {
@@ -364,15 +365,6 @@ const en = {
     quantity: 'Quantity',
     expiry: 'Expiry',
     noExpiry: 'No expiry date',
-    printedDate: 'Printed date',
-    opened: 'Opened',
-    notOpened: 'Not opened yet',
-    useWithin: 'Use within',
-    useWithinDays: (days: number) =>
-      plural(days, { one: '# day after opening', other: '# days after opening' }),
-    notSet: 'Not set',
-    openedSooner: 'Opening it brought the expiry forward from the printed date.',
-    markOpened: 'Mark as opened today',
     notes: 'Notes',
     added: 'Added',
     updated: 'Last updated',
@@ -386,6 +378,36 @@ const en = {
     /** `lists` is a formatted list of names. */
     onLists: (lists: string) => `On ${lists} now.`,
     addToList: 'Add to shopping list',
+  },
+  subItems: {
+    /** A row of units in one state: how many, and that state. */
+    group: (amount: string, state: string) => `${amount} · ${state}`,
+    unopened: 'Unopened',
+    opened: (date: string) => `Opened ${date}`,
+    /** `percent` comes formatted: `60%`. */
+    left: (percent: string) => `${percent} left`,
+    goodUntil: (date: string) => `Use by ${date}`,
+    addMore: 'Add more',
+    /*
+     * What a row's sheet offers. `count` is how many the row holds: an action
+     * takes one of them, and a row of one is "it".
+     */
+    openToday: (count: number): string => (count === 1 ? 'Open it today' : 'Open one today'),
+    howMuchLeft: 'How much is left',
+    /** Under the fill slider of an unopened unit. `full` comes formatted: `100%`. */
+    opensToday: (full: string) => `Below ${full}, it counts as opened today.`,
+    changeDates: 'Change dates',
+    usedUp: (count: number): string => (count === 1 ? 'I used it up' : 'I used one up'),
+    threwOut: (count: number): string => (count === 1 ? 'I threw it out' : 'I threw one out'),
+    deleteOne: (count: number): string => (count === 1 ? 'Delete it' : 'Delete one'),
+    deleteHint: 'Added by mistake',
+    /* Adding units, and changing a row's dates. */
+    addTitle: 'Add more',
+    add: 'Add',
+    changeTitle: 'Change dates',
+    /** How many of a row's units new dates go to: the first ones, and the rest keep theirs. */
+    applyTo: 'Apply to',
+    outOf: (total: number) => `How many of the ${formatNumber(total)} in this row`,
   },
 
   discardSheet: {

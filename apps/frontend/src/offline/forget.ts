@@ -18,17 +18,33 @@ export const MIRROR_PREFIX = 'pantrypal';
  * signing out there does at once. Without `indexedDB.databases()` (Firefox
  * before 126) nothing can be found, and nothing is deleted.
  */
-export async function forgetMirrors(): Promise<void> {
-  if (typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') return;
+export function forgetMirrors(): Promise<void> {
+  return deleteDatabases((name) => name.includes(MIRROR_PREFIX));
+}
 
-  let names: string[];
+/**
+ * The IndexedDB databases on this device whose names `matches` says. RxDB's
+ * Dexie storage keeps each collection of a mirror in a database of its own,
+ * named after the mirror. Empty without `indexedDB.databases()`.
+ */
+export async function findDatabases(matches: (name: string) => boolean): Promise<string[]> {
+  if (typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') return [];
+
   try {
-    names = (await indexedDB.databases())
+    return (await indexedDB.databases())
       .map(({ name }) => name)
-      .filter((name): name is string => name?.includes(MIRROR_PREFIX) === true);
+      .filter((name): name is string => name !== undefined && matches(name));
   } catch {
-    return;
+    return [];
   }
+}
+
+/**
+ * Deletes the IndexedDB databases `matches` names. Removing an RxDB database
+ * only empties its collections, so this is what takes them off the device.
+ */
+export async function deleteDatabases(matches: (name: string) => boolean): Promise<void> {
+  const names = await findDatabases(matches);
 
   await Promise.all(
     names.map(

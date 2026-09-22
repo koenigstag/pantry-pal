@@ -297,6 +297,7 @@ export const fr = {
       `Saisissez un nombre entier de jours de 1 à ${formatNumber(max)}.`,
     notes: (max: number) => `Les notes sont limitées à ${formatNumber(max)} caractères.`,
     defaultShoppingListId: 'Choisissez une liste de courses.',
+    fillPercent: 'Choisissez ce qu’il en reste.',
   },
 
   itemDetails: {
@@ -308,15 +309,6 @@ export const fr = {
     quantity: 'Quantité',
     expiry: 'Péremption',
     noExpiry: 'Pas de date de péremption',
-    printedDate: 'Date imprimée',
-    opened: 'Ouvert le',
-    notOpened: 'Pas encore ouvert',
-    useWithin: 'À consommer dans les',
-    useWithinDays: (days: number) =>
-      plural(days, { one: '# jour après ouverture', other: '# jours après ouverture' }),
-    notSet: 'Non renseigné',
-    openedSooner: 'L’ouverture a avancé la péremption par rapport à la date imprimée.',
-    markOpened: 'Marquer comme ouvert aujourd’hui',
     notes: 'Notes',
     added: 'Ajouté le',
     updated: 'Modifié le',
@@ -328,6 +320,28 @@ export const fr = {
       `Quand il viendra à manquer, il n’ira sur aucune liste tant que ${q(list)} est archivée.`,
     onLists: (lists: string) => `Actuellement sur\u00A0: ${lists}.`,
     addToList: 'Ajouter à une liste de courses',
+  },
+  subItems: {
+    group: (amount: string, state: string) => `${amount} · ${state}`,
+    unopened: 'Non ouvert',
+    opened: (date: string) => `Ouvert le ${date}`,
+    left: (percent: string) => `Reste ${percent}`,
+    goodUntil: (date: string) => `À utiliser avant le ${date}`,
+    addMore: 'En ajouter',
+    openToday: (count: number) =>
+      count === 1 ? 'L’ouvrir aujourd’hui' : 'En ouvrir un aujourd’hui',
+    howMuchLeft: 'Ce qu’il en reste',
+    opensToday: (full: string) => `En dessous de ${full}, il compte comme ouvert aujourd’hui.`,
+    changeDates: 'Modifier les dates',
+    usedUp: (count: number) => (count === 1 ? 'Je l’ai terminé' : 'J’en ai terminé un'),
+    threwOut: (count: number) => (count === 1 ? 'Je l’ai jeté' : 'J’en ai jeté un'),
+    deleteOne: (count: number) => (count === 1 ? 'Le supprimer' : 'En supprimer un'),
+    deleteHint: 'Ajouté par erreur',
+    addTitle: 'En ajouter',
+    add: 'Ajouter',
+    changeTitle: 'Modifier les dates',
+    applyTo: 'Appliquer à',
+    outOf: (total: number) => `Combien des ${formatNumber(total)} de cette ligne`,
   },
 
   discardSheet: {

@@ -36,8 +36,12 @@ interface ItemEditFormProps {
   /** Fields another member changed differently while this form was open. */
   conflicts: readonly DraftField[];
   disabled: boolean;
-  /** The least the quantity steps down to: 0 for an item being used up, 1 for a new one. */
-  minQuantity?: number;
+  /**
+   * Adding an item: the form also sets how many there are and their dates, the
+   * state its first units start in. An existing item's units each keep their
+   * own, changed in the details.
+   */
+  isNew?: boolean;
   onChange: (draft: ItemDraft) => void;
   onSubmit: () => void;
 }
@@ -48,9 +52,11 @@ const SIDE_BUTTON = 'border border-line text-ink-muted hover:bg-sunken hover:tex
 /**
  * Every field of an item, for editing one (`ItemDetailsDialog`) or adding one
  * (`AddItemDialog`), in the same layout and sections as the details view, so
- * switching modes keeps everything in place. Controlled: the dialog owns the
- * draft, because it also decides what is dirty, which DTO validates it, and
- * whether leaving needs a confirmation.
+ * switching modes keeps everything in place. How many and the dates are a new
+ * item's only: once it exists, its units are stepped, added and dated in the
+ * details, each on its own. Controlled: the dialog owns the draft, because it
+ * also decides what is dirty, which DTO validates it, and whether leaving needs
+ * a confirmation.
  */
 export const ItemEditForm = observer(function ItemEditForm({
   id,
@@ -58,7 +64,7 @@ export const ItemEditForm = observer(function ItemEditForm({
   errors,
   conflicts,
   disabled,
-  minQuantity = 0,
+  isNew = false,
   onChange,
   onSubmit,
 }: ItemEditFormProps): ReactElement {
@@ -219,20 +225,23 @@ export const ItemEditForm = observer(function ItemEditForm({
 
         <DetailsSection title={messages.itemDetails.quantity}>
           <div className="grid grid-cols-2 gap-x-3 gap-y-4">
-            <Field
-              label={messages.itemForm.howMany}
-              error={errors['quantity']}
-              className="col-span-2 sm:col-span-1"
-            >
-              {(props) => (
-                <QuantityInput
-                  controlProps={props}
-                  min={minQuantity}
-                  value={draft.quantity}
-                  onChange={(quantity) => update({ quantity })}
-                />
-              )}
-            </Field>
+            {isNew && (
+              <Field
+                label={messages.itemForm.howMany}
+                error={errors['quantity']}
+                className="col-span-2 sm:col-span-1"
+              >
+                {(props) => (
+                  <QuantityInput
+                    controlProps={props}
+                    min={1}
+                    max={MAX_ITEM_QUANTITY}
+                    value={draft.quantity}
+                    onChange={(quantity) => update({ quantity })}
+                  />
+                )}
+              </Field>
+            )}
 
             <Field
               label={messages.itemForm.unit}
@@ -276,61 +285,63 @@ export const ItemEditForm = observer(function ItemEditForm({
           </div>
         </DetailsSection>
 
-        <DetailsSection title={messages.itemDetails.expiry}>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-4">
-            <Field
-              label={messages.itemForm.expires}
-              error={errors['expiresAt']}
-              className="col-span-2 sm:col-span-1"
-            >
-              {(props) => (
-                <DateInput
-                  controlProps={props}
-                  value={draft.expiresAt}
-                  onChange={(expiresAt) => update({ expiresAt })}
-                  clearLabel={messages.itemForm.clearExpires}
-                />
-              )}
-            </Field>
+        {isNew && (
+          <DetailsSection title={messages.itemDetails.expiry}>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+              <Field
+                label={messages.itemForm.expires}
+                error={errors['expiresAt']}
+                className="col-span-2 sm:col-span-1"
+              >
+                {(props) => (
+                  <DateInput
+                    controlProps={props}
+                    value={draft.expiresAt}
+                    onChange={(expiresAt) => update({ expiresAt })}
+                    clearLabel={messages.itemForm.clearExpires}
+                  />
+                )}
+              </Field>
 
-            <Field
-              label={messages.itemForm.opened}
-              error={errors['openedAt']}
-              className="col-span-2 sm:col-span-1"
-            >
-              {(props) => (
-                <DateInput
-                  controlProps={props}
-                  value={draft.openedAt}
-                  onChange={(openedAt) => update({ openedAt })}
-                  clearLabel={messages.itemForm.clearOpened}
-                  max={todayIsoDate()}
-                  todayLabel={messages.itemForm.openedToday}
-                />
-              )}
-            </Field>
+              <Field
+                label={messages.itemForm.opened}
+                error={errors['openedAt']}
+                className="col-span-2 sm:col-span-1"
+              >
+                {(props) => (
+                  <DateInput
+                    controlProps={props}
+                    value={draft.openedAt}
+                    onChange={(openedAt) => update({ openedAt })}
+                    clearLabel={messages.itemForm.clearOpened}
+                    max={todayIsoDate()}
+                    todayLabel={messages.itemForm.openedToday}
+                  />
+                )}
+              </Field>
 
-            <Field
-              label={messages.itemForm.periodAfterOpening}
-              error={errors['periodAfterOpeningDays']}
-              className="col-span-2"
-            >
-              {(props) => (
-                <input
-                  {...props}
-                  type="number"
-                  min="1"
-                  max={MAX_PERIOD_AFTER_OPENING_DAYS}
-                  step="1"
-                  inputMode="numeric"
-                  value={draft.periodAfterOpeningDays}
-                  onChange={(event) => update({ periodAfterOpeningDays: event.target.value })}
-                  className={cn(FIELD_CONTROL, 'sm:max-w-40')}
-                />
-              )}
-            </Field>
-          </div>
-        </DetailsSection>
+              <Field
+                label={messages.itemForm.periodAfterOpening}
+                error={errors['periodAfterOpeningDays']}
+                className="col-span-2"
+              >
+                {(props) => (
+                  <input
+                    {...props}
+                    type="number"
+                    min="1"
+                    max={MAX_PERIOD_AFTER_OPENING_DAYS}
+                    step="1"
+                    inputMode="numeric"
+                    value={draft.periodAfterOpeningDays}
+                    onChange={(event) => update({ periodAfterOpeningDays: event.target.value })}
+                    className={cn(FIELD_CONTROL, 'sm:max-w-40')}
+                  />
+                )}
+              </Field>
+            </div>
+          </DetailsSection>
+        )}
 
         <DetailsSection title={messages.itemDetails.notes}>
           <Field label={messages.itemForm.notes} hideLabel error={errors['notes']}>
@@ -354,12 +365,19 @@ export const ItemEditForm = observer(function ItemEditForm({
 interface QuantityInputProps {
   controlProps: FieldControlProps;
   min: number;
+  max: number;
   value: string;
   onChange: (value: string) => void;
 }
 
 /** A whole number with − and + beside it, like the stepper on the cards. */
-function QuantityInput({ controlProps, min, value, onChange }: QuantityInputProps): ReactElement {
+export function QuantityInput({
+  controlProps,
+  min,
+  max,
+  value,
+  onChange,
+}: QuantityInputProps): ReactElement {
   const quantity = Number(value);
   const isWhole = value.trim() !== '' && Number.isInteger(quantity);
 
@@ -376,7 +394,7 @@ function QuantityInput({ controlProps, min, value, onChange }: QuantityInputProp
         {...controlProps}
         type="number"
         min={min}
-        max={MAX_ITEM_QUANTITY}
+        max={max}
         step="1"
         inputMode="numeric"
         value={value}
@@ -386,7 +404,7 @@ function QuantityInput({ controlProps, min, value, onChange }: QuantityInputProp
       <IconButton
         icon={Plus}
         label={messages.itemForm.increaseQuantity}
-        disabled={!isWhole || quantity >= MAX_ITEM_QUANTITY}
+        disabled={!isWhole || quantity >= max}
         onClick={() => onChange(String(quantity + 1))}
         className={SIDE_BUTTON}
       />
@@ -408,7 +426,7 @@ interface DateInputProps {
  * A native date input with a clear button, which a phone's date picker does not
  * reliably offer. The button that replaced itself hands focus back to the input.
  */
-function DateInput({
+export function DateInput({
   controlProps,
   value,
   onChange,

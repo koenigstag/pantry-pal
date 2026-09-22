@@ -78,12 +78,14 @@ PUT                    /households/:householdId/locations/order       full order
 GET    PATCH  DELETE   /households/:householdId/locations/:locationId DELETE takes ?moveItemsTo=
 GET    POST            /households/:householdId/items                 GET takes ?status=&locationId=
 GET    PATCH  DELETE   /households/:householdId/items/:itemId
+POST                   /households/:householdId/items/:itemId/sub-items              units, each in its own state
+PATCH  DELETE          /households/:householdId/items/:itemId/sub-items/:subItemId   PATCH: dates, fill, status
 GET    POST   PUT      /households/:householdId/shopping-lists        PUT: the editor's whole set
 PATCH  DELETE          /households/:householdId/shopping-lists/:listId
 POST                   /households/:householdId/shopping-lists/:listId/entries           itemIds, quantity
 PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:entryId  quantity, checked
 POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
-GET                    /households/:householdId/sync/:collection      ?updatedAt=&id=&limit=
+GET                    /households/:householdId/sync/:collection      ?updatedAt=&id=&limit=&subItems=
 POST                   /households/:householdId/sync/:collection/push rows: items, entries only
 GET                    /households/:householdId/export                an .xlsx backup
 POST                   /households/:householdId/import/:source        multipart `file`; pantry-pal, kitchen-pal
@@ -226,6 +228,37 @@ or to the fallback when that is omitted. The fallback itself can be reordered an
 re-iconed but never renamed or deleted (409); the database backs the delete rule
 with `locations_fallback_not_deleted`.
 
+## Items and their units
+
+An item is things of one kind in one place; each of them — a carton, a tube — is
+a unit, a `sub_items` row with its own dates, fill level and status. Every item
+the API serves carries its active units (`PantryItem.subItems`, oldest first).
+Its `quantity` is how many, and its dates are the lead unit's: the active one
+that expires first.
+
+- **Whole-item writes keep units in step**, as before units had rows. A higher
+  quantity — a PATCH, putting the shopping away — adds fresh units: unopened,
+  full, with the newest unit's printed date and period after opening. A lower one
+  uses up the units that should go first: opened ones, then the soonest to
+  expire. Dates in a PATCH go on every unit on the shelf.
+- **Units one at a time** go through `ItemsService.changeSubItems`: units added,
+  under the client's ids when it names them; changed — dates, `fillPercent`, and
+  `status` to use one up (`consumed`), throw one out (`discarded`) or put it
+  back; and deleted as mistakes. All under the item's lock, each recorded as an
+  event naming its unit (`item_events.sub_item_id`), the item announced once. The
+  REST routes and the sync push both call it.
+  - A unit below full has been opened (400 otherwise, mirroring
+    `sub_items_fill_needs_opened`), and clearing `openedAt` fills it back up.
+  - An item holds at most `MAX_ITEM_QUANTITY` units on the shelf (400).
+  - An item keeps at least one unit, whatever its status: deleting its last is a 409. Delete the item instead.
+  - The last unit on the shelf used up, thrown out or deleted runs the item out,
+    onto its default list, as a whole-item write does.
+- **Using up or throwing out an item as a whole** is still the item's status. Its
+  units stay as they were, so restoring it brings them back.
+- **Creating an item with its units** (`CreatePantryItemDto.subItems`) gives each
+  its own state and, optionally, the client's id. `quantity` must be how many
+  there are, and the item's own dates are left out.
+
 ## Shopping lists
 
 A list names items rather than copying them: an entry is an item, how many to
@@ -297,6 +330,10 @@ space and list editors stay online.
 - **The checkpoint's `updatedAt` is the database's text, to the microsecond.**
   Pass it back untouched: a value round-tripped through a JS `Date` loses its
   microseconds and sits before its own row.
+- **Items come with their units only when asked** (`?subItems=true`). A mirror
+  made before units existed leaves it out and gets items as they were: its
+  conflict handler compares fields by identity, so an array would read as a
+  change every time, and every item it held would stop taking pulls.
 - **Reads only.** One query per call, no transaction: a row written during a
   pull is in this page or, with a later `updated_at`, the next. Writes keep
   going through the domain services, the push's included, so the mirror never
@@ -321,6 +358,20 @@ space and list editors stay online.
     server's, as the fields that differ between the two states. A stale base
     comes back in `conflicts` with the server's version, for the client's
     conflict handler to merge and push again.
+  - **An item sent with its units** is worked out unit by unit, by id: units only
+    in the new state were added, units only in the assumed one deleted, units in
+    both changed where their fields differ. The quantity and dates follow from the
+    units, so they are not read from such a push. The item's own fields and its
+    units apply in one transaction (`ItemsService.applyChanges`). An item sent
+    without units — by a mirror made before them — has its quantity and dates
+    applied to the item as a whole, as before. The answer comes in the shape the
+    push was sent in.
+  - **An item made offline is created as it was made, then changed as it was
+    changed since**, in one transaction (`ItemsService.createAndApply`): units
+    used up or thrown out before it was ever sent are recorded as such, an item
+    used up offline arrives used up, and one an old mirror stepped down to 0 is
+    made with one unit, then stepped down. A replayed create is recognised by its
+    fields, and by its units when it has them.
   - A 4xx from the services (invalid, archived list) comes back in `conflicts`
     as the server's version — a tombstone for a refused create — and in
     `refused` with the message, so the client can say why rather than retry.

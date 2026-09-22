@@ -1,11 +1,13 @@
+import { effectiveExpiry, withSubItems, type PantryItem, type SubItem } from '@pantry-pal/shared';
 import type { RxConflictHandler, WithDeleted } from 'rxdb/plugins/core';
 
 type Fields = Record<string, unknown>;
 
 /**
- * Whether two versions of a document hold the same data. Documents are flat, so
- * this compares field by field; RxDB's own bookkeeping (`_rev`, `_meta`,
- * `_attachments`) is left out, `_deleted` is not.
+ * Whether two versions of a document hold the same data. Fields are compared
+ * one by one; RxDB's own bookkeeping (`_rev`, `_meta`, `_attachments`) is left
+ * out, `_deleted` is not. A list of units compares by content, in any order: two
+ * copies of one list are never the same object.
  */
 export function sameDocument(a: object, b: object): boolean {
   const left = a as Fields;
@@ -16,7 +18,31 @@ export function sameDocument(a: object, b: object): boolean {
     ),
   );
   for (const key of keys) {
-    if (!Object.is(left[key], right[key])) return false;
+    if (!sameValue(left[key], right[key])) return false;
+  }
+  return true;
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  return Array.isArray(a) && Array.isArray(b) && sameUnits(a as Fields[], b as Fields[]);
+}
+
+/** The same units — flat objects with ids — in the same states, whatever their order. */
+function sameUnits(a: readonly Fields[], b: readonly Fields[]): boolean {
+  if (a.length !== b.length) return false;
+
+  const byId = new Map(b.map((unit) => [unit['id'], unit]));
+  return a.every((unit) => {
+    const other = byId.get(unit['id']);
+    return other !== undefined && sameFlat(unit, other);
+  });
+}
+
+function sameFlat(a: Fields, b: Fields): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (!Object.is(a[key], b[key])) return false;
   }
   return true;
 }
@@ -74,6 +100,109 @@ export function conflictHandler<T extends { id: string }>(rules: MergeRules): Rx
       return merged as WithDeleted<T>;
     },
   };
+}
+
+/**
+ * The item fields its units decide: how many, and the lead unit's dates. They
+ * follow from the merged units rather than being merged themselves.
+ */
+const UNIT_DERIVED_FIELDS = new Set([
+  'quantity',
+  'expiresAt',
+  'openedAt',
+  'periodAfterOpeningDays',
+]);
+
+/** What changing a unit changes: its dates, how much is left, and whether it is still on the shelf. */
+const SUB_ITEM_FIELDS = [
+  'expiresAt',
+  'openedAt',
+  'periodAfterOpeningDays',
+  'fillPercent',
+  'status',
+] as const satisfies readonly (keyof SubItem)[];
+
+/**
+ * An item's conflicts: `conflictHandler`'s, and when units changed here, unit
+ * by unit. Units added here join theirs, units deleted here leave, and a unit's
+ * changed fields go on top of their copy of it — unless it is gone over there,
+ * used up or deleted by someone else, when the change goes with it. The
+ * quantity and dates then follow from the merged units, as on the server.
+ */
+export function itemConflictHandler(rules: MergeRules): RxConflictHandler<PantryItem> {
+  const byField = conflictHandler<PantryItem>(rules);
+
+  return {
+    isEqual: byField.isEqual,
+    resolve: async (input, context) => {
+      const { assumedMasterState, realMasterState, newDocumentState } = input;
+      if (rules.wasRefused(realMasterState.id) || realMasterState._deleted) return realMasterState;
+      if (assumedMasterState === undefined) return realMasterState;
+      if (newDocumentState._deleted) return { ...realMasterState, _deleted: true };
+
+      const assumedUnits = assumedMasterState.subItems as SubItem[] | undefined;
+      const nextUnits = newDocumentState.subItems as SubItem[] | undefined;
+      const realUnits = realMasterState.subItems as SubItem[] | undefined;
+      if (
+        assumedUnits === undefined ||
+        nextUnits === undefined ||
+        realUnits === undefined ||
+        sameValue(assumedUnits, nextUnits)
+      ) {
+        return byField.resolve(input, context);
+      }
+
+      const assumed = assumedMasterState as unknown as Fields;
+      const next = newDocumentState as unknown as Fields;
+      const merged: Fields = { ...realMasterState };
+      for (const key of rules.fields) {
+        if (!UNIT_DERIVED_FIELDS.has(key) && !Object.is(next[key], assumed[key])) {
+          merged[key] = next[key];
+        }
+      }
+
+      const item = withSubItems(
+        merged as unknown as PantryItem,
+        mergeSubItems(assumedUnits, nextUnits, realUnits),
+      );
+      return sameDocument(item, realMasterState)
+        ? realMasterState
+        : (item as WithDeleted<PantryItem>);
+    },
+  };
+}
+
+/** Their units with the changes made here, from `assumed` to `next`, on top. */
+function mergeSubItems(
+  assumed: readonly SubItem[],
+  next: readonly SubItem[],
+  real: readonly SubItem[],
+): SubItem[] {
+  const before = new Map(assumed.map((unit) => [unit.id, unit]));
+  const now = new Set(next.map((unit) => unit.id));
+  const merged = new Map(real.map((unit) => [unit.id, unit]));
+
+  for (const unit of assumed) {
+    if (!now.has(unit.id)) merged.delete(unit.id);
+  }
+  for (const unit of next) {
+    const was = before.get(unit.id);
+    if (was === undefined) {
+      // Added here; there already when a push whose answer was lost landed.
+      if (!merged.has(unit.id)) merged.set(unit.id, unit);
+      continue;
+    }
+
+    const theirs = merged.get(unit.id);
+    const changed = SUB_ITEM_FIELDS.filter((field) => !Object.is(unit[field], was[field]));
+    if (theirs === undefined || changed.length === 0) continue;
+
+    const patched: SubItem = { ...theirs, updatedAt: unit.updatedAt };
+    for (const field of changed) Object.assign(patched, { [field]: unit[field] });
+    merged.set(unit.id, { ...patched, effectiveExpiresAt: effectiveExpiry(patched) });
+  }
+
+  return [...merged.values()];
 }
 
 /** Ids whose last change the server refused, until their conflict is resolved. */

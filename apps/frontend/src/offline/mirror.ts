@@ -28,7 +28,8 @@ import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 import { distinctUntilChanged, map, merge, Subject, type Observable } from 'rxjs';
 
 import { MIRROR_PREFIX } from './forget';
-import { conflictHandler, Refusals, sameDocument } from './merge';
+import { drainLegacyMirror } from './legacy';
+import { conflictHandler, itemConflictHandler, Refusals, sameDocument } from './merge';
 import { itemSchema, locationSchema, shoppingEntrySchema, shoppingListSchema } from './schemas';
 
 addRxPlugin(RxDBLeaderElectionPlugin);
@@ -37,9 +38,12 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 /**
  * Part of every mirror's database name. Raised when a schema changes: the next
  * start opens a new, empty database and pulls everything again, which is
- * simpler than migrating data the server can always resend.
+ * simpler than migrating data the server can always resend. What the old
+ * database never sent is pushed from it first (`legacy.ts`).
+ *
+ * 2: items carry their units (`PantryItem.subItems`).
  */
-const MIRROR_VERSION = 1;
+const MIRROR_VERSION = 2;
 
 /**
  * A local document written once a first sync has pulled everything: from then
@@ -167,9 +171,10 @@ export class Mirror {
     const closing = new AbortController();
     const name = mirrorName(userId, householdId);
 
+    const storage = await mirrorStorage();
     const db = await createRxDatabase<Collections>({
       name,
-      storage: await mirrorStorage(),
+      storage,
       multiInstance: true,
       eventReduce: true,
       localDocuments: true,
@@ -180,7 +185,7 @@ export class Mirror {
     await db.addCollections({
       items: {
         schema: itemSchema,
-        conflictHandler: conflictHandler<PantryItem>({
+        conflictHandler: itemConflictHandler({
           fields: ITEM_FIELDS,
           quantity: { min: 0, max: MAX_ITEM_QUANTITY },
           wasRefused: (id) => itemRefusals.take(id),
@@ -204,6 +209,13 @@ export class Mirror {
     refusalChannel?.addEventListener('message', (event: MessageEvent<MirrorRefusal>) =>
       refused.next(event.data),
     );
+    /** Says so here, and in the other tabs: the change may have been made in any of them. */
+    const announce = (refusal: MirrorRefusal): void => {
+      refused.next(refusal);
+      // A BroadcastChannel reaches this origin only, and takes no target origin.
+      // oxlint-disable-next-line unicorn/require-post-message-target-origin
+      refusalChannel?.postMessage(refusal);
+    };
     const resync$ = changes$.pipe(map(() => 'RESYNC' as const));
 
     const replicate = (
@@ -241,11 +253,7 @@ export class Mirror {
                   const result = await transport.push(pushTo.collection, rows);
                   for (const refusal of result.refused) {
                     pushTo.refusals.add(refusal.id);
-                    const heard: MirrorRefusal = { collection: pushTo.collection, ...refusal };
-                    refused.next(heard);
-                    // A BroadcastChannel reaches this origin only, and takes no target origin.
-                    // oxlint-disable-next-line unicorn/require-post-message-target-origin
-                    refusalChannel?.postMessage(heard);
+                    announce({ collection: pushTo.collection, ...refusal });
                   }
                   return result.conflicts;
                 },
@@ -266,6 +274,17 @@ export class Mirror {
         before: () => untilAborted(items.awaitInSync(), closing.signal),
       }),
     ];
+
+    // The database the version before this one kept, if this device has one.
+    void drainLegacyMirror({
+      userId,
+      householdId,
+      origin,
+      transport,
+      storage,
+      onRefusal: announce,
+      signal: closing.signal,
+    });
 
     // Resolves only in the leading tab, which is the one that pulls.
     void Promise.all(replications.map((replication) => replication.awaitInitialReplication()))

@@ -115,3 +115,8 @@ changes that name at runtime, so it needs no table.
   folds opened + period-after-opening into it. `effectiveExpiry()` works it out
   the same way for a change the frontend's offline mirror has not synced yet;
   the database's value replaces it once the change arrives.
+- An item's quantity and dates follow from its units (`src/utils/sub-items.ts`).
+  `leadSubItem`, `consumeOrder` and `freshSubItemState` restate the database's
+  rules (`LEAD_UNIT_ORDER`, `CONSUME_ORDER` and `FRESH_UNIT_SOURCE_ORDER` in
+  `@pantry-pal/db`) for the offline mirror, and `withSubItems` applies them:
+  change a rule on both sides.

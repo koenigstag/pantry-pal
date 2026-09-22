@@ -21,6 +21,33 @@ const TEXT = { type: 'string' } as const;
 const NULLABLE_TEXT = { type: ['string', 'null'] } as const;
 const INSTANT = { type: 'string' } as const;
 
+/** One unit of an item, inside its document: units change with their item, and sync with it. */
+const SUB_ITEM = {
+  type: 'object',
+  properties: {
+    id: ID,
+    expiresAt: NULLABLE_TEXT,
+    openedAt: NULLABLE_TEXT,
+    periodAfterOpeningDays: { type: ['integer', 'null'] },
+    effectiveExpiresAt: NULLABLE_TEXT,
+    fillPercent: { type: 'integer' },
+    status: TEXT,
+    createdAt: INSTANT,
+    updatedAt: INSTANT,
+  },
+  required: [
+    'id',
+    'expiresAt',
+    'openedAt',
+    'periodAfterOpeningDays',
+    'effectiveExpiresAt',
+    'fillPercent',
+    'status',
+    'createdAt',
+    'updatedAt',
+  ],
+} as const;
+
 export const itemSchema: RxJsonSchema<PantryItem> = {
   version: 0,
   primaryKey: 'id',
@@ -44,10 +71,21 @@ export const itemSchema: RxJsonSchema<PantryItem> = {
     notes: NULLABLE_TEXT,
     status: TEXT,
     defaultShoppingListId: { type: ['string', 'null'] },
+    subItems: { type: 'array', items: SUB_ITEM },
     createdAt: INSTANT,
     updatedAt: INSTANT,
   },
-  required: ['id', 'householdId', 'locationId', 'name', 'category', 'quantity', 'unit', 'status'],
+  required: [
+    'id',
+    'householdId',
+    'locationId',
+    'name',
+    'category',
+    'quantity',
+    'unit',
+    'status',
+    'subItems',
+  ],
 };
 
 export const locationSchema: RxJsonSchema<PantryLocation> = {

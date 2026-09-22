@@ -96,7 +96,7 @@ export class QuantityUpdates {
     this.inFlight.add(itemId);
     let failure: string | null;
     try {
-      failure = await this.pantry.updateItem(itemId, { quantity });
+      failure = await this.pantry.setQuantity(itemId, quantity);
     } finally {
       this.inFlight.delete(itemId);
     }

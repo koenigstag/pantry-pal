@@ -388,7 +388,9 @@ a lookup table like `units`, and the asymmetry is gone.
 
 Designed on 2026-09-17. **Step 1 is built** (2026-09-18, migration `0008`): every
 unit of an item is a `sub_items` row, behind an `ItemsRepository` whose API and
-row shape did not change. Everything else below is designed, not built.
+row shape did not change. **Step 2 is built** (2026-09-22, no migration): units
+reach clients inside their item and are written one at a time. Products and
+translated names are designed, not built.
 
 Today one `items` row mixes what a thing is, where it is, and the state of its
 units. The design splits that into layers:
@@ -427,29 +429,33 @@ opened tube at 60%, and Pantry, holding the spare. Each item has one sub-item.
   `items` row plus two lateral subqueries (`itemRowSelection` in
   `repositories/item-rows.ts`), the active-unit count and the **lead unit** — the
   active unit that expires first, else, with none active, the unit changed last —
-  whose dates the row shows. Writing a quantity adds copies of the lead unit or
-  consumes the units that should go first (opened, then soonest to expire, then
-  oldest); writing dates sets them on every active unit, or with none left on the
-  lead unit. So the backend services, the sync layer and the offline mirror read
-  items as before.
-- **Units in states of their own come from imports** (the backend's Data sheet):
-  `createWithUnits` and `addUnits` write each unit's dates and fill as given, so
-  two units of one item can expire on different days or one can be opened. The
-  row shows the lead unit's, and a later date write sets every unit's again.
-  `undelete` brings back a soft-deleted item for a restored backup, its units as
-  they were; `listActiveUnits`, `findUnitIds` and `findAnyByIds` serve the export
-  and the restore.
+  whose dates the row shows. Writing a quantity consumes the units that should go
+  first (opened, then soonest to expire, then oldest) or adds units — copies of
+  the lead unit in step 1, fresh ones since step 2; writing dates sets them on
+  every active unit, or with none left on the lead unit. So the backend services,
+  the sync layer and the offline mirror read items as before.
+- **Units in states of their own** are written by `createWithUnits` and
+  `addUnits`: for imports (the backend's Data sheet) and, since step 2, for the
+  API and the offline mirror, under the client's ids when it names them. Each
+  unit keeps its dates and fill as given, so two units of one item can expire on
+  different days or one can be opened. The row shows the lead unit's, and a later
+  date write sets every unit's again. `undelete` brings back a soft-deleted item
+  for a restored backup, its units as they were; `listActiveUnits`, `findUnitIds`
+  and `findAnyByIds` serve the export and the restore.
 - **Any unit write touches `items.updated_at`**, because a sync pull finds changed
   items by that column alone. `ItemsRepository.update` always writes the `items`
   row, units or not, and so does `addUnits`.
 - **Fill** is `smallint NOT NULL DEFAULT 100`, `BETWEEN 1 AND 100` — an empty unit
   is consumed, not kept at 0 — with `fill_percent = 100 OR opened_at IS NOT NULL`,
-  because a partly used unit has been opened. Only imports write it so far; the
-  API has no per-unit fields yet.
+  because a partly used unit has been opened. Imports wrote it first; since step 2
+  the API sets it per unit. The bounds are `MIN_FILL_PERCENT` and
+  `FULL_FILL_PERCENT` from shared, which the CHECKs are built from: the same SQL
+  as `0008` wrote, so no migration.
 - **Tenancy is a key:** `(household_id, item_id)` references
   `items(household_id, id)` (`items_household_id_id_unique`), `ON DELETE CASCADE`.
-- **`item_events.sub_item_id`** (nullable) names the unit an event is about. Step 1
-  records whole-item events only, so it stays null.
+- **`item_events.sub_item_id`** (nullable) names the unit an event is about. Every
+  write to one unit records an event naming it (step 2); whole-item writes leave
+  it null.
 - **`MAX_ITEM_QUANTITY` dropped from 10,000 to 100**: it is now also how many rows
   one item holds. A larger count is a size, `1 box × 200 pcs`. The offline mirror
   uses the constant only to clamp merged quantities, not in its RxDB schema, so
@@ -459,14 +465,23 @@ opened tube at 60%, and Pantry, holding the spare. Each item has one sub-item.
   DTOs first held `size_value` to `MAX_ITEM_QUANTITY` too, so a 250 g pack was
   refused once that dropped to 100.
 
-### Sub-items: still to build
+### Sub-items: built in step 2
 
-- **The API and the mirror for per-unit state:** `PantryItem` gains its units, and
-  the frontend edits each unit's dates and fill. The mirror's RxDB schema changes
-  with it, which `apps/frontend/src/offline/schemas.ts` says needs a new mirror
-  database name (`MIRROR_VERSION`), since the server can resend everything.
-- When units can differ, **+** should add an unopened, full unit rather than copy
-  the lead unit, and events about one unit should fill `sub_item_id`.
+- **An `ItemRow` carries its units:** `subItems`, the active ones, oldest first,
+  read as JSON in the same lateral subquery that counts them (`itemRowSelection`),
+  so one statement sees the count and the units alike. Their instants are
+  formatted as JavaScript's `toISOString()` writes them.
+- **`SubItemsRepository` changes units one at a time:** dates, fill and status
+  (`update`), and deleting one added by mistake (`softDelete`). Callers hold the
+  item's lock (`ItemsRepository.lock`) first, and every write moves the item's
+  `updated_at`. New units in states of their own go through `createWithUnits`
+  and `addUnits`, whose `NewUnitInput` takes the client's id.
+- **A higher quantity adds fresh units:** unopened, full, with the printed date and
+  period after opening of the newest active unit, or with none active the lead
+  unit's (`FRESH_UNIT_SOURCE_ORDER`). Step 1 copied the lead unit, opened state
+  and fill included.
+- The API, the sync protocol and the offline mirror for units are described in
+  `apps/backend/CLAUDE.md` and `apps/frontend/CLAUDE.md`.
 
 ### Products
 
@@ -538,7 +553,8 @@ designed and already solves the same problem for storage spaces.
 
 ### Outside the schema
 
-Step 1 changed nothing a client sees. The products step does: an item's name,
+Step 1 changed nothing a client sees; step 2 shows the units. The products step
+changes what an item is: its name,
 category, unit and size come from its product, and the item edit form edits the
 product, so a rename applies in every location. Shopping list entries name items,
 so they keep working, but whether running out should consider a product's other
@@ -560,12 +576,13 @@ locations (the spare in the pantry) is a question for that step.
    user was away: the database layer alone, behind an unchanged API, on a branch
    built over the offline sync work (PR #4), whose sync pull and push read the
    same items code. Revisit if that order does not suit.
-2. **The stepper and a typed quantity**, once units can differ. Proposed: **+**
-   adds an unopened, full sub-item with the newest unit's printed date and period
-   after opening; **−** consumes the unit that should go first (what step 1 does).
-   Typing a lower quantity asks which units go.
-3. **Showing identical units.** Ten unopened eggs are ten rows; the details view
-   should collapse units in the same state rather than list ten identical lines.
+2. ~~The stepper and a typed quantity.~~ Decided 2026-09-21: **+** adds an
+   unopened, full unit with the newest unit's printed date and period after
+   opening; **−** consumes the unit that should go first. No quantity is typed for
+   an existing item any more: the stepper, Add more and each row of units in the
+   details change them, so nothing has to ask which units a lower number takes.
+3. ~~Showing identical units.~~ Decided 2026-09-21: units in the same state are
+   one row, and a row's actions take one of them.
 4. ~~An item whose last unit is consumed or moved out.~~ Settled by step 1: it
    stays on the shelf, as an item at quantity 0 always has. Moving out comes with
    the products step.

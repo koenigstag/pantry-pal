@@ -1,5 +1,8 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -12,6 +15,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
 
 import {
@@ -27,6 +31,7 @@ import {
 } from '../constants';
 import type { ItemStatus } from '../types';
 import { IsIsoDate, IsOmittable, Trim } from './decorators';
+import { NewSubItemDto } from './sub-item.dto';
 
 /**
  * Request payloads shared by both apps.
@@ -125,6 +130,20 @@ export class CreatePantryItemDto {
   @IsOptional()
   @IsUUID()
   defaultShoppingListId?: string | null;
+
+  /**
+   * The item's units, each in a state of its own, instead of `quantity` alike
+   * ones: the offline mirror names each unit it makes, and they can differ.
+   * `quantity` must be how many there are, and the item's own dates are left
+   * out, since they are read from these.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_ITEM_QUANTITY)
+  @ValidateNested({ each: true })
+  @Type(() => NewSubItemDto)
+  subItems?: NewSubItemDto[];
 }
 
 /**
