@@ -86,6 +86,10 @@ interface LocationPagerProps {
  * assistive technology: the tabs above are the way there for everyone not
  * dragging a finger.
  *
+ * It fills the height its parent leaves it (`flex-1`, in a page that is at least
+ * a screen tall), so a space holding one card takes a swipe anywhere below it,
+ * not only over the card.
+ *
  * A committed swipe navigates, exactly as tapping that space's tab would — so
  * the back button walks through the spaces visited either way. The offset is
  * dropped in the same frame the new space arrives, where its pane stands exactly
@@ -269,15 +273,17 @@ export const LocationPager = observer(function LocationPager({
     <div
       ref={viewportRef}
       // `clip` rather than `hidden`: the peek panes are cut off at the sides
-      // without the page's own vertical scrolling moving in here.
-      className="relative touch-pan-y touch-pinch-zoom overflow-x-clip"
+      // without the page's own vertical scrolling moving in here. `flex-1` takes
+      // whatever height the page leaves, so the empty part of a sparse space is
+      // swipeable too.
+      className="relative flex flex-1 flex-col touch-pan-y touch-pinch-zoom overflow-x-clip"
       onPointerDown={begin}
       onPointerMove={move}
       onPointerUp={(event) => end(event, true)}
       onPointerCancel={(event) => end(event, false)}
       onClickCapture={swallowClick}
     >
-      <div ref={trackRef} className={cn('relative', isPanning && 'will-change-transform')}>
+      <div ref={trackRef} className={cn('relative flex-1', isPanning && 'will-change-transform')}>
         {isPanning && previous !== undefined && <Peek side="start">{children(previous)}</Peek>}
         {children(active)}
         {isPanning && next !== undefined && <Peek side="end">{children(next)}</Peek>}
@@ -287,9 +293,10 @@ export const LocationPager = observer(function LocationPager({
 });
 
 /**
- * A neighbouring space, waiting just off the edge. It takes the open pane's
- * height (`inset-y-0`) and keeps whatever does not fit to itself, so bringing it
- * into view never moves the page below.
+ * A neighbouring space, waiting just off the edge. It takes the track's height
+ * (`inset-y-0`) — the page's, or the open pane's where that is taller — and
+ * keeps whatever does not fit to itself, so bringing it into view never moves
+ * the page below.
  */
 function Peek({ side, children }: { side: 'start' | 'end'; children: ReactNode }): ReactElement {
   return (

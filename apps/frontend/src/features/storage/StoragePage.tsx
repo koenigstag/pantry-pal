@@ -160,7 +160,10 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
   ];
 
   return (
-    <div className="flex min-h-full flex-col">
+    // At least a screen tall (above the phone's tab bar), like the Shopping page, so the
+    // pager below fills what the header leaves and a swipe between spaces takes the whole
+    // page area rather than only the rows of cards.
+    <div className="flex min-h-[calc(100dvh-4rem-env(safe-area-inset-bottom))] flex-col md:min-h-dvh">
       <StorageHeader
         query={query}
         onQueryChange={setQuery}
@@ -177,7 +180,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         />
       </StorageHeader>
 
-      <section className="mx-auto w-full max-w-7xl flex-1 pt-3 pb-6">
+      <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col pt-3">
         <h2 className="sr-only">{locationName(location)}</h2>
 
         <div className="mb-3 flex min-h-11 items-center gap-2 px-4 md:px-8">
@@ -209,8 +212,10 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
 
         {/*
           Swiping sideways over the items moves to the next space, whose own
-          items follow the finger. Each pane carries the page's side padding, so
-          they slide in from the edge of the screen rather than from a margin.
+          items follow the finger. Each pane carries the page's padding, so they
+          slide in from the edge of the screen rather than from a margin, and the
+          pager itself fills the page — every part of it takes a swipe, not only
+          the rows of cards.
         */}
         <LocationPager locations={pantry.locations} active={location} link={params.locationLink}>
           {(space) => {
@@ -218,7 +223,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
             const spaceItems = isOpen ? visibleItems : visibleItemsIn(space.id);
 
             return (
-              <div className="px-4 md:px-8">
+              <div className="px-4 pb-6 md:px-8">
                 {isSearching && spaceItems.length === 0 ? (
                   <p className="py-16 text-center text-ink-muted">
                     {messages.storage.noMatches(query.trim(), locationName(space))}

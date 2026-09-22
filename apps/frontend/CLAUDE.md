@@ -303,10 +303,14 @@ that space actually holds, searched and sorted as the page asks
   tapped, a space deleted — ends the pan the same way.
 - Past the first or last space the panes still give, a little, and spring back:
   there is no wrapping around, as there is none in the tabs.
-- A neighbour's pane takes the open pane's height and keeps what does not fit to
-  itself, so bringing it into view never moves the page below. Each pane carries
-  the page's side padding, which is why the section itself has none: the panes
-  slide in from the edge of the screen rather than from a margin.
+- **The pager fills the page**, which is at least a screen tall above the
+  phone's tab bar, as the Shopping page is: a space holding one card takes a
+  swipe anywhere below it, not only over the card, and a sparse page gains no
+  scrolling of its own. A neighbour's pane takes that same height (`inset-y-0`
+  on the track) and keeps what does not fit to itself, so bringing it into view
+  never moves the page below. Each pane carries the page's padding, which is why
+  the section itself has none: the panes slide in from the edge of the screen
+  rather than from a margin.
 
 ### The locations editor
 
