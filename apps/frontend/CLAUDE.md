@@ -328,8 +328,21 @@ would refuse a contradicting value.
   the layout mirrors for right-to-left languages.
 - The item grid sizes its columns with container queries (`@container`, `@lg:`),
   not viewport breakpoints: three a row on a phone, at most seven.
+- **The phone's tab bar has its height in the theme**, and nowhere else.
+  `--spacing-tab-bar-links` (4rem) is its row of links, which are
+  `h-tab-bar-links`, and `--spacing-tab-bar` adds the safe-area inset the bar
+  pads itself with: the room it takes at the foot of the screen. Whatever stays
+  clear of the bar derives from that — `pb-tab-bar` on `<main>`,
+  `bottom-tab-bar` under the Shopping page's Bought bar, the notices 0.5rem
+  above the bar, and the minimum height of both pages,
+  `min-h-[calc(100dvh-var(--spacing-tab-bar))]` — and gives way to an `md:`
+  variant (`md:pb-0`, `md:bottom-0`, `md:bottom-6`, `md:min-h-dvh`), as there is
+  no tab bar from `md` up. Never spell out the 4rem or the inset at a call site:
+  a copy that misses a change fails nowhere, it only leaves a page slightly too
+  tall or too short.
 - Custom utilities: `focus-ring` (a focus-visible outline in `currentColor`,
-  which stays visible on the accent header) and `scrollbar-none`.
+  which stays visible on the accent header), `no-spinner` (a number input
+  without the browser's spin buttons, beside its own) and `scrollbar-none`.
 
 ## UI primitives — native elements, no component library
 
@@ -414,13 +427,14 @@ between shopping lists.
 - Past the first or last tab the panes still give, a little, and spring back:
   there is no wrapping around, as there is none in the tabs.
 - **The pager fills the page**, which on both pages is at least a screen tall
-  above the phone's tab bar: a space holding one card takes a swipe anywhere
-  below it, not only over the card, and a sparse page gains no scrolling of its
-  own. A neighbour's pane takes that same height (`inset-y-0` on the track) and
-  keeps what does not fit to itself, so bringing it into view never moves the
-  page below. Each pane carries the page's padding, which is why the sections
-  themselves have none: the panes slide in from the edge of the screen rather
-  than from a margin.
+  above the phone's tab bar (`100dvh - var(--spacing-tab-bar)`, see Styling): a
+  space holding one card takes a swipe anywhere below it, not only over the
+  card, and a sparse page gains no scrolling of its own, since that minimum and
+  `<main>`'s `pb-tab-bar` add up to exactly the screen. A neighbour's pane takes
+  that same height (`inset-y-0` on the track) and keeps what does not fit to
+  itself, so bringing it into view never moves the page below. Each pane carries
+  the page's padding, which is why the sections themselves have none: the panes
+  slide in from the edge of the screen rather than from a margin.
 - The Shopping page's Bought bar stays put while a swipe runs: it is an action
   on the open list, not its contents, and follows once the swipe lands.
 

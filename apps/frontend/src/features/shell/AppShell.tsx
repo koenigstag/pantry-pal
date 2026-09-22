@@ -53,10 +53,11 @@ export const AppShell = observer(function AppShell(): ReactElement {
         <ConnectionStatus state={pantry.connection} />
       </aside>
 
-      <main className="min-w-0 flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+      <main className="min-w-0 flex-1 pb-tab-bar md:pb-0">
         <Outlet />
       </main>
 
+      {/* Its links and its safe-area padding add up to `--spacing-tab-bar` (index.css). */}
       <nav
         aria-label={messages.nav.label}
         className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
@@ -68,7 +69,7 @@ export const AppShell = observer(function AppShell(): ReactElement {
                 to={item.path}
                 className={({ isActive }) =>
                   cn(
-                    'focus-ring flex h-16 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors',
+                    'focus-ring flex h-tab-bar-links flex-col items-center justify-center gap-1 text-xs font-medium transition-colors',
                     isActive ? 'text-accent' : 'text-ink-muted hover:text-ink',
                   )
                 }

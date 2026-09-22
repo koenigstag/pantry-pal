@@ -56,6 +56,20 @@
   }
 }
 
+/*
+ * The phone's bottom tab bar (`AppShell`): a row of links, and under it the
+ * safe-area inset, which the bar pads itself with. `tab-bar-links` is that
+ * row, the height of each link. `tab-bar` is the two together, the room the
+ * bar takes at the foot of the screen, which whatever sits above the bar
+ * clears: `pb-tab-bar`, `bottom-tab-bar`, and for a page at least a screen
+ * tall, `100dvh - var(--spacing-tab-bar)`. There is no tab bar from `md` up,
+ * so each use gives way to an `md:` variant.
+ */
+@theme {
+  --spacing-tab-bar-links: 4rem;
+  --spacing-tab-bar: calc(var(--spacing-tab-bar-links) + env(safe-area-inset-bottom));
+}
+
 @layer base {
   html {
     color-scheme: light dark;
