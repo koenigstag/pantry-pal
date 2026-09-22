@@ -172,7 +172,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
     // At least a screen tall (above the phone's tab bar), like the Shopping page, so the
     // pager below fills what the header leaves and a swipe between spaces takes the whole
     // page area rather than only the rows of cards.
-    <div className="flex min-h-[calc(100dvh-4rem-env(safe-area-inset-bottom))] flex-col md:min-h-dvh">
+    <div className="flex min-h-[calc(100dvh-var(--spacing-tab-bar))] flex-col md:min-h-dvh">
       <StorageHeader
         query={query}
         onQueryChange={setQuery}

@@ -26,7 +26,7 @@ export const NoticeRegion = observer(function NoticeRegion({
       className={cn(
         'pointer-events-none fixed inset-x-0 z-20 flex flex-col items-center gap-2 px-4',
         placement === 'page'
-          ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6'
+          ? 'bottom-[calc(var(--spacing-tab-bar)+0.5rem)] md:bottom-6'
           : 'bottom-[max(1rem,env(safe-area-inset-bottom))]',
       )}
     >

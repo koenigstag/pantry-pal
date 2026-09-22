@@ -153,7 +153,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
   return (
     // At least a screen tall (above the phone's tab bar), so the mark-as-bought bar sits at the
     // bottom of a short list rather than right under it.
-    <div className="flex min-h-[calc(100dvh-4rem-env(safe-area-inset-bottom))] flex-col md:min-h-dvh">
+    <div className="flex min-h-[calc(100dvh-var(--spacing-tab-bar))] flex-col md:min-h-dvh">
       <header className="bg-accent text-on-accent md:bg-transparent md:text-ink">
         <div className="flex items-center gap-2 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 md:px-8 md:pt-8">
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
@@ -288,7 +288,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
 
       {list !== undefined && inCart.length > 0 && (
         // Above the phone's bottom tab bar, and at the foot of the page from `md` up.
-        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] border-t border-line bg-surface/95 px-4 py-3 backdrop-blur md:bottom-0 md:px-8">
+        <div className="sticky bottom-tab-bar border-t border-line bg-surface/95 px-4 py-3 backdrop-blur md:bottom-0 md:px-8">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
             <p className="hidden flex-1 text-sm text-ink-muted sm:block">
               {messages.shopping.markBoughtHint}
