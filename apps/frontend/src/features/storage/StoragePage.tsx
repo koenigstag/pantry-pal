@@ -16,6 +16,7 @@ import { filterItems, sortItems } from './itemOrder';
 import { DeleteItemsSheet, MoveItemsSheet, RemoveItemSheet } from './ItemSheets';
 import { LocationEditorDialog } from './LocationEditorDialog';
 import { locationName } from './locationName';
+import { LocationPager } from './LocationPager';
 import { LocationTabs } from './LocationTabs';
 import { StorageHeader } from './StorageHeader';
 import { SelectionBar, SortControl } from './StorageToolbar';
@@ -102,12 +103,15 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
   }
 
   const isSearching = query.trim() !== '';
-  const visibleItems = sortItems(
-    filterItems(pantry.itemsIn(location.id), query),
-    params.sort,
-    params.direction,
-    pantry.unitLabel,
-  );
+  /** What a space shows now: its items, searched and sorted as the page asks. */
+  const visibleItemsIn = (id: string): readonly PantryItem[] =>
+    sortItems(
+      filterItems(pantry.itemsIn(id), query),
+      params.sort,
+      params.direction,
+      pantry.unitLabel,
+    );
+  const visibleItems = visibleItemsIn(location.id);
 
   // Only what is on screen counts as selected: never act on items a search hides.
   const selectedIds =
@@ -173,10 +177,10 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         />
       </StorageHeader>
 
-      <section className="mx-auto w-full max-w-7xl flex-1 px-4 pt-3 pb-6 md:px-8">
+      <section className="mx-auto w-full max-w-7xl flex-1 pt-3 pb-6">
         <h2 className="sr-only">{locationName(location)}</h2>
 
-        <div className="mb-3 flex min-h-11 items-center gap-2">
+        <div className="mb-3 flex min-h-11 items-center gap-2 px-4 md:px-8">
           {selectedIds.size > 0 ? (
             <SelectionBar
               count={selectedIds.size}
@@ -203,22 +207,40 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
           )}
         </div>
 
-        {isSearching && visibleItems.length === 0 ? (
-          <p className="py-16 text-center text-ink-muted">
-            {messages.storage.noMatches(query.trim(), locationName(location))}
-          </p>
-        ) : (
-          <ItemGrid
-            items={visibleItems}
-            selectedIds={selectedIds}
-            detailsLink={params.itemLink}
-            onToggleSelected={toggleSelected}
-            onRemove={openRemoveSheet}
-            // An empty space shows only the plus card. Search results don't: a new item
-            // would not be among them.
-            onAdd={isSearching ? undefined : () => setSheet({ kind: 'add' })}
-          />
-        )}
+        {/*
+          Swiping sideways over the items moves to the next space, whose own
+          items follow the finger. Each pane carries the page's side padding, so
+          they slide in from the edge of the screen rather than from a margin.
+        */}
+        <LocationPager locations={pantry.locations} active={location} link={params.locationLink}>
+          {(space) => {
+            const isOpen = space.id === location.id;
+            const spaceItems = isOpen ? visibleItems : visibleItemsIn(space.id);
+
+            return (
+              <div className="px-4 md:px-8">
+                {isSearching && spaceItems.length === 0 ? (
+                  <p className="py-16 text-center text-ink-muted">
+                    {messages.storage.noMatches(query.trim(), locationName(space))}
+                  </p>
+                ) : (
+                  <ItemGrid
+                    items={spaceItems}
+                    selectedIds={isOpen ? selectedIds : NOTHING_SELECTED}
+                    detailsLink={
+                      isOpen ? params.itemLink : (itemId) => params.itemLinkIn(space.id, itemId)
+                    }
+                    onToggleSelected={toggleSelected}
+                    onRemove={openRemoveSheet}
+                    // An empty space shows only the plus card. Search results don't: a new item
+                    // would not be among them.
+                    onAdd={isSearching ? undefined : () => setSheet({ kind: 'add' })}
+                  />
+                )}
+              </div>
+            );
+          }}
+        </LocationPager>
       </section>
 
       <Outlet context={outletContext} />

@@ -51,6 +51,9 @@ src/i18n/                  message catalog and Intl formatters
   (`useStorageParams`). The location is a path segment, so each tab is a link
   and the back button walks through them. The sort is a query parameter changed
   with `replace`, and defaults stay out of the URL.
+- **Swiping sideways over the items changes storage space** (`LocationPager`),
+  and navigates exactly where that space's tab leads — so the back button walks
+  through the spaces however they were reached. See below.
 - Shopping URL state is `/shopping/:listId`, a tab per list in use like the
   storage spaces'; `/shopping` alone, or an archived or deleted list's URL,
   redirects to the first list in use.
@@ -269,6 +272,41 @@ out as `Authorization: Bearer` and in the socket handshake; the refresh token
   and Sign out. Changing the password signs out the account's other devices; a
   wrong current password is a 403, which the form shows, never a 401, which
   would look like an expired token.
+
+### Swiping between storage spaces
+
+`LocationPager` wraps the item grid: a finger dragged sideways over the items
+moves to the next or previous space, with that space's own items following the
+finger the whole way — half a swipe shows half of each. Letting go finishes the
+move, which navigates like the tab would, or takes it back. Its neighbours are
+real panes rendered by the same render prop as the open space, so they show what
+that space actually holds, searched and sorted as the page asks
+(`visibleItemsIn`).
+
+- **Touch and pen only.** A mouse has the tabs, and dragging with one selects
+  text. The tabs remain the way there for everyone: the peek panes are
+  `pointer-events-none`, `inert` and `aria-hidden`, so they reach neither the tab
+  order nor a screen reader, and they are mounted only while a swipe shows them.
+- **The page still scrolls and zooms.** `touch-action: pan-y pinch-zoom` leaves
+  both to the browser, and a gesture is claimed only once it has travelled
+  further sideways than down; a vertical start is let go of for good. A click
+  landing just after a swipe is swallowed, so a swipe that ends over a card does
+  not open it.
+- **`overflow-x: clip`, never `hidden`**, which would make the pager a scroll
+  container on both axes and move the page's own vertical scrolling into it.
+- **A drag costs no renders:** the offset is written straight to the track's
+  `transform`, and React hears about a swipe twice — to mount the neighbours,
+  and to settle. So nothing in `StoragePage` re-renders while a finger moves.
+- **The offset is dropped in the frame the new space arrives** (a layout effect
+  watching the open space), where its pane stands exactly where the peek pane
+  stood: the swap cannot be seen. Anything else that navigates mid-swipe — a tab
+  tapped, a space deleted — ends the pan the same way.
+- Past the first or last space the panes still give, a little, and spring back:
+  there is no wrapping around, as there is none in the tabs.
+- A neighbour's pane takes the open pane's height and keeps what does not fit to
+  itself, so bringing it into view never moves the page below. Each pane carries
+  the page's side padding, which is why the section itself has none: the panes
+  slide in from the edge of the screen rather than from a margin.
 
 ### The locations editor
 
