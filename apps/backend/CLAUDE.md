@@ -556,3 +556,66 @@ job queue that lives in PostgreSQL, so it adds no Redis or other service.
 - **First job: purge `refresh_tokens`.** Every sign-in adds a row and nothing
   deletes expired or revoked ones. A daily cron schedule is enough.
 - **Later:** expiry reminders, deferred in `packages/db/CLAUDE.md`.
+
+## Text assistant: planned
+
+Designed on 2026-09-22 with the user; to be built once the Data sheet's imports
+(PR #6) and the per-unit API of sub-items step 2 have both merged. Nothing of it
+exists yet.
+
+People say what they did or what a storage space holds, in their own words, and
+Claude turns the text into changes they confirm: "в холодильнике молоко, два
+пакета до пятницы", "съел йогурт", "добавь хлеб в список", "открыл сыр".
+
+- **Text in, never audio.** The app analyses the text it is sent, however it was
+  produced: typed, dictated with the phone keyboard, or pasted. It does no speech
+  recognition of its own.
+- **Interpret, then apply: two routes, and only the second writes.**
+  - `POST /households/:householdId/assistant/interpret` with `{ text }` sends the
+    text to `claude-sonnet-5` with the household as it stands — storage spaces,
+    active items and their units, shopping lists and entries, each with its id —
+    the unit and category codes, today's date in the user's time zone, and their
+    language. The answer is held to a fixed JSON schema (structured outputs,
+    `output_config.format`), then checked: every id must belong to the household,
+    every field passes the DTOs the forms use, and the limits a schema cannot state
+    are checked in code. It answers with the proposed actions, each carrying what a
+    preview line shows, plus the parts it could not resolve.
+  - `POST /households/:householdId/assistant/apply` takes the actions the user
+    kept, validates them again, and applies them in one transaction through the
+    services — adding through `ImportService`, the rest through the items,
+    sub-items and shopping list services — so history, locks and broadcasts hold,
+    and the offline mirror pulls the result.
+- **What it understands, from the start:** adding items (new ones, or units added
+  to the item of that name in that space); quantities (use up, step, set a count);
+  shopping lists (add, tick, bought); unit details (opened, fill, expiry, moving),
+  which is why it waits for step 2's per-unit API.
+- **Only what the text names changes.** A description of a shelf is not a
+  stocktake: items it leaves out stay as they are.
+- **Nothing applies without a preview**: one tickable line per action, then Apply.
+- **The schema never varies**, so it compiles once and stays cached. Ids are plain
+  strings the server checks, not per-household enums, which would change the
+  schema whenever the household did.
+- **The prompt** puts its fixed instructions first, to be cached (Sonnet 5 caches
+  prefixes from 1,024 tokens), then the household and the text. It carries the
+  rules: things are counted, not weighed (`1 bag × 2 kg` of rice); relative dates
+  resolve against today; names stay in the language they were written in; an
+  ambiguous item is the one that expires first, for using up, or is left
+  unresolved.
+- **The model only proposes.** There is no bulk delete, and a request has a
+  maximum number of actions. Item and space names are text other members typed, so
+  the household goes into the prompt marked as data, never as instructions. A
+  per-user rate limit (`@nestjs/throttler`) and a maximum text length bound the cost.
+- **Configuration:** `ANTHROPIC_API_KEY` in the backend's environment, read
+  through `ConfigService` and used with the official `@anthropic-ai/sdk`. Without
+  it the routes answer 404 and the frontend hides the entry point, which needs a
+  flag it can read (on `GET /me`, say), much as the admin API stays off without
+  `ADMIN_API_KEY`.
+- **Cost:** a request is about 6K tokens in, mostly the household, and 500 out:
+  roughly 1–2¢ at Sonnet 5's $2 and $10 per million tokens.
+- **Before it ships:** 30–50 real phrases in Russian, Ukrainian and English, each
+  with the actions it should produce, run against Sonnet 5 to tune the prompt.
+- **Frontend:** a sheet with a text box; the text is kept on the device as a draft
+  while offline, interpreting shows the preview, and Apply sends what is ticked.
+  All copy in the catalogs. Where it opens from is not decided yet: proposed, a
+  speech-bubble button beside search in the Storage header, and the same sheet on
+  the Shopping page.

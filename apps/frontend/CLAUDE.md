@@ -497,6 +497,13 @@ what the household has.
   skipped rows with their reasons. Its heading takes focus, since it replaces the
   form and its button.
 
+### The text assistant: planned
+
+Not built: a sheet where people type, dictate or paste what they did or what a
+storage space holds, see Claude's reading of it as tickable changes, and apply
+them. The design, and what it waits for, is in the backend's `CLAUDE.md` (Text
+assistant: planned).
+
 ## Installable, and usable offline
 
 `vite-plugin-pwa` (Workbox) writes a manifest and a service worker into `dist`,
