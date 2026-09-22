@@ -14,12 +14,13 @@ import {
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState, type ReactElement } from 'react';
-import { Navigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams } from 'react-router';
 
 import { messages } from '../../i18n/messages';
 import { useNotices, usePantryStore } from '../../stores/StoreContext';
 import { IconButton } from '../../ui/IconButton';
 import { Menu, type MenuItem } from '../../ui/Menu';
+import { SwipePager } from '../../ui/SwipePager';
 import { PageStatus } from '../shell/PageStatus';
 import { shareText, shoppingListText } from './shareList';
 import { ShoppingEntryRow } from './ShoppingEntryRow';
@@ -36,6 +37,17 @@ function byCheckedAt(a: ShoppingListEntry, b: ShoppingListEntry): number {
   const y = b.checkedAt ?? '';
   if (x === y) return 0;
   return x < y ? -1 : 1;
+}
+
+/** How a list is shown: what is still to buy, in the order it was added, then the cart. */
+function toBuyAndCart(entries: readonly ShoppingListEntry[]): {
+  toBuy: readonly ShoppingListEntry[];
+  inCart: readonly ShoppingListEntry[];
+} {
+  return {
+    toBuy: entries.filter((entry) => entry.checkedAt === null),
+    inCart: entries.filter((entry) => entry.checkedAt !== null).toSorted(byCheckedAt),
+  };
 }
 
 /** Whether the editor is open, and with which new row, if any (see `ShoppingListEditorDialog`). */
@@ -55,6 +67,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
   const pantry = usePantryStore();
   const notices = useNotices();
   const { listId } = useParams<{ listId: string }>();
+  const navigate = useNavigate();
 
   const [editor, setEditor] = useState<EditorState>(EDITOR_CLOSED);
   const [isMarkingBought, setMarkingBought] = useState(false);
@@ -94,8 +107,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
   );
 
   const entries = list === undefined ? [] : shown(list);
-  const toBuy = entries.filter((entry) => entry.checkedAt === null);
-  const inCart = entries.filter((entry) => entry.checkedAt !== null).toSorted(byCheckedAt);
+  const { toBuy, inCart } = toBuyAndCart(entries);
   const text =
     list === undefined ? null : shoppingListText(list, entries, pantry.itemsById, pantry.unitName);
 
@@ -192,9 +204,9 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
         )}
       </header>
 
-      <section className="mx-auto w-full max-w-3xl flex-1 px-4 pt-3 pb-6 md:px-8">
-        {list === undefined && (
-          <div className="flex flex-col items-center gap-3 py-16 text-center text-ink-muted">
+      <section className="mx-auto flex w-full max-w-3xl flex-1 flex-col pt-3">
+        {list === undefined ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-16 text-center text-ink-muted md:px-8">
             <ShoppingCart aria-hidden="true" className="size-10" strokeWidth={1.5} />
             <p>{messages.shopping.noLists}</p>
             <button
@@ -210,44 +222,67 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
               {messages.shopping.createFirst}
             </button>
           </div>
-        )}
+        ) : (
+          /*
+            Swiping sideways over the entries moves to the next list, whose own
+            entries follow the finger, like the storage spaces. Each pane carries
+            the page's padding, so they slide in from the edge of the screen, and
+            the pager fills the page: every part of it takes a swipe, not only
+            the rows.
+          */
+          <SwipePager
+            pages={lists}
+            active={list}
+            // Where that list's tab leads, so a swipe and a tap end up the same.
+            onSwipe={(id) => void navigate(shoppingListLink(id))}
+          >
+            {(candidate) => {
+              const rows =
+                candidate.id === list.id ? { toBuy, inCart } : toBuyAndCart(shown(candidate));
 
-        {list !== undefined && entries.length === 0 && (
-          <div className="flex flex-col items-center gap-2 py-16 text-center text-ink-muted">
-            <p className="font-medium text-ink">{messages.shopping.emptyList(list.name)}</p>
-            <p className="max-w-sm text-sm">{messages.shopping.emptyHint}</p>
-          </div>
-        )}
-
-        {list !== undefined && entries.length > 0 && (
-          <>
-            <h2 className="sr-only">{list.name}</h2>
-            <p
-              aria-live="polite"
-              className="mb-3 flex min-h-11 items-center text-sm text-ink-muted"
-            >
-              {messages.shopping.toBuy(toBuy.length)}
-            </p>
-            {toBuy.length > 0 && (
-              <ul className="flex flex-col gap-2">
-                {toBuy.map((entry) => (
-                  <ShoppingEntryRow key={entry.id} entry={entry} />
-                ))}
-              </ul>
-            )}
-            {inCart.length > 0 && (
-              <>
-                <h3 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase">
-                  {messages.shopping.inCart}
-                </h3>
-                <ul className="flex flex-col gap-2">
-                  {inCart.map((entry) => (
-                    <ShoppingEntryRow key={entry.id} entry={entry} />
-                  ))}
-                </ul>
-              </>
-            )}
-          </>
+              return (
+                <div className="px-4 pb-6 md:px-8">
+                  {rows.toBuy.length === 0 && rows.inCart.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-16 text-center text-ink-muted">
+                      <p className="font-medium text-ink">
+                        {messages.shopping.emptyList(candidate.name)}
+                      </p>
+                      <p className="max-w-sm text-sm">{messages.shopping.emptyHint}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <h2 className="sr-only">{candidate.name}</h2>
+                      <p
+                        aria-live="polite"
+                        className="mb-3 flex min-h-11 items-center text-sm text-ink-muted"
+                      >
+                        {messages.shopping.toBuy(rows.toBuy.length)}
+                      </p>
+                      {rows.toBuy.length > 0 && (
+                        <ul className="flex flex-col gap-2">
+                          {rows.toBuy.map((entry) => (
+                            <ShoppingEntryRow key={entry.id} entry={entry} />
+                          ))}
+                        </ul>
+                      )}
+                      {rows.inCart.length > 0 && (
+                        <>
+                          <h3 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+                            {messages.shopping.inCart}
+                          </h3>
+                          <ul className="flex flex-col gap-2">
+                            {rows.inCart.map((entry) => (
+                              <ShoppingEntryRow key={entry.id} entry={entry} />
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            }}
+          </SwipePager>
         )}
       </section>
 
