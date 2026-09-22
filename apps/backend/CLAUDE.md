@@ -51,6 +51,7 @@ src/
   items/        per-household items and their event history; running out, restocking
   shopping-lists/ lists and their entries: the editor's save, archiving, putting away
   sync/         the offline mirror: pulls since a checkpoint, pushes through the services
+  data/         the Data sheet: an .xlsx backup out; imports in, from a backup or KitchenPal
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
@@ -84,6 +85,8 @@ PATCH  DELETE          /households/:householdId/shopping-lists/:listId/entries/:
 POST                   /households/:householdId/shopping-lists/:listId/put-away          entryIds
 GET                    /households/:householdId/sync/:collection      ?updatedAt=&id=&limit=
 POST                   /households/:householdId/sync/:collection/push rows: items, entries only
+GET                    /households/:householdId/export                an .xlsx backup
+POST                   /households/:householdId/import/:source        multipart `file`; pantry-pal, kitchen-pal
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
@@ -324,6 +327,62 @@ space and list editors stay online.
     Anything else fails the push, which the client sends again later.
   - The answer is 200 whatever became of each row.
 
+## Backups and imports
+
+The frontend's Data sheet (`src/data/`): any member exports the household or
+imports a file into it. Files are .xlsx, read and written with **exceljs**.
+
+**The export is a backup** (`GET .../export`): storage spaces, the active items
+and their active units, in the sheets `backup-format.ts` describes — `Pantry Pal`
+(format and version), `Storage spaces`, `Items`, `Units` — under English
+headers, which are the format. Categories and units are codes. It is read in one
+`repeatable read` snapshot, so no unit names an item the file lacks, and it is
+sent `no-store`; the frontend's service worker keeps it out of its read cache
+too.
+
+**An import** (`POST .../import/:source`, the file in the multipart field `file`)
+never replaces anything: what the file holds joins what the household has, in
+one transaction (`ImportService`).
+
+- **Parsers first, outside the transaction.** Each source turns the workbook into
+  an `ImportPlan` (`pantry-pal-backup.ts`, `kitchen-pal.ts`); a file that cannot be
+  read fails before anything is written. A row that cannot be read is left out
+  and listed in the answer with a reason (`IMPORT_SKIP_REASON`); a file that
+  cannot be read at all is a 400 whose `code` names why (`IMPORT_ERROR`).
+- **Storage spaces** match the household's own by id, then by name, then by any
+  name of the default space they were copied from, so KitchenPal's "Fridge" finds
+  "Холодильник" and "Other" finds the fallback. Anything else is created, named as
+  the file has it — or, for a default the household deleted, in the member's
+  language — until `MAX_LOCATIONS_PER_HOUSEHOLD`, and the fallback takes the rest.
+  Creating them takes the household lock, as the locations service does.
+- **Items** match by id (a backup of this household), a deleted one coming back
+  (`ItemsRepository.undelete`, recorded as `restored`); else an active item of the
+  same name in the same space takes the file's units; else one is created. Rows of
+  one file that share a name and a space land in one item, so the summary counts
+  the household's items, not rows.
+- **Units keep their own state** — expiry, opened date, fill — through
+  `ItemsRepository.createWithUnits` and `addUnits`. A partly used unit without an
+  opened date takes the day of the import, as `sub_items_fill_needs_opened`
+  requires. A unit whose id the household holds already is skipped, so importing
+  a backup into the household it came from a second time adds nothing; into
+  another household it adds everything again. Units past `MAX_ITEM_QUANTITY` are
+  left out and reported (`capped`).
+- **KitchenPal** exports one sheet, a row per thing on a shelf. `Quantity_metric`
+  is what is left of all the pieces together, so the size recorded is one full
+  piece's: a whisky at 20% holding 150 ml is a 750 ml bottle. The open piece
+  becomes a unit at that fill, the rest full ones. Its categories map to ours
+  (`CATEGORIES` in `kitchen-pal.ts`), the rest land in `other`; brand, store,
+  price and barcode go into the notes. Photos are not imported.
+- **Announced as usual**: `location.created`, `item.created` and `item.updated`
+  per write, so clients, the offline mirror's pulls included, need nothing new.
+  Every item written records an event whose payload names the source.
+- **Limits**: 2 MB per file (`MAX_IMPORT_FILE_BYTES`, a 413 from multer),
+  `MAX_IMPORT_ROWS` rows per sheet, and a zip whose central directory claims more
+  than 64 MB or 1000 parts is refused before exceljs unpacks it (`workbook.ts`). A
+  directory that lies about its sizes is bounded by the upload limit alone.
+- **exceljs pulls in `uuid@8`**, which `pnpm audit` flags (bounds check in v3, v5
+  and v6 with a buffer). exceljs only calls `v4()`, so it is not reachable.
+
 ## Request flow
 
 ```
@@ -497,3 +556,66 @@ job queue that lives in PostgreSQL, so it adds no Redis or other service.
 - **First job: purge `refresh_tokens`.** Every sign-in adds a row and nothing
   deletes expired or revoked ones. A daily cron schedule is enough.
 - **Later:** expiry reminders, deferred in `packages/db/CLAUDE.md`.
+
+## Text assistant: planned
+
+Designed on 2026-09-22 with the user; to be built once the Data sheet's imports
+(PR #6) and the per-unit API of sub-items step 2 have both merged. Nothing of it
+exists yet.
+
+People say what they did or what a storage space holds, in their own words, and
+Claude turns the text into changes they confirm: "в холодильнике молоко, два
+пакета до пятницы", "съел йогурт", "добавь хлеб в список", "открыл сыр".
+
+- **Text in, never audio.** The app analyses the text it is sent, however it was
+  produced: typed, dictated with the phone keyboard, or pasted. It does no speech
+  recognition of its own.
+- **Interpret, then apply: two routes, and only the second writes.**
+  - `POST /households/:householdId/assistant/interpret` with `{ text }` sends the
+    text to `claude-sonnet-5` with the household as it stands — storage spaces,
+    active items and their units, shopping lists and entries, each with its id —
+    the unit and category codes, today's date in the user's time zone, and their
+    language. The answer is held to a fixed JSON schema (structured outputs,
+    `output_config.format`), then checked: every id must belong to the household,
+    every field passes the DTOs the forms use, and the limits a schema cannot state
+    are checked in code. It answers with the proposed actions, each carrying what a
+    preview line shows, plus the parts it could not resolve.
+  - `POST /households/:householdId/assistant/apply` takes the actions the user
+    kept, validates them again, and applies them in one transaction through the
+    services — adding through `ImportService`, the rest through the items,
+    sub-items and shopping list services — so history, locks and broadcasts hold,
+    and the offline mirror pulls the result.
+- **What it understands, from the start:** adding items (new ones, or units added
+  to the item of that name in that space); quantities (use up, step, set a count);
+  shopping lists (add, tick, bought); unit details (opened, fill, expiry, moving),
+  which is why it waits for step 2's per-unit API.
+- **Only what the text names changes.** A description of a shelf is not a
+  stocktake: items it leaves out stay as they are.
+- **Nothing applies without a preview**: one tickable line per action, then Apply.
+- **The schema never varies**, so it compiles once and stays cached. Ids are plain
+  strings the server checks, not per-household enums, which would change the
+  schema whenever the household did.
+- **The prompt** puts its fixed instructions first, to be cached (Sonnet 5 caches
+  prefixes from 1,024 tokens), then the household and the text. It carries the
+  rules: things are counted, not weighed (`1 bag × 2 kg` of rice); relative dates
+  resolve against today; names stay in the language they were written in; an
+  ambiguous item is the one that expires first, for using up, or is left
+  unresolved.
+- **The model only proposes.** There is no bulk delete, and a request has a
+  maximum number of actions. Item and space names are text other members typed, so
+  the household goes into the prompt marked as data, never as instructions. A
+  per-user rate limit (`@nestjs/throttler`) and a maximum text length bound the cost.
+- **Configuration:** `ANTHROPIC_API_KEY` in the backend's environment, read
+  through `ConfigService` and used with the official `@anthropic-ai/sdk`. Without
+  it the routes answer 404 and the frontend hides the entry point, which needs a
+  flag it can read (on `GET /me`, say), much as the admin API stays off without
+  `ADMIN_API_KEY`.
+- **Cost:** a request is about 6K tokens in, mostly the household, and 500 out:
+  roughly 1–2¢ at Sonnet 5's $2 and $10 per million tokens.
+- **Before it ships:** 30–50 real phrases in Russian, Ukrainian and English, each
+  with the actions it should produce, run against Sonnet 5 to tune the prompt.
+- **Frontend:** a sheet with a text box; the text is kept on the device as a draft
+  while offline, interpreting shows the preview, and Apply sends what is ticked.
+  All copy in the catalogs. Where it opens from is not decided yet: proposed, a
+  speech-bubble button beside search in the Storage header, and the same sheet on
+  the Shopping page.

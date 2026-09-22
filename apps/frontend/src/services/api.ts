@@ -1,21 +1,24 @@
-import type {
-  AuthSession,
-  Category,
-  CurrentUser,
-  PantryItem,
-  PantryLocation,
-  ShoppingList,
-  ShoppingListEntriesChange,
-  ShoppingListEntry,
-  ShoppingLists,
-  SyncCheckpoint,
-  SyncCollection,
-  SyncPullPayload,
-  SyncPushCollection,
-  SyncPushResult,
-  SyncPushRow,
-  Unit,
-  UserHousehold,
+import {
+  IMPORT_FILE_FIELD,
+  type AuthSession,
+  type Category,
+  type CurrentUser,
+  type ImportSource,
+  type ImportSummary,
+  type PantryItem,
+  type PantryLocation,
+  type ShoppingList,
+  type ShoppingListEntriesChange,
+  type ShoppingListEntry,
+  type ShoppingLists,
+  type SyncCheckpoint,
+  type SyncCollection,
+  type SyncPullPayload,
+  type SyncPushCollection,
+  type SyncPushResult,
+  type SyncPushRow,
+  type Unit,
+  type UserHousehold,
 } from '@pantry-pal/shared';
 import type {
   AddShoppingListEntriesDto,
@@ -36,32 +39,37 @@ import type {
 } from '@pantry-pal/shared/dto';
 
 import { messages } from '../i18n/messages';
-import { ApiError, send } from './http';
+import { ApiError, receive, send } from './http';
 import { accessTokenOrStored, refreshAccessToken } from './session';
 
 export { ApiError } from './http';
 
 /**
- * A request as the signed-in user.
+ * A call as the signed-in user, given the access token.
  *
  * The access token is refreshed before it expires, so a 401 means the server
  * refused it early, after restarting with a new signing key, say. The token is
- * then refreshed and the request sent once more. A refresh the server refuses
+ * then refreshed and the call made once more. A refresh the server refuses
  * ends the session, and the app returns to the sign-in page.
  */
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function authorized<T>(call: (accessToken: string) => Promise<T>): Promise<T> {
   const token = await accessTokenOrStored();
   if (token === null) throw new ApiError(messages.auth.sessionEnded, 401);
 
   try {
-    return await send<T>(path, init, token);
+    return await call(token);
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 401) throw error;
 
     const replacement = await refreshAccessToken(token);
     if (replacement === null) throw error;
-    return send<T>(path, init, replacement);
+    return call(replacement);
   }
+}
+
+/** A request as the signed-in user, answered with JSON. */
+function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return authorized((token) => send<T>(path, init, token));
 }
 
 const household = (householdId: string): string => `/households/${encodeURIComponent(householdId)}`;
@@ -212,6 +220,23 @@ export const pantryApi = {
       method: 'POST',
       body: JSON.stringify({ rows }),
     }),
+
+  /**
+   * Adds a file's storage spaces, items and units to the household. A 400 or 413
+   * names what was wrong with the file in its `code`.
+   */
+  importFile: (householdId: string, source: ImportSource, file: File): Promise<ImportSummary> => {
+    const body = new FormData();
+    body.append(IMPORT_FILE_FIELD, file);
+    return request<ImportSummary>(`${household(householdId)}/import/${source}`, {
+      method: 'POST',
+      body,
+    });
+  },
+
+  /** The household's backup: an .xlsx of its storage spaces, items and units. */
+  exportBackup: (householdId: string): Promise<Blob> =>
+    authorized((token) => receive(`${household(householdId)}/export`, {}, token)),
 };
 
 export type PantryApi = typeof pantryApi;

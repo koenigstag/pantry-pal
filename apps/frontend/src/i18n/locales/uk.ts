@@ -1,4 +1,4 @@
-import { formatNumber, plural, type PluralForms } from '../format';
+import { formatList, formatNumber, plural, type PluralForms } from '../format';
 import type { Messages } from '../messages';
 
 /*
@@ -533,6 +533,91 @@ export const uk = {
     saveFailed: 'Не вдалося зберегти списки покупок.',
     changedElsewhere:
       'Хтось інший змінив списки покупок, поки ви редагували. Їхні зміни вже в списку: перевірте його та збережіть знову.',
+  },
+
+  data: {
+    title: 'Дані',
+    import: 'Імпорт',
+    importHint: 'Додати предмети з резервної копії або з іншого застосунку',
+    export: 'Експорт',
+    exportHint: 'Зберегти місця зберігання й усе, що в них, у файл Excel',
+    exporting: 'Готуємо файл…',
+    exported: 'Файл збережено в завантаження.',
+    exportFailed: 'Не вдалося експортувати запаси.',
+    importFrom: 'Імпорт з',
+    sources: {
+      'pantry-pal': {
+        name: 'Резервна копія Pantry Pal',
+        hint: 'Файл, збережений через «Експорт»',
+        steps: [
+          'У Pantry Pal відкрийте «Дані» в меню ⋮ і виберіть «Експорт».',
+          'Перенесіть збережений файл .xlsx на цей пристрій.',
+          'Виберіть його нижче.',
+        ],
+        note: 'Нічого не замінюється: те, що вже є, лишається як є, а предмети, видалені після копії, повертаються.',
+      },
+      'kitchen-pal': {
+        name: 'KitchenPal',
+        hint: 'Файл Excel, який експортує KitchenPal',
+        steps: [
+          'У KitchenPal експортуйте інвентар комори у файл Excel.',
+          'Перенесіть файл .xlsx на цей пристрій.',
+          'Виберіть його нижче.',
+        ],
+        note: 'Нічого не замінюється: усе додається до того, що у вас є, тож файл, імпортований двічі, додає все двічі.',
+      },
+    },
+    chooseFile: 'Вибрати файл',
+    fileHint: 'Файл Excel (.xlsx)',
+    fileSize: (kilobytes: number) => `${formatNumber(kilobytes)}\u00A0КБ`,
+    submit: 'Імпортувати',
+    submitting: 'Імпортуємо…',
+    done: 'Готово',
+    summary: {
+      title: 'Імпорт завершено',
+      createdItems: 'Нові предмети',
+      updatedItems: 'Поповнені предмети',
+      restoredItems: 'Відновлені предмети',
+      unchangedItems: 'Уже були на місці',
+      addedUnits: 'Додано штук',
+      nothingNew: 'Нічого нового: усе з файлу вже є.',
+      newLocations: (names: readonly string[]) =>
+        `${plural(names.length, {
+          one: 'Нове місце зберігання:',
+          few: 'Нові місця зберігання:',
+          many: 'Нові місця зберігання:',
+          other: 'Нові місця зберігання:',
+        })} ${formatList(names.map((name) => `«${name}»`))}`,
+      capped: (max: number) => `Предмет вміщує до ${formatNumber(max)} штук, тож решту не додано:`,
+      cappedItem: (name: string, count: number) => `«${name}»: ${formatNumber(count)}`,
+      skipped: (count: number) =>
+        plural(count, {
+          one: 'Пропущено # рядок',
+          few: 'Пропущено # рядки',
+          many: 'Пропущено # рядків',
+          other: 'Пропущено # рядка',
+        }),
+      skippedRow: (sheet: string, row: number, name: string | null, reason: string) =>
+        `${sheet}, рядок ${formatNumber(row)}${name === null ? '' : ` («${name}»)`}: ${reason}`,
+      reasons: {
+        'no-name': 'немає назви',
+        'no-quantity': 'немає кількості',
+        'nothing-left': 'нічого не лишилося',
+        'unknown-item': 'вказано предмет, якого немає у файлі',
+        'invalid-value': 'значення, яке не вдалося прочитати',
+      },
+    },
+    errors: {
+      notAWorkbook: 'Це не файл Excel (.xlsx). Виберіть файл, який експортував застосунок.',
+      wrongFormat: {
+        'pantry-pal': 'Це не резервна копія Pantry Pal, або її зробила новіша версія Pantry Pal.',
+        'kitchen-pal': 'Це не експорт KitchenPal: у ньому немає стовпців Product і Pieces.',
+      },
+      tooManyRows: (max: number) =>
+        `У файлі понад ${formatNumber(max)} рядків — більше, ніж приймає один імпорт.`,
+      tooLarge: (megabytes: number) =>
+        `Файл завеликий: імпорт приймає до ${formatNumber(megabytes)}\u00A0МБ.`,
+    },
   },
 
   planner: {

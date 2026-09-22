@@ -46,9 +46,15 @@ interface DialogProps {
   children: ReactNode;
 }
 
+/**
+ * A modal `<dialog>` is fixed to every edge of the viewport and centred by its
+ * margins, which only works while its height fits its content (`h-fit`, the
+ * browser's own default): `h-auto` would stretch it to its maximum and leave a
+ * short box at the top.
+ */
 const DIALOG_CLASSES: Record<DialogVariant, string> = {
   modal:
-    'm-0 h-dvh max-h-none w-full max-w-none md:m-auto md:h-auto md:max-h-[85dvh] md:w-[calc(100%-2rem)] md:max-w-lg',
+    'm-0 h-dvh max-h-none w-full max-w-none md:m-auto md:h-fit md:max-h-[85dvh] md:w-[calc(100%-2rem)] md:max-w-lg',
   sheet: 'mx-0 mt-auto mb-0 max-h-[85dvh] w-full max-w-none md:m-auto md:max-w-md',
   fullscreen:
     'm-0 h-dvh max-h-none w-full max-w-none md:m-auto md:h-[min(90dvh,52rem)] md:w-[calc(100%-4rem)] md:max-w-5xl',

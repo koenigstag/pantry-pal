@@ -1,25 +1,58 @@
 import { ITEM_STATUS, type ItemStatus } from '@pantry-pal/shared';
-import { and, asc, count, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 
 import type { Database } from '../client';
-import { items, subItems, type NewItemRecord, type NewSubItemRow } from '../schema';
+import {
+  items,
+  subItems,
+  type NewItemRecord,
+  type NewSubItemRow,
+  type SubItemRow,
+} from '../schema';
 import { itemRowSelection, LEAD_UNIT_ORDER, type ItemRow, type ItemUnitState } from './item-rows';
 import { syncStamp, syncWindowWhere, type SyncWindow, type WithSyncStamp } from './sync-window';
 
 export type { ItemRow, ItemUnitState } from './item-rows';
 
 /**
- * Everything the caller supplies; tenancy and identity are applied by the
- * repository, and `unitKind` by the database. `quantity` and the dates are the
- * item's units: that many are created, each with those dates.
+ * The item's own fields: everything the caller supplies but its units.
+ * Tenancy and identity are applied by the repository, and `unitKind` by the
+ * database.
  */
-export type CreateItemInput = Omit<
+export type CreateItemFieldsInput = Omit<
   NewItemRecord,
   'householdId' | 'unitKind' | 'createdAt' | 'updatedAt' | 'deletedAt'
-> &
-  Partial<ItemUnitState> & { quantity: number };
+>;
+
+/**
+ * The item's fields, and its units as `quantity` and the dates: that many units
+ * are created, each with those dates.
+ */
+export type CreateItemInput = CreateItemFieldsInput & Partial<ItemUnitState> & { quantity: number };
 
 export type UpdateItemInput = Partial<CreateItemInput>;
+
+/**
+ * One unit with a state of its own, as an import brings them: unlike the units
+ * `create` and `update` write, these need not match each other or the item's
+ * lead unit. Written active.
+ */
+export interface NewUnitInput extends ItemUnitState {
+  /** 1–100. Below 100 the unit must have been opened: see `sub_items_fill_needs_opened`. */
+  fillPercent: number;
+}
 
 export interface ListItemsFilter {
   /** Omit for every status. Soft-deleted rows are never listed. */
@@ -52,9 +85,11 @@ const CONSUME_ORDER = [
  * **Units.** An item's units are rows of `sub_items`, but every method here
  * reads and writes the item as one row (`ItemRow`), as callers always have: a
  * quantity, and one set of dates. Writing a quantity adds or consumes units;
- * writing dates sets them on every unit on the shelf, so an item's active units
- * always share one state. Anything a unit write changes also moves the item's
- * `updated_at`, which is how a sync pull finds it.
+ * writing dates sets them on every unit on the shelf. Only `createWithUnits`
+ * and `addUnits` write units in states of their own, as an import brings them;
+ * the row then shows the lead unit's, and a later date write evens them out.
+ * Anything a unit write changes also moves the item's `updated_at`, which is
+ * how a sync pull finds it.
  */
 export class ItemsRepository {
   constructor(private readonly db: Database) {}
@@ -181,15 +216,7 @@ export class ItemsRepository {
    */
   async create(householdId: string, input: CreateItemInput): Promise<ItemRow> {
     const { quantity, expiresAt, openedAt, periodAfterOpeningDays, ...fields } = input;
-
-    const [record] = await this.db
-      .insert(items)
-      .values({ ...fields, householdId })
-      .returning({ id: items.id });
-
-    // `.returning()` on a single-row insert always yields one row; the guard is
-    // for the type, not for a case that can happen.
-    if (record === undefined) throw new Error('Insert returned no row');
+    const id = await this.insertItem(householdId, fields);
 
     const state = {
       expiresAt: expiresAt ?? null,
@@ -197,12 +224,116 @@ export class ItemsRepository {
       periodAfterOpeningDays: periodAfterOpeningDays ?? null,
     };
     if (quantity > 0) {
-      await this.insertUnits(householdId, record.id, quantity, state);
+      await this.insertUnits(householdId, id, quantity, state);
     } else {
-      await this.insertUnits(householdId, record.id, 1, state, ITEM_STATUS.Consumed);
+      await this.insertUnits(householdId, id, 1, state, ITEM_STATUS.Consumed);
     }
 
-    return this.required(householdId, record.id);
+    return this.required(householdId, id);
+  }
+
+  /**
+   * Creates the item with the units given, each in a state of its own: two
+   * units of one thing can expire on different days, or one can be opened.
+   * There must be at least one.
+   */
+  async createWithUnits(
+    householdId: string,
+    input: CreateItemFieldsInput,
+    units: readonly NewUnitInput[],
+  ): Promise<ItemRow> {
+    if (units.length === 0) throw new Error('createWithUnits needs at least one unit');
+
+    const id = await this.insertItem(householdId, input);
+    await this.insertStatedUnits(householdId, id, units);
+
+    return this.required(householdId, id);
+  }
+
+  /**
+   * Adds units to a live item, each in a state of its own, and moves the item's
+   * `updated_at`, which is how a sync pull finds it. `undefined` when the item
+   * is not there.
+   */
+  async addUnits(
+    householdId: string,
+    id: string,
+    units: readonly NewUnitInput[],
+  ): Promise<ItemRow | undefined> {
+    const [record] = await this.db
+      .update(items)
+      .set({ updatedAt: new Date() })
+      .where(this.live(householdId, id))
+      .returning({ id: items.id });
+    if (record === undefined) return undefined;
+
+    await this.insertStatedUnits(householdId, id, units);
+    return this.findById(householdId, id);
+  }
+
+  /**
+   * What is on the shelves, unit by unit: the active units of the household's
+   * active items, grouped by item, oldest first within each.
+   */
+  listActiveUnits(householdId: string): Promise<SubItemRow[]> {
+    return this.db
+      .select(getTableColumns(subItems))
+      .from(subItems)
+      .innerJoin(items, eq(items.id, subItems.itemId))
+      .where(
+        and(
+          eq(items.householdId, householdId),
+          eq(items.status, ITEM_STATUS.Active),
+          isNull(items.deletedAt),
+          eq(subItems.status, ITEM_STATUS.Active),
+          isNull(subItems.deletedAt),
+        ),
+      )
+      .orderBy(asc(subItems.itemId), asc(subItems.createdAt), asc(subItems.id));
+  }
+
+  /**
+   * Which of `ids` are units of this household, in any state: consumed, and
+   * those of deleted items, count too. Every id must be a UUID.
+   */
+  async findUnitIds(householdId: string, ids: readonly string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+
+    const rows = await this.db
+      .select({ id: subItems.id })
+      .from(subItems)
+      .where(and(eq(subItems.householdId, householdId), inArray(subItems.id, [...ids])));
+
+    return new Set(rows.map((row) => row.id));
+  }
+
+  /** Items by id whatever their state, soft-deleted ones included. Every id must be a UUID. */
+  findAnyByIds(householdId: string, ids: readonly string[]): Promise<ItemRow[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+
+    return this.selectRows()
+      .query.where(and(eq(items.householdId, householdId), inArray(items.id, [...ids])))
+      .orderBy(asc(items.id));
+  }
+
+  /**
+   * Brings back a soft-deleted item, into `locationId` and with `status`, its
+   * units as they were — for a restored backup that still holds it. `undefined`
+   * when there is no such deleted item.
+   */
+  async undelete(
+    householdId: string,
+    id: string,
+    patch: { locationId: string; status: ItemStatus },
+  ): Promise<ItemRow | undefined> {
+    const [record] = await this.db
+      .update(items)
+      .set({ ...patch, deletedAt: null, updatedAt: new Date() })
+      .where(and(eq(items.householdId, householdId), eq(items.id, id), isNotNull(items.deletedAt)))
+      .returning({ id: items.id });
+    if (record === undefined) return undefined;
+
+    return this.findById(householdId, id);
   }
 
   /**
@@ -426,6 +557,19 @@ export class ItemsRepository {
     await this.db.update(subItems).set(state).where(eq(subItems.id, lead.id));
   }
 
+  /** The `items` row alone; its id, for the units that follow. */
+  private async insertItem(householdId: string, fields: CreateItemFieldsInput): Promise<string> {
+    const [record] = await this.db
+      .insert(items)
+      .values({ ...fields, householdId })
+      .returning({ id: items.id });
+
+    // `.returning()` on a single-row insert always yields one row; the guard is
+    // for the type, not for a case that can happen.
+    if (record === undefined) throw new Error('Insert returned no row');
+    return record.id;
+  }
+
   private async insertUnits(
     householdId: string,
     itemId: string,
@@ -435,6 +579,25 @@ export class ItemsRepository {
   ): Promise<void> {
     const unit: NewSubItemRow = { householdId, itemId, ...state, status };
     await this.db.insert(subItems).values(Array.from({ length: howMany }, () => ({ ...unit })));
+  }
+
+  private async insertStatedUnits(
+    householdId: string,
+    itemId: string,
+    units: readonly NewUnitInput[],
+  ): Promise<void> {
+    if (units.length === 0) return;
+
+    await this.db.insert(subItems).values(
+      units.map((unit): NewSubItemRow => ({
+        householdId,
+        itemId,
+        expiresAt: unit.expiresAt,
+        openedAt: unit.openedAt,
+        periodAfterOpeningDays: unit.periodAfterOpeningDays,
+        fillPercent: unit.fillPercent,
+      })),
+    );
   }
 
   private live(householdId: string, id: string) {

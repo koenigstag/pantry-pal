@@ -1,4 +1,4 @@
-import { formatNumber, plural, type PluralForms } from '../format';
+import { formatList, formatNumber, plural, type PluralForms } from '../format';
 import type { Messages } from '../messages';
 
 /*
@@ -544,6 +544,93 @@ export const ru = {
     saveFailed: 'Не удалось сохранить списки покупок.',
     changedElsewhere:
       'Кто-то другой изменил списки покупок, пока вы редактировали. Их изменения уже в списке: проверьте его и сохраните снова.',
+  },
+
+  data: {
+    title: 'Данные',
+    import: 'Импорт',
+    importHint: 'Добавить предметы из резервной копии или из другого приложения',
+    export: 'Экспорт',
+    exportHint: 'Сохранить места хранения и всё, что в них, в файл Excel',
+    exporting: 'Готовим файл…',
+    exported: 'Файл сохранён в загрузки.',
+    exportFailed: 'Не удалось экспортировать запасы.',
+    importFrom: 'Импорт из',
+    sources: {
+      'pantry-pal': {
+        name: 'Резервная копия Pantry Pal',
+        hint: 'Файл, сохранённый через «Экспорт»',
+        steps: [
+          'В Pantry Pal откройте «Данные» в меню ⋮ и выберите «Экспорт».',
+          'Перенесите сохранённый файл .xlsx на это устройство.',
+          'Выберите его ниже.',
+        ],
+        note: 'Ничего не заменяется: то, что уже есть, остаётся как есть, а предметы, удалённые после копии, возвращаются.',
+      },
+      'kitchen-pal': {
+        name: 'KitchenPal',
+        hint: 'Файл Excel, который экспортирует KitchenPal',
+        steps: [
+          'В KitchenPal экспортируйте инвентарь кладовой в файл Excel.',
+          'Перенесите файл .xlsx на это устройство.',
+          'Выберите его ниже.',
+        ],
+        note: 'Ничего не заменяется: всё добавляется к тому, что у вас есть, поэтому файл, импортированный дважды, добавляет всё дважды.',
+      },
+    },
+    chooseFile: 'Выбрать файл',
+    fileHint: 'Файл Excel (.xlsx)',
+    fileSize: (kilobytes: number) => `${formatNumber(kilobytes)}\u00A0КБ`,
+    submit: 'Импортировать',
+    submitting: 'Импортируем…',
+    done: 'Готово',
+    summary: {
+      title: 'Импорт завершён',
+      createdItems: 'Новые предметы',
+      updatedItems: 'Пополненные предметы',
+      restoredItems: 'Восстановленные предметы',
+      unchangedItems: 'Уже были на месте',
+      addedUnits: 'Добавлено штук',
+      nothingNew: 'Ничего нового: всё из файла уже есть.',
+      newLocations: (names: readonly string[]) =>
+        `${plural(names.length, {
+          one: 'Новое место хранения:',
+          few: 'Новые места хранения:',
+          many: 'Новые места хранения:',
+          other: 'Новые места хранения:',
+        })} ${formatList(names.map((name) => `«${name}»`))}`,
+      capped: (max: number) =>
+        `В предмете помещается до ${formatNumber(max)} штук, поэтому остальное не добавлено:`,
+      cappedItem: (name: string, count: number) => `«${name}»: ${formatNumber(count)}`,
+      skipped: (count: number) =>
+        plural(count, {
+          one: 'Пропущена # строка',
+          few: 'Пропущены # строки',
+          many: 'Пропущено # строк',
+          other: 'Пропущено # строки',
+        }),
+      skippedRow: (sheet: string, row: number, name: string | null, reason: string) =>
+        `${sheet}, строка ${formatNumber(row)}${name === null ? '' : ` («${name}»)`}: ${reason}`,
+      reasons: {
+        'no-name': 'нет названия',
+        'no-quantity': 'нет количества',
+        'nothing-left': 'ничего не осталось',
+        'unknown-item': 'указан предмет, которого нет в файле',
+        'invalid-value': 'значение, которое не удалось прочитать',
+      },
+    },
+    errors: {
+      notAWorkbook: 'Это не файл Excel (.xlsx). Выберите файл, который экспортировало приложение.',
+      wrongFormat: {
+        'pantry-pal':
+          'Это не резервная копия Pantry Pal, или её сделала более новая версия Pantry Pal.',
+        'kitchen-pal': 'Это не экспорт KitchenPal: в нём нет столбцов Product и Pieces.',
+      },
+      tooManyRows: (max: number) =>
+        `В файле больше ${formatNumber(max)} строк — больше, чем принимает один импорт.`,
+      tooLarge: (megabytes: number) =>
+        `Файл слишком большой: импорт принимает до ${formatNumber(megabytes)}\u00A0МБ.`,
+    },
   },
 
   planner: {

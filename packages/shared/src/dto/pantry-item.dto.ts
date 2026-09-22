@@ -21,6 +21,7 @@ import {
   MAX_ITEM_NOTES_LENGTH,
   MAX_ITEM_QUANTITY,
   MAX_PERIOD_AFTER_OPENING_DAYS,
+  MAX_SIZE_VALUE,
   MAX_UNIT_CODE_LENGTH,
   SIZE_DECIMAL_PLACES,
 } from '../constants';
@@ -91,7 +92,7 @@ export class CreatePantryItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: SIZE_DECIMAL_PLACES })
   @IsPositive()
-  @Max(MAX_ITEM_QUANTITY)
+  @Max(MAX_SIZE_VALUE)
   sizeValue?: number | null;
 
   @IsOptional()
@@ -173,7 +174,7 @@ export class UpdatePantryItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: SIZE_DECIMAL_PLACES })
   @IsPositive()
-  @Max(MAX_ITEM_QUANTITY)
+  @Max(MAX_SIZE_VALUE)
   sizeValue?: number | null;
 
   @IsOptional()

@@ -33,6 +33,7 @@ src/features/profile/      the account's details: fields shared by onboarding an
 src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), PageStatus
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/shopping/     the Shopping page, the list picker, the lists editor, sharing as text
+src/features/data/         the Data sheet: exporting a backup, importing one or another app's file
 src/features/pages.tsx     Planner placeholder, Profile
 src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore
 src/offline/               the offline mirror: RxDB database, replication, merge rules, forgetting on sign-out
@@ -342,7 +343,9 @@ would refuse a contradicting value.
   plain heading. A modal form therefore shows its own Cancel/Save row only from
   `md` up (`hidden md:flex`), and the header action submits it through
   `form={formId}`. Keep a dialog mounted and toggle `open`, so focus can return
-  to the opener.
+  to the opener. The box is centred by its margins, which needs its height to
+  fit the content (`md:h-fit`): a fixed `<dialog>` with `h-auto` stretches to its
+  maximum and leaves a short box at the top.
 - **A dialog never closes itself.** Escape (its `cancel` event is prevented), the
   backdrop and the close button only call `onClose`; the owner closes it by
   setting `open` to false or unmounting it, and may decline — a blocked
@@ -513,6 +516,43 @@ lists.
   clipboard, and a notice says so. Only `text` is shared, since some apps paste a
   `title` too.
 
+### The Data sheet
+
+**Data** in the Storage page's ⋮ menu opens `DataDialog`: Export and Import, then
+the sources to import from (a Pantry Pal backup, KitchenPal), then one source's
+file. The steps are views of one `modal` dialog, full-screen on a phone, with Back
+in the header bar there and at the foot from `md` up; every opening starts at the
+menu. The backend's `CLAUDE.md` has what a backup holds and how an import matches
+what the household has.
+
+- **Both are online REST calls**, like the editors: `PantryStore.exportBackup` and
+  `importFile` first wait, briefly, for this device's changes to reach the server,
+  so a backup holds them and an import meets the items as they are. After an
+  import the store pulls; the broadcasts would bring the same.
+- **The export is a download**: `api.exportBackup` reads the answer as a `Blob`
+  (`http.receive`), and `saveFile` clicks a `download` link to it. The link goes
+  inside the dialog, since a modal dialog makes the rest of the page inert. The
+  service worker leaves `/export` out of its read cache: an old backup handed out
+  as today's would be worse than none.
+- **The file picker is a `label` round a visually hidden input**, so its words come
+  from the catalog rather than the browser's own "No file chosen". A file over
+  `MAX_IMPORT_FILE_BYTES` is refused before it is sent. `http.send` leaves the
+  content type to a `FormData` body, which sets the multipart boundary itself.
+- **Refusals are named by their `code`**: `ApiError.code` carries the body's, and
+  `importError` in `PantryStore` picks the catalog's words for it; a 413 is "too
+  large" whoever sent it, since a proxy in front of the API may.
+- **The summary counts the household's items** — new, topped up, restored, already
+  here — and lists new storage spaces, items that reached the quantity limit, and
+  skipped rows with their reasons. Its heading takes focus, since it replaces the
+  form and its button.
+
+### The text assistant: planned
+
+Not built: a sheet where people type, dictate or paste what they did or what a
+storage space holds, see Claude's reading of it as tickable changes, and apply
+them. The design, and what it waits for, is in the backend's `CLAUDE.md` (Text
+assistant: planned).
+
 ## Installable, and usable offline
 
 `vite-plugin-pwa` (Workbox) writes a manifest and a service worker into `dist`,
@@ -531,7 +571,8 @@ worker on, Chrome among the ones that allow it.
   `pantry-api-reads`, five seconds before it gives up on the network — so the
   bootstrap (the user, households, units, categories) answers offline, and the
   header's Offline badge says why the rest is not live. Sync pulls stay out of
-  it, since the mirror keeps its own copy and a cached page would skip changes.
+  it, since the mirror keeps its own copy and a cached page would skip changes,
+  and so does the export (The Data sheet).
   Writes are never cached: the everyday ones go to the mirror, the rest fail.
   - The cache is keyed by URL alone, so `services/apiCache.ts` empties it
     whenever a session starts or ends (`AuthStore`): the next account to sign in

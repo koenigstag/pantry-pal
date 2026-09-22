@@ -1,4 +1,4 @@
-import { formatNumber, plural, type PluralForms } from '../format';
+import { formatList, formatNumber, plural, type PluralForms } from '../format';
 import type { Messages } from '../messages';
 
 /*
@@ -520,6 +520,86 @@ export const es = {
     saveFailed: 'No se han podido guardar las listas de la compra.',
     changedElsewhere:
       'Otra persona ha cambiado las listas de la compra mientras editabas. Sus cambios ya están en la lista: revísala y vuelve a guardar.',
+  },
+
+  data: {
+    title: 'Datos',
+    import: 'Importar',
+    importHint: 'Añade artículos desde una copia de seguridad o desde otra aplicación',
+    export: 'Exportar',
+    exportHint:
+      'Guarda tus lugares de almacenamiento y todo lo que contienen en un archivo de Excel',
+    exporting: 'Preparando el archivo…',
+    exported: 'Guardado en tus descargas.',
+    exportFailed: 'No se ha podido exportar tu despensa.',
+    importFrom: 'Importar desde',
+    sources: {
+      'pantry-pal': {
+        name: 'Copia de seguridad de Pantry Pal',
+        hint: 'Un archivo guardado con «Exportar»',
+        steps: [
+          'En Pantry Pal, abre «Datos» en el menú ⋮ y elige «Exportar».',
+          'Pasa a este dispositivo el archivo .xlsx que se guarda.',
+          'Elígelo abajo.',
+        ],
+        note: 'No se sustituye nada: lo que ya está se queda como está, y los artículos eliminados después de la copia vuelven.',
+      },
+      'kitchen-pal': {
+        name: 'KitchenPal',
+        hint: 'El archivo de Excel que exporta KitchenPal',
+        steps: [
+          'En KitchenPal, exporta el inventario de tu despensa a un archivo de Excel.',
+          'Pasa el archivo .xlsx a este dispositivo.',
+          'Elígelo abajo.',
+        ],
+        note: 'No se sustituye nada: todo se suma a lo que tienes, así que un archivo importado dos veces lo suma dos veces.',
+      },
+    },
+    chooseFile: 'Elegir un archivo',
+    fileHint: 'Un archivo de Excel (.xlsx)',
+    fileSize: (kilobytes: number) => `${formatNumber(kilobytes)}\u00A0KB`,
+    submit: 'Importar',
+    submitting: 'Importando…',
+    done: 'Hecho',
+    summary: {
+      title: 'Importación terminada',
+      createdItems: 'Artículos nuevos',
+      updatedItems: 'Artículos repuestos',
+      restoredItems: 'Artículos recuperados',
+      unchangedItems: 'Artículos que ya estaban',
+      addedUnits: 'Unidades añadidas',
+      nothingNew: 'Nada nuevo: todo lo del archivo ya está aquí.',
+      newLocations: (names: readonly string[]) =>
+        `${plural(names.length, { one: 'Nuevo lugar de almacenamiento:', other: 'Nuevos lugares de almacenamiento:' })} ${formatList(names.map((name) => `«${name}»`))}`,
+      capped: (max: number) =>
+        `Un artículo admite hasta ${formatNumber(max)} unidades, así que esto se ha quedado fuera:`,
+      cappedItem: (name: string, count: number) => `«${name}»: ${formatNumber(count)}`,
+      skipped: (count: number) =>
+        plural(count, { one: 'Se ha omitido # fila', other: 'Se han omitido # filas' }),
+      skippedRow: (sheet: string, row: number, name: string | null, reason: string) =>
+        `${sheet}, fila ${formatNumber(row)}${name === null ? '' : ` («${name}»)`}: ${reason}`,
+      reasons: {
+        'no-name': 'sin nombre',
+        'no-quantity': 'sin cantidad',
+        'nothing-left': 'no queda nada',
+        'unknown-item': 'nombra un artículo que el archivo no tiene',
+        'invalid-value': 'un valor que no se puede leer',
+      },
+    },
+    errors: {
+      notAWorkbook:
+        'Esto no es un archivo de Excel (.xlsx). Elige el archivo que exportó la aplicación.',
+      wrongFormat: {
+        'pantry-pal':
+          'Este archivo no es una copia de seguridad de Pantry Pal, o lo creó una versión más reciente de Pantry Pal.',
+        'kitchen-pal':
+          'Este archivo no es una exportación de KitchenPal: no tiene las columnas Product y Pieces.',
+      },
+      tooManyRows: (max: number) =>
+        `Este archivo tiene más de ${formatNumber(max)} filas, más de las que admite una importación.`,
+      tooLarge: (megabytes: number) =>
+        `Este archivo es demasiado grande: una importación admite hasta ${formatNumber(megabytes)}\u00A0MB.`,
+    },
   },
 
   planner: {
