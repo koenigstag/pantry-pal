@@ -28,6 +28,8 @@ export interface StorageParams {
    * take it as a prop.
    */
   itemLink: (itemId: string) => Partial<Path>;
+  /** The same, for a location that is not the open one — a space a swipe is showing. */
+  itemLinkIn: (locationId: string, itemId: string) => Partial<Path>;
 }
 
 /**
@@ -68,12 +70,17 @@ export function useStorageParams(): StorageParams {
     [search],
   );
 
-  const itemLink = useCallback(
-    (id: string): Partial<Path> => ({
-      pathname: `/storage/${encodeURIComponent(locationId ?? '')}/items/${encodeURIComponent(id)}`,
+  const itemLinkIn = useCallback(
+    (inLocationId: string, id: string): Partial<Path> => ({
+      pathname: `/storage/${encodeURIComponent(inLocationId)}/items/${encodeURIComponent(id)}`,
       search: search === '' ? '' : `?${search}`,
     }),
-    [locationId, search],
+    [search],
+  );
+
+  const itemLink = useCallback(
+    (id: string): Partial<Path> => itemLinkIn(locationId ?? '', id),
+    [itemLinkIn, locationId],
   );
 
   return {
@@ -85,6 +92,7 @@ export function useStorageParams(): StorageParams {
     toggleDirection: () => update(sort, direction === 'asc' ? 'desc' : 'asc'),
     locationLink,
     itemLink,
+    itemLinkIn,
   };
 }
 

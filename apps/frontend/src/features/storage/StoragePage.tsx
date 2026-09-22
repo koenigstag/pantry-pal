@@ -2,11 +2,12 @@ import type { PantryItem } from '@pantry-pal/shared';
 import { CheckCheck, PackagePlus, RefreshCw, SquarePen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
-import { Navigate, Outlet } from 'react-router';
+import { Navigate, Outlet, useNavigate } from 'react-router';
 
 import { messages } from '../../i18n/messages';
 import { usePantryStore } from '../../stores/StoreContext';
 import type { MenuItem } from '../../ui/Menu';
+import { SwipePager } from '../../ui/SwipePager';
 import { PageStatus } from '../shell/PageStatus';
 import { AddToListSheet, type ListPick } from '../shopping/AddToListSheet';
 import { AddItemDialog } from './AddItemDialog';
@@ -47,6 +48,7 @@ const NOTHING_SELECTED: ReadonlySet<string> = new Set();
 export const StoragePage = observer(function StoragePage(): ReactElement {
   const pantry = usePantryStore();
   const params = useStorageParams();
+  const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
   const [isSearchOpen, setSearchOpen] = useState(false);
@@ -102,12 +104,15 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
   }
 
   const isSearching = query.trim() !== '';
-  const visibleItems = sortItems(
-    filterItems(pantry.itemsIn(location.id), query),
-    params.sort,
-    params.direction,
-    pantry.unitLabel,
-  );
+  /** What a space shows now: its items, searched and sorted as the page asks. */
+  const visibleItemsIn = (id: string): readonly PantryItem[] =>
+    sortItems(
+      filterItems(pantry.itemsIn(id), query),
+      params.sort,
+      params.direction,
+      pantry.unitLabel,
+    );
+  const visibleItems = visibleItemsIn(location.id);
 
   // Only what is on screen counts as selected: never act on items a search hides.
   const selectedIds =
@@ -156,7 +161,10 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
   ];
 
   return (
-    <div className="flex min-h-full flex-col">
+    // At least a screen tall (above the phone's tab bar), like the Shopping page, so the
+    // pager below fills what the header leaves and a swipe between spaces takes the whole
+    // page area rather than only the rows of cards.
+    <div className="flex min-h-[calc(100dvh-4rem-env(safe-area-inset-bottom))] flex-col md:min-h-dvh">
       <StorageHeader
         query={query}
         onQueryChange={setQuery}
@@ -173,10 +181,10 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         />
       </StorageHeader>
 
-      <section className="mx-auto w-full max-w-7xl flex-1 px-4 pt-3 pb-6 md:px-8">
+      <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col pt-3">
         <h2 className="sr-only">{locationName(location)}</h2>
 
-        <div className="mb-3 flex min-h-11 items-center gap-2">
+        <div className="mb-3 flex min-h-11 items-center gap-2 px-4 md:px-8">
           {selectedIds.size > 0 ? (
             <SelectionBar
               count={selectedIds.size}
@@ -203,22 +211,47 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
           )}
         </div>
 
-        {isSearching && visibleItems.length === 0 ? (
-          <p className="py-16 text-center text-ink-muted">
-            {messages.storage.noMatches(query.trim(), locationName(location))}
-          </p>
-        ) : (
-          <ItemGrid
-            items={visibleItems}
-            selectedIds={selectedIds}
-            detailsLink={params.itemLink}
-            onToggleSelected={toggleSelected}
-            onRemove={openRemoveSheet}
-            // An empty space shows only the plus card. Search results don't: a new item
-            // would not be among them.
-            onAdd={isSearching ? undefined : () => setSheet({ kind: 'add' })}
-          />
-        )}
+        {/*
+          Swiping sideways over the items moves to the next space, whose own
+          items follow the finger. Each pane carries the page's padding, so they
+          slide in from the edge of the screen rather than from a margin, and the
+          pager itself fills the page — every part of it takes a swipe, not only
+          the rows of cards.
+        */}
+        <SwipePager
+          pages={pantry.locations}
+          active={location}
+          // Where that space's tab leads, so a swipe and a tap end up the same.
+          onSwipe={(id) => void navigate(params.locationLink(id))}
+        >
+          {(space) => {
+            const isOpen = space.id === location.id;
+            const spaceItems = isOpen ? visibleItems : visibleItemsIn(space.id);
+
+            return (
+              <div className="px-4 pb-6 md:px-8">
+                {isSearching && spaceItems.length === 0 ? (
+                  <p className="py-16 text-center text-ink-muted">
+                    {messages.storage.noMatches(query.trim(), locationName(space))}
+                  </p>
+                ) : (
+                  <ItemGrid
+                    items={spaceItems}
+                    selectedIds={isOpen ? selectedIds : NOTHING_SELECTED}
+                    detailsLink={
+                      isOpen ? params.itemLink : (itemId) => params.itemLinkIn(space.id, itemId)
+                    }
+                    onToggleSelected={toggleSelected}
+                    onRemove={openRemoveSheet}
+                    // An empty space shows only the plus card. Search results don't: a new item
+                    // would not be among them.
+                    onAdd={isSearching ? undefined : () => setSheet({ kind: 'add' })}
+                  />
+                )}
+              </div>
+            );
+          }}
+        </SwipePager>
       </section>
 
       <Outlet context={outletContext} />

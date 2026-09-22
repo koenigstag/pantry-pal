@@ -37,7 +37,7 @@ src/features/pages.tsx     Planner placeholder, Profile
 src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore
 src/offline/               the offline mirror: RxDB database, replication, merge rules, forgetting on sign-out
 src/services/              http (fetch), session (tokens), api (REST and sync), socket
-src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, cn
+src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, SwipePager, cn
 src/i18n/                  message catalog and Intl formatters
 ```
 
@@ -54,6 +54,10 @@ src/i18n/                  message catalog and Intl formatters
 - Shopping URL state is `/shopping/:listId`, a tab per list in use like the
   storage spaces'; `/shopping` alone, or an archived or deleted list's URL,
   redirects to the first list in use.
+- **Both tab rows are swipeable** (`ui/SwipePager`): a finger dragged sideways
+  over the items, or over the entries, changes storage space or shopping list
+  and navigates exactly where that tab leads — so the back button walks through
+  them however they were reached. See UI primitives below.
 - An item's details are a child route, `/storage/:locationId/items/:itemId`,
   rendered by `ItemDetailsDialog` into `StoragePage`'s `<Outlet>` over the list.
   The back button closes them. The card's link carries `OPENED_FROM_LIST` state,
@@ -373,6 +377,50 @@ would refuse a contradicting value.
     scrolling the list. During a keyboard drag, the sensor cancels Escape's
     `keydown`, so Escape cancels the drag and the dialog stays open.
 
+### Swiping between tabs — `ui/SwipePager`
+
+The primitive behind both tab rows: a finger dragged sideways over the contents
+moves to the next or previous tab's page, with that page's own contents
+following the finger the whole way — half a swipe shows half of each. Letting go
+finishes the move, which navigates like the tab would (`onSwipe`), or takes it
+back. `StoragePage` pages between storage spaces this way, `ShoppingPage`
+between shopping lists.
+
+- **The neighbours are real panes**, rendered by the same render prop as the
+  open page, so they show what that page actually holds — a space's items,
+  searched and sorted as the page asks (`visibleItemsIn`), or a list's entries
+  to buy and in the cart (`toBuyAndCart`).
+- **Touch and pen only.** A mouse has the tabs, and dragging with one selects
+  text. The tabs remain the way there for everyone: the peek panes are
+  `pointer-events-none`, `inert` and `aria-hidden`, so they reach neither the tab
+  order nor a screen reader, and they are mounted only while a swipe shows them.
+- **The page still scrolls and zooms.** `touch-action: pan-y pinch-zoom` leaves
+  both to the browser, and a gesture is claimed only once it has travelled
+  further sideways than down; a vertical start is let go of for good. A click
+  landing just after a swipe is swallowed, so a swipe that ends over a card or a
+  row does not open it.
+- **`overflow-x: clip`, never `hidden`**, which would make the pager a scroll
+  container on both axes and move the page's own vertical scrolling into it.
+- **A drag costs no renders:** the offset is written straight to the track's
+  `transform`, and React hears about a swipe twice — to mount the neighbours,
+  and to settle. So neither page re-renders while a finger moves.
+- **The offset is dropped in the frame the new page arrives** (a layout effect
+  watching the open page), where its pane stands exactly where the peek pane
+  stood: the swap cannot be seen. Anything else that navigates mid-swipe — a tab
+  tapped, a space or list deleted — ends the pan the same way.
+- Past the first or last tab the panes still give, a little, and spring back:
+  there is no wrapping around, as there is none in the tabs.
+- **The pager fills the page**, which on both pages is at least a screen tall
+  above the phone's tab bar: a space holding one card takes a swipe anywhere
+  below it, not only over the card, and a sparse page gains no scrolling of its
+  own. A neighbour's pane takes that same height (`inset-y-0` on the track) and
+  keeps what does not fit to itself, so bringing it into view never moves the
+  page below. Each pane carries the page's padding, which is why the sections
+  themselves have none: the panes slide in from the edge of the screen rather
+  than from a margin.
+- The Shopping page's Bought bar stays put while a swipe runs: it is an action
+  on the open list, not its contents, and follows once the swipe lands.
+
 ## Localization
 
 The UI speaks English, Ukrainian, Russian, German, French (France and Canada)
@@ -450,7 +498,8 @@ lists.
   every render (`shoppingListDraft.ts`), like the locations editor's, and a 409
   refetches for another try. Archived lists sit in their own group below.
 - **Archived lists are frozen**, so only the editor shows them: not the tabs, the
-  picker, or the item form's choices (`pantry.activeShoppingLists`).
+  picker, or the item form's choices (`pantry.activeShoppingLists`) — and not the
+  swipe, which pages through exactly what the tabs offer.
 - **Bought** (the button under the ticked entries, "Bought 2") sends the ticked
   entries shown to the put-away endpoint (`PantryStore.putAwayShopping`), which
   restocks their items and takes them off the list. The copy says what the user
