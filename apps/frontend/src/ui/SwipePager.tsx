@@ -1,4 +1,3 @@
-import type { PantryLocation } from '@pantry-pal/shared';
 import { observer } from 'mobx-react-lite';
 import {
   useEffect,
@@ -10,9 +9,8 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { useNavigate, type Path } from 'react-router';
 
-import { cn } from '../../ui/cn';
+import { cn } from './cn';
 
 /** Below this much travel a gesture could still turn out to be the page scrolling. */
 const AXIS_SLOP = 10;
@@ -36,7 +34,7 @@ const SETTLE_EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 const CLICK_GRACE_MS = 120;
 
 /**
- * A swipe in progress, or the animation that ends it. `fromId` is the space the
+ * A swipe in progress, or the animation that ends it. `fromId` is the page the
  * pager was showing when it started: once that is no longer the open one, the
  * swipe arrived (or something else navigated), and the pan is over.
  */
@@ -48,7 +46,7 @@ interface Gesture {
   /** Moves by `AXIS_SLOP` once the axis is settled, so the panes start from rest. */
   startX: number;
   startY: number;
-  /** The pager's width, measured once: a swipe across it all is a whole space. */
+  /** The pager's width, measured once: a swipe across it all is a whole page. */
   width: number;
   /** -1 where the page reads right to left, so a drag's sign is its reading direction. */
   sign: number;
@@ -59,52 +57,54 @@ interface Gesture {
   velocity: number;
 }
 
-interface LocationPagerProps {
-  /** Every storage space of the household, in the order the tabs show them. */
-  locations: readonly PantryLocation[];
-  /** The space the page is showing, which is one of `locations`. */
-  active: PantryLocation;
-  /** Where a space lives: a swipe navigates exactly where that space's tab leads. */
-  link: (locationId: string) => Partial<Path>;
+interface SwipePagerProps<T extends { id: string }> {
+  /** Every page the tabs offer, in the order they offer them. */
+  pages: readonly T[];
+  /** The page on screen, which is one of `pages`. */
+  active: T;
   /**
-   * One space's items. Called for the open space, and for a neighbour while a
-   * swipe is showing it — so it must render any space, not just the open one.
+   * A swipe settled on another page: go there, exactly as tapping its tab would
+   * — normally a navigation, which brings that page back as `active`.
    */
-  children: (location: PantryLocation) => ReactNode;
+  onSwipe: (id: string) => void;
+  /**
+   * One page's contents. Called for the open page, and for a neighbour while a
+   * swipe is showing it — so it must render any page, not just the open one.
+   */
+  children: (page: T) => ReactNode;
 }
 
 /**
- * Swiping sideways over the items moves to the next or previous storage space,
- * the neighbour's own items following the finger the whole way: half a swipe
- * shows half of each space, and letting go either finishes the move or takes it
- * back.
+ * A row of tabs, swipeable: dragging sideways over the contents moves to the
+ * next or previous tab's page, the neighbour's own contents following the finger
+ * the whole way — half a swipe shows half of each — and letting go either
+ * finishes the move or takes it back. The Storage page pages between storage
+ * spaces this way, the Shopping page between shopping lists.
  *
  * The neighbours are real panes, rendered by the same `children` as the open
- * space and laid out either side of it, absolutely, so they take the open pane's
- * height and the page below does not move while they come into view. They are
- * mounted only while a swipe is showing them, and are `inert` and hidden from
- * assistive technology: the tabs above are the way there for everyone not
- * dragging a finger.
+ * page and laid out either side of it, absolutely, so they take its height and
+ * the page below does not move while they come into view. They are mounted only
+ * while a swipe is showing them, and are `inert` and hidden from assistive
+ * technology: the tabs are the way there for everyone not dragging a finger.
  *
  * It fills the height its parent leaves it (`flex-1`, in a page that is at least
- * a screen tall), so a space holding one card takes a swipe anywhere below it,
- * not only over the card.
+ * a screen tall), so a page holding one row takes a swipe anywhere below it, not
+ * only over that row.
  *
- * A committed swipe navigates, exactly as tapping that space's tab would — so
- * the back button walks through the spaces visited either way. The offset is
- * dropped in the same frame the new space arrives, where its pane stands exactly
- * where the peek pane stood, so nothing jumps.
+ * `onSwipe` navigates, exactly as tapping that tab would — so the back button
+ * walks through the pages visited either way. The offset is dropped in the same
+ * frame the new page arrives, where its pane stands exactly where the peek pane
+ * stood, so nothing jumps.
  *
  * The drag itself costs no renders: the transform is written straight to the
  * track. React hears about a swipe twice, to mount the neighbours and to settle.
  */
-export const LocationPager = observer(function LocationPager({
-  locations,
+export const SwipePager = observer(function SwipePager<T extends { id: string }>({
+  pages,
   active,
-  link,
+  onSwipe,
   children,
-}: LocationPagerProps): ReactElement {
-  const navigate = useNavigate();
+}: SwipePagerProps<T>): ReactElement {
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<Gesture | null>(null);
@@ -112,11 +112,11 @@ export const LocationPager = observer(function LocationPager({
   const swallowClickUntil = useRef(0);
   const [pan, setPan] = useState<Pan | null>(null);
 
-  const index = locations.findIndex((candidate) => candidate.id === active.id);
-  const previous = index > 0 ? locations[index - 1] : undefined;
-  const next = index === -1 ? undefined : locations[index + 1];
-  // A pan that started in another space is one the layout effect below is about
-  // to end: its peek panes belong to that space, and are gone already.
+  const index = pages.findIndex((candidate) => candidate.id === active.id);
+  const previous = index > 0 ? pages[index - 1] : undefined;
+  const next = index === -1 ? undefined : pages[index + 1];
+  // A pan that started on another page is one the layout effect below is about
+  // to end: its peek panes belong to that page, and are gone already.
   const isPanning = pan !== null && pan.fromId === active.id;
 
   function clearSettleTimer(): void {
@@ -129,9 +129,9 @@ export const LocationPager = observer(function LocationPager({
 
   useLayoutEffect(() => {
     if (pan !== null && pan.fromId !== active.id) {
-      // The swipe arrived: the new space's pane stands exactly where the peek
+      // The swipe arrived: the new page's pane stands exactly where the peek
       // pane stood, so dropping the offset now moves nothing on screen. A tab
-      // tapped, or a space deleted, ends a pan the same way.
+      // tapped, or a page deleted, ends a pan the same way.
       gestureRef.current = null;
       clearSettleTimer();
       setPan(null);
@@ -148,7 +148,7 @@ export const LocationPager = observer(function LocationPager({
   /** Where the track sits for a finger that has travelled `dx`. */
   function offsetFor(dx: number, gesture: Gesture): number {
     if ((dx * gesture.sign < 0 ? next : previous) !== undefined) {
-      // No further than the neighbour: one space is as far as one swipe goes,
+      // No further than the neighbour: one page is as far as one swipe goes,
       // and past its far edge there would be nothing to show.
       return Math.sign(dx) * Math.min(Math.abs(dx), gesture.width);
     }
@@ -256,10 +256,10 @@ export const LocationPager = observer(function LocationPager({
     settleTimer.current = window.setTimeout(() => {
       settleTimer.current = null;
       // Navigating is what ends a finished swipe: the layout effect above drops
-      // the offset once the space it asked for is the open one. One that fell
+      // the offset once the page it asked for is the open one. One that fell
       // short has slid back already, and only has to let go.
       if (destination === undefined) setPan(null);
-      else navigate(link(destination.id));
+      else onSwipe(destination.id);
     }, duration);
   }
 
@@ -274,7 +274,7 @@ export const LocationPager = observer(function LocationPager({
       ref={viewportRef}
       // `clip` rather than `hidden`: the peek panes are cut off at the sides
       // without the page's own vertical scrolling moving in here. `flex-1` takes
-      // whatever height the page leaves, so the empty part of a sparse space is
+      // whatever height the page leaves, so the empty part of a sparse page is
       // swipeable too.
       className="relative flex flex-1 flex-col touch-pan-y touch-pinch-zoom overflow-x-clip"
       onPointerDown={begin}
@@ -293,8 +293,8 @@ export const LocationPager = observer(function LocationPager({
 });
 
 /**
- * A neighbouring space, waiting just off the edge. It takes the track's height
- * (`inset-y-0`) — the page's, or the open pane's where that is taller — and
+ * A neighbouring page, waiting just off the edge. It takes the track's height
+ * (`inset-y-0`) — the screen's, or the open pane's where that is taller — and
  * keeps whatever does not fit to itself, so bringing it into view never moves
  * the page below.
  */

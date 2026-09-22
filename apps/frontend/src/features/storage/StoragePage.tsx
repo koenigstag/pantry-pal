@@ -2,11 +2,12 @@ import type { PantryItem } from '@pantry-pal/shared';
 import { CheckCheck, PackagePlus, RefreshCw, SquarePen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
-import { Navigate, Outlet } from 'react-router';
+import { Navigate, Outlet, useNavigate } from 'react-router';
 
 import { messages } from '../../i18n/messages';
 import { usePantryStore } from '../../stores/StoreContext';
 import type { MenuItem } from '../../ui/Menu';
+import { SwipePager } from '../../ui/SwipePager';
 import { PageStatus } from '../shell/PageStatus';
 import { AddToListSheet, type ListPick } from '../shopping/AddToListSheet';
 import { AddItemDialog } from './AddItemDialog';
@@ -16,7 +17,6 @@ import { filterItems, sortItems } from './itemOrder';
 import { DeleteItemsSheet, MoveItemsSheet, RemoveItemSheet } from './ItemSheets';
 import { LocationEditorDialog } from './LocationEditorDialog';
 import { locationName } from './locationName';
-import { LocationPager } from './LocationPager';
 import { LocationTabs } from './LocationTabs';
 import { StorageHeader } from './StorageHeader';
 import { SelectionBar, SortControl } from './StorageToolbar';
@@ -48,6 +48,7 @@ const NOTHING_SELECTED: ReadonlySet<string> = new Set();
 export const StoragePage = observer(function StoragePage(): ReactElement {
   const pantry = usePantryStore();
   const params = useStorageParams();
+  const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
   const [isSearchOpen, setSearchOpen] = useState(false);
@@ -217,7 +218,12 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
           pager itself fills the page — every part of it takes a swipe, not only
           the rows of cards.
         */}
-        <LocationPager locations={pantry.locations} active={location} link={params.locationLink}>
+        <SwipePager
+          pages={pantry.locations}
+          active={location}
+          // Where that space's tab leads, so a swipe and a tap end up the same.
+          onSwipe={(id) => void navigate(params.locationLink(id))}
+        >
           {(space) => {
             const isOpen = space.id === location.id;
             const spaceItems = isOpen ? visibleItems : visibleItemsIn(space.id);
@@ -245,7 +251,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
               </div>
             );
           }}
-        </LocationPager>
+        </SwipePager>
       </section>
 
       <Outlet context={outletContext} />
