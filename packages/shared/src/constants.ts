@@ -328,3 +328,15 @@ export const MAX_UNIT_LABEL_LENGTH = 16;
 
 export const MAX_CATEGORY_CODE_LENGTH = 32;
 export const MAX_CATEGORY_LABEL_LENGTH = 40;
+
+/**
+ * An `ingredients.id`: the Open Food Facts taxonomy's language and name,
+ * `en:whole-milk`. The longest in the taxonomy is under 100 characters.
+ */
+export const MAX_INGREDIENT_ID_LENGTH = 160;
+/** A search for an ingredient: about an item name's length. */
+export const MAX_INGREDIENT_QUERY_LENGTH = MAX_ITEM_NAME_LENGTH;
+/** How many ingredients a search answers with, best first. */
+export const INGREDIENT_SEARCH_LIMIT = 20;
+/** How many ingredients one lookup by id may name: a page of a household's items. */
+export const MAX_INGREDIENT_LOOKUP_IDS = 200;

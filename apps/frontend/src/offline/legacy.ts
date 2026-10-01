@@ -10,6 +10,7 @@ import {
 import {
   createRxDatabase,
   type RxCollection,
+  type RxConflictHandler,
   type RxDatabase,
   type RxJsonSchema,
   type RxStorage,
@@ -17,27 +18,32 @@ import {
 import { replicateRxCollection, type RxReplicationState } from 'rxdb/plugins/replication';
 
 import { deleteDatabases, findDatabases, MIRROR_PREFIX } from './forget';
-import { conflictHandler, Refusals } from './merge';
+import { conflictHandler, itemConflictHandler, Refusals } from './merge';
 import type { MirroredDocument, MirrorRefusal, MirrorTransport } from './mirror';
 
-/**
- * The mirror's version before items had units. A device that last ran it may
- * still hold changes it never sent — made offline, and the app closed before
- * it was back online — which the new database, pulled fresh from the server,
- * would never know about.
+/*
+ * The mirror's earlier versions. A device that last ran one may still hold
+ * changes it never sent — made offline, and the app closed before it was back
+ * online — which the new database, pulled fresh from the server, would never
+ * know about.
+ *
+ *   1  items without units
+ *   2  items with units, without an ingredient
  */
-const LEGACY_VERSION = 1;
 
 /** How long a drain may take before it gives up, until the next start. */
 const DRAIN_TIMEOUT_MS = 30_000;
 
 /** An item as version 1 held it: without units, which the server still takes. */
-type LegacyItem = Omit<PantryItem, 'subItems'>;
+type LegacyItem = Omit<PantryItem, 'subItems' | 'ingredientId'>;
+
+/** An item as version 2 held it: without an ingredient, which the server still takes. */
+type Version2Item = Omit<PantryItem, 'ingredientId'>;
 
 /*
- * Version 1's schemas, exactly as they were: RxDB opens a database only with
- * the schemas it was made with. Never change these; a later version that
- * replaces the mirror again brings its own copies.
+ * The earlier versions' schemas, exactly as they were: RxDB opens a database
+ * only with the schemas it was made with. Never change these; a later version
+ * that replaces the mirror again brings its own copies.
  */
 const ID = { type: 'string', maxLength: 36 } as const;
 const TEXT = { type: 'string' } as const;
@@ -90,7 +96,74 @@ const legacyEntrySchema: RxJsonSchema<ShoppingListEntry> = {
   required: ['id', 'householdId', 'listId', 'itemId', 'quantity'],
 };
 
-/** The fields version 1 changed on an item and an entry, merged as it merged them. */
+/** Version 2's unit, inside its item. */
+const SUB_ITEM = {
+  type: 'object',
+  properties: {
+    id: ID,
+    expiresAt: NULLABLE_TEXT,
+    openedAt: NULLABLE_TEXT,
+    periodAfterOpeningDays: { type: ['integer', 'null'] },
+    effectiveExpiresAt: NULLABLE_TEXT,
+    fillPercent: { type: 'integer' },
+    status: TEXT,
+    createdAt: INSTANT,
+    updatedAt: INSTANT,
+  },
+  required: [
+    'id',
+    'expiresAt',
+    'openedAt',
+    'periodAfterOpeningDays',
+    'effectiveExpiresAt',
+    'fillPercent',
+    'status',
+    'createdAt',
+    'updatedAt',
+  ],
+} as const;
+
+const version2ItemSchema: RxJsonSchema<Version2Item> = {
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: ID,
+    householdId: ID,
+    locationId: ID,
+    productId: { type: ['string', 'null'] },
+    name: TEXT,
+    category: TEXT,
+    isEdible: { type: 'boolean' },
+    quantity: { type: 'integer' },
+    unit: TEXT,
+    sizeValue: { type: ['number', 'null'] },
+    sizeUnit: NULLABLE_TEXT,
+    expiresAt: NULLABLE_TEXT,
+    openedAt: NULLABLE_TEXT,
+    periodAfterOpeningDays: { type: ['integer', 'null'] },
+    effectiveExpiresAt: NULLABLE_TEXT,
+    notes: NULLABLE_TEXT,
+    status: TEXT,
+    defaultShoppingListId: { type: ['string', 'null'] },
+    subItems: { type: 'array', items: SUB_ITEM },
+    createdAt: INSTANT,
+    updatedAt: INSTANT,
+  },
+  required: [
+    'id',
+    'householdId',
+    'locationId',
+    'name',
+    'category',
+    'quantity',
+    'unit',
+    'status',
+    'subItems',
+  ],
+};
+
+/** The fields versions 1 and 2 changed on an item and an entry, merged as they merged them. */
 const LEGACY_ITEM_FIELDS = [
   'name',
   'locationId',
@@ -112,10 +185,44 @@ const LEGACY_ENTRY_FIELDS = [
   'checkedAt',
 ] as const satisfies readonly (keyof ShoppingListEntry)[];
 
+type AnyLegacyItem = LegacyItem | Version2Item;
+
 interface LegacyCollections {
-  items: RxCollection<LegacyItem>;
+  items: RxCollection<AnyLegacyItem>;
   shopping_list_entries: RxCollection<ShoppingListEntry>;
 }
+
+/** What opening one earlier version's database takes. Entries never changed shape. */
+interface LegacyVersion {
+  version: number;
+  itemSchema: RxJsonSchema<AnyLegacyItem>;
+  itemConflictHandler: (wasRefused: (id: string) => boolean) => RxConflictHandler<AnyLegacyItem>;
+}
+
+/** Oldest first: a change made in an older version was made before any in a newer one. */
+const LEGACY_VERSIONS: readonly LegacyVersion[] = [
+  {
+    version: 1,
+    itemSchema: legacyItemSchema as RxJsonSchema<AnyLegacyItem>,
+    itemConflictHandler: (wasRefused) =>
+      conflictHandler<LegacyItem>({
+        fields: LEGACY_ITEM_FIELDS,
+        quantity: { min: 0, max: MAX_ITEM_QUANTITY },
+        wasRefused,
+      }) as unknown as RxConflictHandler<AnyLegacyItem>,
+  },
+  {
+    version: 2,
+    itemSchema: version2ItemSchema as RxJsonSchema<AnyLegacyItem>,
+    // Version 2 merged units as the mirror still does; it had no ingredient to merge.
+    itemConflictHandler: (wasRefused) =>
+      itemConflictHandler({
+        fields: LEGACY_ITEM_FIELDS,
+        quantity: { min: 0, max: MAX_ITEM_QUANTITY },
+        wasRefused,
+      }) as unknown as RxConflictHandler<AnyLegacyItem>,
+  },
+];
 
 export interface LegacyDrainOptions {
   userId: string;
@@ -131,18 +238,33 @@ export interface LegacyDrainOptions {
 }
 
 /**
- * Sends whatever this user's version-1 database of this household never sent,
- * then deletes it. Its items have no units, and the server takes them as it
- * always did: a quantity and dates for the whole item.
+ * Sends whatever this user's databases of this household from earlier versions
+ * never sent, oldest first, then deletes each. The server still takes their
+ * items as they were: without units, a quantity and dates for the whole item;
+ * without an ingredient, the ingredient left alone.
+ */
+export async function drainLegacyMirrors(options: LegacyDrainOptions): Promise<void> {
+  for (const legacy of LEGACY_VERSIONS) {
+    // One at a time, oldest first, so changes reach the server in the order they were made.
+    // oxlint-disable-next-line no-await-in-loop
+    await drainLegacyMirror(legacy, options);
+  }
+}
+
+/**
+ * Sends whatever one earlier version's database never sent, then deletes it.
  *
  * Nothing waits for it. Only its own changes are pushed — nothing is pulled into
  * a database about to go — and the new mirror learns of them from the server,
  * like of anyone's. Whatever stops it from finishing — no network, another tab
  * draining it, the mirror closing — leaves the database for the next start.
  */
-export async function drainLegacyMirror(options: LegacyDrainOptions): Promise<void> {
+async function drainLegacyMirror(
+  legacy: LegacyVersion,
+  options: LegacyDrainOptions,
+): Promise<void> {
   const { userId, householdId, origin, transport, storage, onRefusal, signal } = options;
-  const name = `${MIRROR_PREFIX}_${LEGACY_VERSION}_${userId}_${householdId}`;
+  const name = `${MIRROR_PREFIX}_${legacy.version}_${userId}_${householdId}`;
   // Each collection is an IndexedDB database of its own, named after the mirror.
   const isPart = (database: string): boolean => database.includes(`-${name}--`);
   // Without `indexedDB.databases()` (Firefox before 126) nothing is found, and the
@@ -164,12 +286,8 @@ export async function drainLegacyMirror(options: LegacyDrainOptions): Promise<vo
     const entryRefusals = new Refusals();
     await db.addCollections({
       items: {
-        schema: legacyItemSchema,
-        conflictHandler: conflictHandler<LegacyItem>({
-          fields: LEGACY_ITEM_FIELDS,
-          quantity: { min: 0, max: MAX_ITEM_QUANTITY },
-          wasRefused: (id) => itemRefusals.take(id),
-        }),
+        schema: legacy.itemSchema,
+        conflictHandler: legacy.itemConflictHandler((id) => itemRefusals.take(id)),
       },
       shopping_list_entries: {
         schema: legacyEntrySchema,

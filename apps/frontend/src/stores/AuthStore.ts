@@ -13,6 +13,7 @@ import {
   subscribeSession,
   type StoredSession,
 } from '../services/session';
+import { forgetIngredientNames } from './IngredientCatalog';
 
 /** What each route that signs in answers when it refuses, beyond the statuses every one shares. */
 type RefusalMessages = Readonly<Partial<Record<number, string>>>;
@@ -113,6 +114,7 @@ export class AuthStore {
   private startSession(session: AuthSession, isNewAccount: boolean): void {
     // Whoever used this device before is not necessarily whoever signs in now.
     void clearApiCache();
+    forgetIngredientNames();
     this.isOnboarding = isNewAccount;
     saveSession(session);
   }
@@ -124,8 +126,10 @@ export class AuthStore {
       // Signed out, or the session ended: the cached reads go with it, since
       // they are keyed by URL alone. The offline mirrors are kept unless this
       // was a sign-out: they belong to one user, and hold changes that reach the
-      // server once the same person signs in again.
+      // server once the same person signs in again. The ingredient names kept
+      // on the device go too.
       void clearApiCache();
+      forgetIngredientNames();
     }
     if (signedIn) this.endedElsewhere = false;
     else this.isOnboarding = false;

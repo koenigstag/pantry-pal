@@ -15,6 +15,7 @@ export * from './category.dto';
 export * from './decorators';
 export * from './default-location.dto';
 export * from './household.dto';
+export * from './ingredient.dto';
 export * from './location.dto';
 export * from './me.dto';
 export * from './pantry-item.dto';

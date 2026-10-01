@@ -210,6 +210,11 @@ export interface PantryItem {
    */
   isEdible: boolean;
   /**
+   * What the item is, whatever it is called: an `Ingredient.id` such as
+   * `en:whole-milk`, which recipes name too. `null` until the user says.
+   */
+  ingredientId: string | null;
+  /**
    * How many, as a whole number: its active units. A fractional amount is a
    * size: `1 × 1.5 kg`.
    */
@@ -491,4 +496,29 @@ export interface ImportSummary {
   /** Items that reached `MAX_ITEM_QUANTITY`, by name, with how many of the file's units did not fit. */
   capped: Array<{ name: string; units: number }>;
   skipped: ImportSkippedRow[];
+}
+
+/**
+ * Something a recipe calls for — milk, whole milk, cheddar — from the Open Food
+ * Facts ingredients taxonomy, named in the reader's language where the taxonomy
+ * has it, else in English.
+ */
+export interface Ingredient {
+  /** The taxonomy's id: `en:whole-milk`. Stable, and what items store. */
+  id: string;
+  name: string;
+  /**
+   * The `Category.code` its items most likely belong in — cheese is `dairy` —
+   * or `null` where the taxonomy does not say. The item form fills it in.
+   */
+  category: string | null;
+}
+
+/** An ingredient a search found. */
+export interface IngredientMatch extends Ingredient {
+  /**
+   * The name the search matched, when it is not `name`: a synonym, or a name in
+   * another language. "scallions" explains why "spring onion" came up.
+   */
+  matchedName: string | null;
 }

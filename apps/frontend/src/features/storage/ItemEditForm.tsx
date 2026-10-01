@@ -4,6 +4,7 @@ import {
   MAX_ITEM_NOTES_LENGTH,
   MAX_ITEM_QUANTITY,
   MAX_PERIOD_AFTER_OPENING_DAYS,
+  type Ingredient,
 } from '@pantry-pal/shared';
 import { Minus, Plus, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
@@ -16,6 +17,7 @@ import { cn } from '../../ui/cn';
 import { Field, FIELD_CONTROL, FIELD_TEXTAREA, type FieldControlProps } from '../../ui/Field';
 import { IconButton } from '../../ui/IconButton';
 import { DETAILS_GRID, DetailsSection, ItemPhoto } from './detailsLayout';
+import { IngredientPicker } from './IngredientPicker';
 import {
   draftFieldLabel,
   isQuantityUnit,
@@ -90,6 +92,28 @@ export const ItemEditForm = observer(function ItemEditForm({
 
   // Only the default category lets an item choose; any other decides for it.
   const canSetEdible = draft.category === DEFAULT_CATEGORY;
+
+  /**
+   * A chosen ingredient fills in the category while the item is still in the
+   * default one, which is where a new item starts: one the user picked stays.
+   * Removing the ingredient leaves the category as it is.
+   */
+  function changeIngredient(ingredient: Ingredient | null): void {
+    if (ingredient === null) {
+      update({ ingredientId: '' });
+      return;
+    }
+    const { category } = ingredient;
+    const fills =
+      draft.category === DEFAULT_CATEGORY &&
+      category !== null &&
+      pantry.categories.some((known) => known.code === category);
+    update(
+      fills
+        ? { ingredientId: ingredient.id, category, isEdible: pantry.categoryEdible(category) }
+        : { ingredientId: ingredient.id },
+    );
+  }
 
   /** Into the default category the item keeps its value; into any other it takes that one's. */
   function changeCategory(code: string): void {
@@ -190,6 +214,22 @@ export const ItemEditForm = observer(function ItemEditForm({
                 {messages.itemForm.edible}
               </label>
             )}
+
+            <Field
+              label={messages.itemForm.ingredient}
+              hint={messages.itemForm.ingredientHint}
+              error={errors['ingredientId']}
+              className="col-span-2"
+            >
+              {(props) => (
+                <IngredientPicker
+                  controlProps={props}
+                  value={draft.ingredientId}
+                  itemName={draft.name}
+                  onChange={changeIngredient}
+                />
+              )}
+            </Field>
 
             <Field
               label={messages.itemForm.shoppingList}

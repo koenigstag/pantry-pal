@@ -12,6 +12,9 @@ import {
 
 const SORT_PARAM = 'sort';
 const DIRECTION_PARAM = 'dir';
+/** `?ingredient=none`: only items no ingredient has been chosen for. */
+const INGREDIENT_PARAM = 'ingredient';
+const WITHOUT_INGREDIENT = 'none';
 
 export interface StorageParams {
   locationId: string | undefined;
@@ -20,6 +23,9 @@ export interface StorageParams {
   direction: SortDirection;
   setSort: (field: SortField) => void;
   toggleDirection: () => void;
+  /** Showing only the items without an ingredient, to go through them. */
+  withoutIngredient: boolean;
+  toggleWithoutIngredient: () => void;
   /** Where a location's tab leads, keeping the current sort. */
   locationLink: (locationId: string) => Partial<Path>;
   /**
@@ -34,12 +40,12 @@ export interface StorageParams {
 
 /**
  * The Storage page's URL state:
- * `/storage/:locationId/items/:itemId?sort=expiry&dir=desc`.
+ * `/storage/:locationId/items/:itemId?sort=expiry&dir=desc&ingredient=none`.
  *
  * The location is a path segment, so each tab is a real link that the back
  * button walks through; so are an item's details, which the back button closes.
- * The sort is a query parameter changed in place: flipping the order is not a
- * place to go back to. Defaults stay out of the URL, so a bare
+ * The sort and the filter are query parameters changed in place: flipping the
+ * order is not a place to go back to. Defaults stay out of the URL, so a bare
  * `/storage/:locationId` means "by name, ascending".
  */
 export function useStorageParams(): StorageParams {
@@ -48,6 +54,7 @@ export function useStorageParams(): StorageParams {
 
   const sort = parseSortField(searchParams.get(SORT_PARAM));
   const direction = parseSortDirection(searchParams.get(DIRECTION_PARAM));
+  const withoutIngredient = searchParams.get(INGREDIENT_PARAM) === WITHOUT_INGREDIENT;
   const search = searchParams.toString();
 
   function update(nextSort: SortField, nextDirection: SortDirection): void {
@@ -56,6 +63,18 @@ export function useStorageParams(): StorageParams {
         const next = new URLSearchParams(current);
         setOrDelete(next, SORT_PARAM, nextSort, DEFAULT_SORT_FIELD);
         setOrDelete(next, DIRECTION_PARAM, nextDirection, DEFAULT_SORT_DIRECTION);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function toggleWithoutIngredient(): void {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (withoutIngredient) next.delete(INGREDIENT_PARAM);
+        else next.set(INGREDIENT_PARAM, WITHOUT_INGREDIENT);
         return next;
       },
       { replace: true },
@@ -90,6 +109,8 @@ export function useStorageParams(): StorageParams {
     direction,
     setSort: (field) => update(field, direction),
     toggleDirection: () => update(sort, direction === 'asc' ? 'desc' : 'asc'),
+    withoutIngredient,
+    toggleWithoutIngredient,
     locationLink,
     itemLink,
     itemLinkIn,

@@ -7,9 +7,9 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Fifteen tables, the transaction layer, seed data, and repositories for users,
+Eighteen tables, the transaction layer, seed data, and repositories for users,
 refresh tokens, households, members, locations, items (with their units), item events, units,
-categories, the default storage spaces, shopping lists and their entries.
+categories, ingredients, the default storage spaces, shopping lists and their entries.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -32,6 +32,7 @@ pnpm type-check   # tsc --noEmit
 pnpm db:generate  # drizzle-kit: SQL migrations from the schema
 pnpm db:migrate   # apply migrations
 pnpm db:seed      # reset and re-create the test household (builds first)
+pnpm db:ingredients [file]  # import the Open Food Facts ingredients (downloads unless given the file)
 pnpm db:push      # push schema directly (development only)
 pnpm db:studio    # browse data
 ```
@@ -132,6 +133,56 @@ These are deliberate. Changing any of them affects the whole workspace.
   `items.is_edible` copies it — except in `other`, where each item sets its own
   and the category's flag is only the starting value. No constraint can state
   that exception, so the items and categories services keep it.
+- **Ingredients** (`ingredients`, `ingredient_names`, `ingredient_parents`) are
+  what items are, whatever they are called: `items.ingredient_id` names one,
+  optionally, and recipes will name the same rows. Global reference data from
+  the Open Food Facts ingredients taxonomy, ODbL, imported by
+  `pnpm db:ingredients` (`src/ingredients-taxonomy.ts`, `scripts/import-ingredients.mjs`):
+  - **The id is the taxonomy's own**, `en:whole-milk`: text, stable across
+    imports, readable in a backup. The importer keeps entries with an English
+    name, and drops additives (E numbers), origin and label variants ("rice from
+    Italy"), and whole branches nobody keeps on a shelf (flavourings, enzymes,
+    vitamins, grape varieties, …): about 4,200 of 6,600.
+  - **Names in the app's languages only** (`SUPPORTED_LANGUAGES` in shared): one
+    primary per language, which readers of it see, and synonyms, which only search
+    reads. English rows are among them, so a search reads one table.
+    `search_name` is the name folded by shared's `searchText` (lowercase, no
+    accents or stress marks), computed by the importer since `unaccent` is not
+    immutable and cannot be indexed; a GIN trigram index serves `LIKE '%…%'` and
+    `%`, so migration `0009` creates `pg_trgm`.
+  - **Names the taxonomy lacks** come from `data/ingredient-names.<language>.json`
+    (ODbL too; see `data/README.md`). The taxonomy's primary name wins, and a
+    translation then only adds synonyms, except for the few names
+    `data/ingredient-overrides.<language>.json` puts first ("гречка", not the
+    taxonomy's "ядрица"). Russian has one for every
+    ingredient: about 950 from the taxonomy, 3,260 machine translated and
+    reviewed. Names in Russian and Ukrainian are tidied on import: stress marks
+    and Latin lookalike letters inside Cyrillic words go, and a common noun loses
+    its capital (`cли́вочное ма́сло` → `сливочное масло`).
+  - **Not every entry is an ingredient**: list numbering (`en:no1`), colour words
+    and label jargon are dropped by id (`NOT_AN_INGREDIENT_ID`).
+  - **Search** (`IngredientsRepository.search`) looks in every stored language —
+    households type in two, and English fills the taxonomy's gaps — and ranks the
+    whole name, its start, a later word's start, anywhere, then only alike; within
+    each, the reader's language, then English. Near twins the reader's language
+    names alike (whiskey and whisky) appear once, the better ranked. The
+    taxonomy's own translations are uneven: Ukrainian has about 600 names,
+    German 2,500.
+  - **A re-import never deletes an ingredient**, since items may name any
+    (`items_ingredient_id_ingredients_id_fk`, `RESTRICT`). Names and parents are
+    replaced whole, so one the taxonomy dropped keeps its English `name` for
+    display but leaves search.
+  - **`ingredients.category`** is the category an item tagged with it most likely
+    belongs in (cheese → `dairy`), so the item form can fill it in. The importer
+    works it out from `CATEGORY_BRANCHES`: the nearest of a few taxonomy branches
+    above the entry decides, ties going to the first listed, plus juices by id,
+    which the taxonomy files only under their fruit. About two thirds get one;
+    oils, sugar, honey, nuts and the like get none, and canned, frozen and the
+    non-food categories are never chosen. `SET NULL`, so a category stays
+    deletable; a code the database lacks is left out at import.
+  - **`ingredient_parents`** is the taxonomy's hierarchy, a graph (a row may have
+    several parents). Nothing reads it yet: recipe matching will, so that cheddar
+    satisfies a recipe asking for cheese.
 - **Locations are soft-deleted.** The items foreign key is `RESTRICT` and counts
   consumed, discarded and soft-deleted rows too, so a hard delete would be
   impossible for any location that ever held an item. The case-insensitive name
@@ -377,6 +428,16 @@ from empty and seeded, the API check scripts from the offline sync work (35 pull
 37 push, 82 shopping) all pass, as do 30 checks of what each write does to the
 units, among them the `sub_items` constraints in a rolled-back transaction.
 `drizzle-kit generate` reports no changes.
+
+`0009_ingredients` adds the three ingredient tables, `ingredients.category` and
+the nullable `items.ingredient_id` with its key and a partial index. It was
+regenerated in place for `ingredients.category` before it was ever released. It is drizzle-kit's own
+output with one hand-added statement first, `CREATE EXTENSION IF NOT EXISTS
+pg_trgm` (a trusted extension, so the database's owner may create it), which the
+trigram index needs. Verified on PGlite (PostgreSQL 17 compiled to WebAssembly,
+with its `pg_trgm`), not on PostgreSQL 18: every migration from empty, the seed,
+the real taxonomy imported twice (idempotent), and the API checks of the backend
+and the frontend over it. `drizzle-kit generate` reports no changes.
 
 ## Resolved: categories are a table
 

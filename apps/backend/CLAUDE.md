@@ -54,6 +54,7 @@ src/
   data/         the Data sheet: an .xlsx backup out; imports in, from a backup or KitchenPal
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
+  ingredients/  GET /ingredients: search and lookup (signed in; imported reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
   admin/        /admin/units, /admin/categories, /admin/default-locations, /admin/users (passwords)
   realtime/     ChangeFeed, PantryGateway, Socket.IO adapter, WS exception filter
@@ -69,6 +70,7 @@ GET    PATCH           /me                                            PATCH: nam
 POST                   /me/password                                   current + new; 5/min per account
 GET    /units
 GET    /categories
+GET                    /ingredients                                   ?q= or ?ids=, and &lang=
 GET    POST            /households
 GET    PATCH  DELETE   /households/:householdId                       PATCH/DELETE: owner
 GET    POST            /households/:householdId/members               POST: owner
@@ -255,9 +257,25 @@ that expires first.
     onto its default list, as a whole-item write does.
 - **Using up or throwing out an item as a whole** is still the item's status. Its
   units stay as they were, so restoring it brings them back.
+- **An item may name an ingredient** (`ingredientId`), checked to exist on create
+  and on a patch that changes it (400 otherwise); `null` clears it. Ingredients
+  are never deleted, so no lock is taken.
 - **Creating an item with its units** (`CreatePantryItemDto.subItems`) gives each
   its own state and, optionally, the client's id. `quantity` must be how many
   there are, and the item's own dates are left out.
+
+## Ingredients
+
+`GET /ingredients?q=молоко&lang=uk` searches every stored name, any language,
+best first (`INGREDIENT_SEARCH_LIMIT`); `?ids=en:milk,en:egg&lang=uk` names the
+ingredients items hold, in the order asked, leaving out unknown ids. Each comes
+with the category its items most likely belong in, or `null`. Exactly one
+of `q` and `ids` (400 otherwise). Names come in `lang`, a language of
+`SUPPORTED_LOCALES` without its region, else English. The language is a
+parameter rather than the account's, so an answer never depends on who asked.
+Signed in, unlike units and categories, since a search costs more than a list.
+Nothing writes ingredients through the API: they are imported, see
+`packages/db/CLAUDE.md`.
 
 ## Shopping lists
 
@@ -330,6 +348,12 @@ space and list editors stay online.
 - **The checkpoint's `updatedAt` is the database's text, to the microsecond.**
   Pass it back untouched: a value round-tripped through a JS `Date` loses its
   microseconds and sits before its own row.
+- **Items come with their ingredient only when asked** (`?ingredients=true`), for
+  the same reason as units below: a mirror made before ingredients has a schema
+  without the field, which refuses a document that has one (RxDB's dev-mode
+  validation; production stores it unchecked). A push is answered in the shape
+  it came in, `ingredientId` only if the pushed item had it
+  (`toMirroredItem`, `MirrorShape`), since newer apps still drain older mirrors.
 - **Items come with their units only when asked** (`?subItems=true`). A mirror
   made before units existed leaves it out and gets items as they were: its
   conflict handler compares fields by identity, so an array would read as a
@@ -386,7 +410,8 @@ imports a file into it. Files are .xlsx, read and written with **exceljs**.
 **The export is a backup** (`GET .../export`): storage spaces, the active items
 and their active units, in the sheets `backup-format.ts` describes — `Pantry Pal`
 (format and version), `Storage spaces`, `Items`, `Units` — under English
-headers, which are the format. Categories and units are codes. It is read in one
+headers, which are the format. Categories and units are codes, and an ingredient its id
+(`Ingredient`; a backup made before ingredients has no such column). It is read in one
 `repeatable read` snapshot, so no unit names an item the file lacks, and it is
 sent `no-store`; the frontend's service worker keeps it out of its read cache
 too.
@@ -411,6 +436,8 @@ one transaction (`ImportService`).
   same name in the same space takes the file's units; else one is created. Rows of
   one file that share a name and a space land in one item, so the summary counts
   the household's items, not rows.
+- **A new item takes the file's ingredient** if the server has it, and leaves it
+  out otherwise; an item matched or restored keeps its own. KitchenPal names none.
 - **Units keep their own state** — expiry, opened date, fill — through
   `ItemsRepository.createWithUnits` and `addUnits`. A partly used unit without an
   opened date takes the day of the import, as `sub_items_fill_needs_opened`

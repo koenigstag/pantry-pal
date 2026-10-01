@@ -1,6 +1,8 @@
+import { LANGUAGE } from '../i18n/locale';
 import { authApi, pantryApi } from '../services/api';
 import { createPantrySocket } from '../services/socket';
 import { AuthStore } from './AuthStore';
+import { IngredientCatalog } from './IngredientCatalog';
 import { NoticeStore } from './NoticeStore';
 import { PantryStore } from './PantryStore';
 import { QuantityUpdates } from './QuantityUpdates';
@@ -33,10 +35,12 @@ export class RootStore {
 export class SessionStores {
   readonly pantry: PantryStore;
   readonly quantities: QuantityUpdates;
+  readonly ingredients: IngredientCatalog;
 
   constructor(notices: NoticeStore) {
     this.pantry = new PantryStore(pantryApi, createPantrySocket(), notices);
     this.quantities = new QuantityUpdates(this.pantry, notices);
+    this.ingredients = new IngredientCatalog(pantryApi, LANGUAGE);
   }
 
   dispose(): void {

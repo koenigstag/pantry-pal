@@ -78,6 +78,16 @@ reference data (units, categories, default locations) and password resets go
 through `/admin`, authenticated by an API key.
 Details in `apps/backend/CLAUDE.md`.
 
+### Items know what they are: ingredients
+
+An item may name an **ingredient** (`items.ingredient_id`, `en:whole-milk`):
+what it is whatever the household calls it, so recipes can be matched against
+it later. Ingredients are global reference data imported from the Open Food
+Facts taxonomy (ODbL; the item form credits it) with
+`pnpm --filter @pantry-pal/db db:ingredients`, never written through the API.
+Until that import has run, the item form's ingredient search finds nothing.
+Details in `packages/db/CLAUDE.md`.
+
 ### The frontend works offline, from a mirror
 
 `PantryStore` shows the household as the device holds it: an offline mirror

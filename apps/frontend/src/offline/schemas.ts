@@ -60,6 +60,7 @@ export const itemSchema: RxJsonSchema<PantryItem> = {
     name: TEXT,
     category: TEXT,
     isEdible: { type: 'boolean' },
+    ingredientId: { type: ['string', 'null'] },
     quantity: { type: 'integer' },
     unit: TEXT,
     sizeValue: { type: ['number', 'null'] },

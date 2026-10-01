@@ -80,3 +80,7 @@ export function usePantryStore(): SessionStores['pantry'] {
 export function useQuantities(): SessionStores['quantities'] {
   return useSessionStores().quantities;
 }
+
+export function useIngredients(): SessionStores['ingredients'] {
+  return useSessionStores().ingredients;
+}

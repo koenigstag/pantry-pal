@@ -104,8 +104,16 @@ function compareStrings(a: string, b: string): number {
 }
 
 /** Items whose name contains `query`, ignoring case and accents. */
-export function filterItems(items: readonly PantryItem[], query: string): readonly PantryItem[] {
+export function filterItems(
+  items: readonly PantryItem[],
+  query: string,
+  withoutIngredient = false,
+): readonly PantryItem[] {
   const needle = normalizeForSearch(query);
-  if (needle === '') return items;
-  return items.filter((item) => normalizeForSearch(item.name).includes(needle));
+  if (needle === '' && !withoutIngredient) return items;
+  return items.filter(
+    (item) =>
+      (needle === '' || normalizeForSearch(item.name).includes(needle)) &&
+      (!withoutIngredient || item.ingredientId === null),
+  );
 }

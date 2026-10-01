@@ -143,6 +143,9 @@ export const ru = {
     noMatches: (query: string, location: string) =>
       `В месте хранения «${location}» нет совпадений с «${query}».`,
     noLocations: 'В этом домохозяйстве ещё нет мест хранения.',
+    withoutIngredient: 'Без ингредиента',
+    allHaveIngredients: (location: string) =>
+      `У всего в месте хранения «${location}» есть ингредиент.`,
     fallbackLocation: 'Другое',
   },
 
@@ -280,6 +283,15 @@ export const ru = {
     location: 'Место хранения',
     category: 'Категория',
     edible: 'Съедобное',
+    ingredient: 'Ингредиент',
+    ingredientHint: 'Что это, для рецептов: ищите на любом языке. Названия из Open Food Facts.',
+    ingredientPlaceholder: 'Поиск ингредиентов',
+    ingredientChangePlaceholder: 'Найти другой',
+    clearIngredient: 'Убрать ингредиент',
+    ingredientSuggested: 'Возможно:',
+    ingredientSearching: 'Поиск…',
+    ingredientOffline: 'Для поиска нужно подключение.',
+    ingredientNoMatches: (query: string) => `Ни один ингредиент не совпадает с «${query}».`,
     quantity: 'Количество',
     howMany: 'Сколько',
     decreaseQuantity: 'Уменьшить количество',
@@ -309,6 +321,7 @@ export const ru = {
     name: 'Введите название.',
     locationId: 'Выберите место хранения.',
     category: 'Выберите категорию.',
+    ingredientId: 'Выберите ингредиент из списка.',
     quantity: (min: number, max: number) =>
       `Введите целое число от ${formatNumber(min)} до ${formatNumber(max)}.`,
     unit: 'Выберите единицу.',
@@ -332,6 +345,7 @@ export const ru = {
     save: 'Сохранить',
     saving: 'Сохранение…',
     details: 'Подробности',
+    ingredient: 'Ингредиент',
     quantity: 'Количество',
     expiry: 'Срок годности',
     noExpiry: 'Без срока годности',

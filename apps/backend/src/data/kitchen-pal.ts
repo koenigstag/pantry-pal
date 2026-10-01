@@ -193,6 +193,7 @@ function readRow(
     spaceKey: space.key,
     name,
     ...categoryOf(row.text(COLUMN.category), shelf),
+    ingredientId: null,
     unit: COUNT_UNIT,
     ...sizeOf(row, full + (open * fill) / FULL),
     notes: notesOf(row, table),

@@ -9,6 +9,7 @@ import { DataModule } from './data/data.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { HouseholdsModule } from './households/households.module';
+import { IngredientsModule } from './ingredients/ingredients.module';
 import { ItemsModule } from './items/items.module';
 import { LocationsModule } from './locations/locations.module';
 import { ChangeFeedModule } from './realtime/change-feed';
@@ -31,6 +32,7 @@ import { UnitsModule } from './units/units.module';
     AuthModule,
     UnitsModule,
     CategoriesModule,
+    IngredientsModule,
     HouseholdsModule,
     LocationsModule,
     ItemsModule,

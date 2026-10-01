@@ -1,4 +1,9 @@
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type SupportedLocale } from '@pantry-pal/shared';
+import {
+  DEFAULT_LOCALE,
+  localeLookupOrder,
+  SUPPORTED_LOCALES,
+  type SupportedLocale,
+} from '@pantry-pal/shared';
 
 /**
  * The browser's copy of the language: the signed-in account's, or one picked on
@@ -75,6 +80,9 @@ function writeCopy(locale: SupportedLocale): boolean {
  */
 export const LOCALE: SupportedLocale =
   supportedLocale(readCopy()) ?? preferredLocale(browserLanguages()) ?? DEFAULT_LOCALE;
+
+/** `LOCALE`'s language without its region, `fr` for `fr-CA`: how ingredients are named. */
+export const LANGUAGE: string = localeLookupOrder(LOCALE).at(-1) ?? LOCALE;
 
 /**
  * Makes `tag` the page's language: remembers it, and reloads unless the page

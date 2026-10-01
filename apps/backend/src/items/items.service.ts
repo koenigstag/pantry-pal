@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   CategoriesRepository,
+  IngredientsRepository,
   ItemEventsRepository,
   ItemsRepository,
   LocationsRepository,
@@ -109,6 +110,7 @@ export class ItemsService {
     private readonly locations: LocationsRepository,
     private readonly units: UnitsRepository,
     private readonly categories: CategoriesRepository,
+    private readonly ingredients: IngredientsRepository,
     private readonly shoppingLists: ShoppingListsRepository,
     private readonly shoppingEntries: ShoppingListEntriesRepository,
     private readonly changes: ChangeFeed,
@@ -142,11 +144,13 @@ export class ItemsService {
     const sizeValue = dto.sizeValue ?? null;
     const sizeUnit = dto.sizeUnit ?? null;
     const defaultShoppingListId = dto.defaultShoppingListId ?? null;
+    const ingredientId = dto.ingredientId ?? null;
 
     if (dto.subItems !== undefined) assertUnitsOnCreate(dto, dto.subItems);
     assertSizePair(sizeValue, sizeUnit);
     await this.assertUnits(dto.unit, sizeUnit);
     const isEdible = await this.resolveEdible(dto.category, dto.isEdible);
+    if (ingredientId !== null) await this.assertIngredient(ingredientId);
     await this.lockLocation(householdId, dto.locationId);
     if (defaultShoppingListId !== null) {
       await this.lockShoppingList(householdId, defaultShoppingListId);
@@ -159,6 +163,7 @@ export class ItemsService {
       locationId: dto.locationId,
       category: dto.category,
       isEdible,
+      ingredientId,
       unit: dto.unit,
       sizeValue,
       sizeUnit,
@@ -224,6 +229,7 @@ export class ItemsService {
               dto.isEdible,
               before.isEdible,
             ),
+      ingredientId: dto.ingredientId,
       quantity: dto.quantity,
       unit: dto.unit,
       sizeValue: dto.sizeValue,
@@ -244,6 +250,9 @@ export class ItemsService {
     assertSizePair(sizeValue, sizeUnit);
 
     await this.assertUnits(changes.unit && patch.unit, changes.sizeUnit && sizeUnit);
+    if (changes.ingredientId !== undefined && typeof patch.ingredientId === 'string') {
+      await this.assertIngredient(patch.ingredientId);
+    }
     if (changes.locationId !== undefined && patch.locationId !== undefined) {
       await this.lockLocation(householdId, patch.locationId);
     }
@@ -597,6 +606,16 @@ export class ItemsService {
    * `items_unit_count_fk`, so the client gets a message naming its mistake
    * rather than a constraint name. A unit left `undefined` is not being written.
    */
+  /**
+   * Ingredients are never deleted, so knowing one exists is enough: no lock. The
+   * foreign key is the safety net all the same.
+   */
+  private async assertIngredient(id: string): Promise<void> {
+    if (!(await this.ingredients.exists(id))) {
+      throw new BadRequestException(`Unknown ingredient: ${id}`);
+    }
+  }
+
   private async assertUnits(
     unit: string | undefined,
     sizeUnit: string | null | undefined,

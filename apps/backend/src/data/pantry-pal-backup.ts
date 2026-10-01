@@ -5,6 +5,7 @@ import {
   IMPORT_ERROR,
   IMPORT_SKIP_REASON,
   MAX_CATEGORY_CODE_LENGTH,
+  MAX_INGREDIENT_ID_LENGTH,
   MAX_ITEM_NAME_LENGTH,
   MAX_ITEM_NOTES_LENGTH,
   MAX_ITEM_QUANTITY,
@@ -218,6 +219,7 @@ function readItems(
       const fields = {
         category: codeOf(row, ITEM_COLUMN.Category, MAX_CATEGORY_CODE_LENGTH) ?? DEFAULT_CATEGORY,
         isEdible: row.boolean(ITEM_COLUMN.Edible),
+        ingredientId: ingredientOf(row),
         unit: codeOf(row, ITEM_COLUMN.Unit, MAX_UNIT_CODE_LENGTH) ?? COUNT_UNIT,
         ...sizeOf(row),
         notes: notes === '' ? null : clip(notes, MAX_ITEM_NOTES_LENGTH),
@@ -333,6 +335,15 @@ function codeOf(row: TableRow, column: string, max: number): string | null {
   if (code === '') return null;
   if ([...code].length > max) throw new CellValueError(column);
   return code;
+}
+
+/**
+ * An ingredient's id as written, which the import checks against the server's;
+ * one too long to be any is left out rather than failing the row.
+ */
+function ingredientOf(row: TableRow): string | null {
+  const id = row.text(ITEM_COLUMN.Ingredient)?.trim() ?? '';
+  return id === '' || [...id].length > MAX_INGREDIENT_ID_LENGTH ? null : id;
 }
 
 /** Both or neither, like the item's columns; a size out of range is left out. */

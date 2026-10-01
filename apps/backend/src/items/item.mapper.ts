@@ -19,6 +19,7 @@ export function toItemFields(row: ItemRow): Omit<PantryItem, 'subItems'> {
     name: row.name,
     category: row.category,
     isEdible: row.isEdible,
+    ingredientId: row.ingredientId,
     quantity: row.quantity,
     unit: row.unit,
     sizeValue: row.sizeValue,
@@ -33,6 +34,28 @@ export function toItemFields(row: ItemRow): Omit<PantryItem, 'subItems'> {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/**
+ * The fields an offline mirror's items have: units since its version 2, an
+ * ingredient since version 3. A mirror is served, and answered, in its own
+ * shape, since its schema refuses a field it never had.
+ */
+export interface MirrorShape {
+  withUnits: boolean;
+  withIngredient: boolean;
+}
+
+/** An item as some offline mirror holds it: units and the ingredient both came later. */
+export type MirroredItem = Omit<PantryItem, 'subItems' | 'ingredientId'> &
+  Partial<Pick<PantryItem, 'subItems' | 'ingredientId'>>;
+
+export function toMirroredItem(
+  row: ItemRow,
+  { withUnits, withIngredient }: MirrorShape,
+): MirroredItem {
+  const { ingredientId, ...item } = withUnits ? toPantryItem(row) : toItemFields(row);
+  return withIngredient ? { ...item, ingredientId } : item;
 }
 
 function toSubItem(unit: ItemRowSubItem): SubItem {

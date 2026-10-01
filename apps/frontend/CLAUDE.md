@@ -35,7 +35,8 @@ src/features/storage/      the Storage page: location tabs, search, sort, select
 src/features/shopping/     the Shopping page, the list picker, the lists editor, sharing as text
 src/features/data/         the Data sheet: exporting a backup, importing one or another app's file
 src/features/pages.tsx     Planner placeholder, Profile
-src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore
+src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore,
+                           IngredientCatalog (ingredient names and search)
 src/offline/               the offline mirror: RxDB database, replication, merge rules, forgetting on sign-out
 src/services/              http (fetch), session (tokens), api (REST and sync), socket
 src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, SwipePager, cn
@@ -48,8 +49,10 @@ src/i18n/                  message catalog and Intl formatters
   **`react-router/dom`**. v8 removed the `react-router-dom` package; everything
   else imports from `react-router`.
 - Routes carry components only. Data comes from the MobX stores, not loaders.
-- Storage URL state is `/storage/:locationId?sort=expiry&dir=desc`
-  (`useStorageParams`). The location is a path segment, so each tab is a link
+- Storage URL state is `/storage/:locationId?sort=expiry&dir=desc&ingredient=none`
+  (`useStorageParams`). `ingredient=none` is the No ingredient toggle beside the
+  sort: only items without one, to go through them, counted in the tabs as a
+  search is. The location is a path segment, so each tab is a link
   and the back button walks through them. The sort is a query parameter changed
   with `replace`, and defaults stay out of the URL.
 - Shopping URL state is `/shopping/:listId`, a tab per list in use like the
@@ -164,9 +167,10 @@ database instead of migrating the old one. The old one may still hold changes it
 never sent — made offline, the app closed before it was back online — so it is
 drained first (`offline/legacy.ts`): opened with a frozen copy of its schemas,
 which RxDB needs to open it, it pushes under its old replications' names, then
-is deleted. The server still takes that old shape. Whatever stops a drain — no
-network, the mirror closing — leaves the database for the next start. Version 2
-added units.
+is deleted. The server still takes that old shape, and answers in it. Every
+earlier version is drained, oldest first. Whatever stops a drain — no network,
+the mirror closing — leaves the database for the next start. Version 2 added
+units, version 3 the ingredient (pulled with `?ingredients=true`).
 
 Quantities are whole numbers (`@IsInt()` in the shared DTOs, `integer` in the
 database), counted in a count unit — `pcs` or a container such as `bottle` or
@@ -334,6 +338,31 @@ members add or delete meanwhile appear or drop out, and an untouched name
 follows a rename made elsewhere. The server answers 409 when the list the user
 edited was stale; the store then refetches, the draft rebases, and the user
 checks the list and saves again.
+
+### Ingredients
+
+An item may name an ingredient (`PantryItem.ingredientId`, `en:whole-milk`):
+what it is, whatever it is called, for recipes later. The item form's
+**Ingredient** field (`IngredientPicker`) is an ARIA combobox: matches list below
+the input as the user types, in any language the app speaks, each with the name
+it matched by when that is another (a synonym, another language). While none is
+chosen, the item's name suggests three, one tap each. The details show the chosen
+one as a chip beside the space and the category.
+
+- **Choosing one fills in the category** (`Ingredient.category`) while the item
+  is still in the default category, where a new item starts, along with
+  `isEdible`. A category the user picked stays, and removing the ingredient
+  changes nothing.
+
+- **Searching needs the server** (`GET /ingredients`); offline, the field says so.
+  Choosing one is an item edit like any other, so it goes through the mirror.
+- **Names live in `IngredientCatalog`**, looked up by id in batches and kept in
+  localStorage per language, so the chosen ones show offline. The service worker
+  leaves `/ingredients` out of its read cache: every search is a URL of its own,
+  and would push the bootstrap out of that small cache. The kept names go with
+  the session (`forgetIngredientNames`), as the cached reads do: they say what a
+  pantry holds. A name not known yet shows as its id read as words, `whole milk`.
+- **The hint credits Open Food Facts**, whose ODbL asks for it.
 
 ### Categories
 
@@ -618,7 +647,7 @@ worker on, Chrome among the ones that allow it.
   bootstrap (the user, households, units, categories) answers offline, and the
   header's Offline badge says why the rest is not live. Sync pulls stay out of
   it, since the mirror keeps its own copy and a cached page would skip changes,
-  and so does the export (The Data sheet).
+  and so do the export (The Data sheet) and ingredients (Ingredients).
   Writes are never cached: the everyday ones go to the mirror, the rest fail.
   - The cache is keyed by URL alone, so `services/apiCache.ts` empties it
     whenever a session starts or ends (`AuthStore`): the next account to sign in

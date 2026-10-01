@@ -29,7 +29,7 @@ import {
 } from '@pantry-pal/shared/dto';
 
 import type { Membership } from '../common/request-context';
-import { toItemFields, toPantryItem } from '../items/item.mapper';
+import { toMirroredItem, type MirroredItem, type MirrorShape } from '../items/item.mapper';
 import { ItemsService, type ItemChanges, type SubItemChanges } from '../items/items.service';
 import { toShoppingListEntry } from '../shopping-lists/shopping-list.mapper';
 import { ShoppingListsService } from '../shopping-lists/shopping-lists.service';
@@ -41,6 +41,7 @@ const ITEM_FIELDS = [
   'locationId',
   'category',
   'isEdible',
+  'ingredientId',
   'quantity',
   'unit',
   'sizeValue',
@@ -76,7 +77,7 @@ const SUB_ITEM_FIELDS = [
   'status',
 ] as const satisfies readonly (keyof SubItem)[];
 
-type ItemDocument = SyncDocument<PantryItem> | SyncDocument<Omit<PantryItem, 'subItems'>>;
+type ItemDocument = SyncDocument<MirroredItem>;
 
 type Outcome =
   | { kind: 'applied' }
@@ -163,12 +164,16 @@ export class SyncPushService {
     const next = row.newDocumentState as unknown as ItemDocument;
     const assumed = row.assumedMasterState as unknown as ItemDocument | undefined;
     const master = await this.items.findAnyById(membership.householdId, next.id);
-    // Answered in the shape it came in: a mirror made before units takes none.
-    const withUnits = subItemsOf(next) !== undefined;
+    // Answered in the shape it came in: a mirror made before units, or before
+    // ingredients, takes none.
+    const shape: MirrorShape = {
+      withUnits: subItemsOf(next) !== undefined,
+      withIngredient: 'ingredientId' in next,
+    };
 
     if (assumed === undefined) {
       if (master !== undefined) {
-        const current = itemDocument(master, withUnits);
+        const current = itemDocument(master, shape);
         return sameCreate(current, next) ? APPLIED : { kind: 'conflict', master: current };
       }
       // Made and deleted before it ever reached the server: nothing to do.
@@ -178,12 +183,12 @@ export class SyncPushService {
     }
 
     if (master === undefined) return refuseCreate(next, 'Item not found');
-    const current = itemDocument(master, withUnits);
+    const current = itemDocument(master, shape);
     if (current.updatedAt !== assumed.updatedAt) return { kind: 'conflict', master: current };
 
     if (next._deleted) {
       return this.attempt(() => this.itemsService.remove(membership, next.id), {
-        onRefusal: () => this.currentItem(membership, next.id, withUnits),
+        onRefusal: () => this.currentItem(membership, next.id, shape),
       });
     }
 
@@ -209,7 +214,7 @@ export class SyncPushService {
           // The mirror put the item on its default list itself, and pushes that entry next.
           listWhenRunOut: false,
         }),
-      { onRefusal: () => this.currentItem(membership, next.id, withUnits) },
+      { onRefusal: () => this.currentItem(membership, next.id, shape) },
     );
   }
 
@@ -349,11 +354,11 @@ export class SyncPushService {
   private async currentItem(
     membership: Membership,
     id: string,
-    withUnits: boolean,
+    shape: MirrorShape,
   ): Promise<SyncDocument<SyncedDocument>> {
     const row = await this.items.findAnyById(membership.householdId, id);
     if (row === undefined) throw new Error(`Item ${id} vanished during a push`);
-    return itemDocument(row, withUnits);
+    return itemDocument(row, shape);
   }
 
   private async currentEntry(
@@ -366,9 +371,9 @@ export class SyncPushService {
   }
 }
 
-function itemDocument(row: ItemRow, withUnits: boolean): ItemDocument {
-  const item = withUnits ? toPantryItem(row) : toItemFields(row);
-  return { ...item, _deleted: row.deletedAt !== null };
+/** An item in the shape the mirror that pushed it holds, with its tombstone flag. */
+function itemDocument(row: ItemRow, shape: MirrorShape): ItemDocument {
+  return { ...toMirroredItem(row, shape), _deleted: row.deletedAt !== null };
 }
 
 function entryDocument(row: ShoppingListEntryRow): SyncDocument<ShoppingListEntry> {

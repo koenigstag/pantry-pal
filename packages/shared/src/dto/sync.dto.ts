@@ -51,6 +51,18 @@ export class SyncPullQueryDto {
   )
   @IsBoolean()
   subItems?: boolean;
+
+  /**
+   * `true` to have each item's ingredient (`PantryItem.ingredientId`). A mirror
+   * made before ingredients leaves it out, and gets items as they were: its
+   * schema has no such field, and refuses a document that has one.
+   */
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  ingredients?: boolean;
 }
 
 /** One row of a push. Its documents are checked against the item or entry rules by the service. */

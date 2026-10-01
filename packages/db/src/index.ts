@@ -6,6 +6,9 @@ export type {
   DefaultLocationTranslationRow,
   HouseholdMemberRow,
   HouseholdRow,
+  IngredientNameRow,
+  IngredientParentRow,
+  IngredientRow,
   ItemEventRow,
   ItemRecord,
   LocationRow,
@@ -32,6 +35,17 @@ export {
   type TransactionalOptions,
 } from './transaction';
 export { findPostgresError, PG_ERROR, type PgErrorCode, type PostgresErrorInfo } from './errors';
+export {
+  importIngredients,
+  INGREDIENT_LANGUAGES,
+  OFF_INGREDIENTS_TAXONOMY_URL,
+  parseOffTaxonomy,
+  type IngredientImportSummary,
+  type IngredientTranslations,
+  type ParseTaxonomyOptions,
+  type TaxonomyIngredient,
+  type TaxonomyIngredientName,
+} from './ingredients-taxonomy';
 export {
   CATEGORY_SEED,
   DEFAULT_LOCATION_SEED,

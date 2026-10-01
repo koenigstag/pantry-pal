@@ -21,6 +21,7 @@ import {
 import {
   ITEM_STATUSES,
   MAX_CATEGORY_CODE_LENGTH,
+  MAX_INGREDIENT_ID_LENGTH,
   MAX_ITEM_NAME_LENGTH,
   MAX_ITEM_NOTES_LENGTH,
   MAX_ITEM_QUANTITY,
@@ -45,8 +46,8 @@ import { NewSubItemDto } from './sub-item.dto';
  *
  * What a DTO cannot express is checked by the server: that `locationId` and
  * `defaultShoppingListId` belong to the household, that the category and unit
- * codes exist, that `unit` is a count unit, and that `sizeValue`/`sizeUnit` come
- * as a pair.
+ * codes and the ingredient exist, that `unit` is a count unit, and that
+ * `sizeValue`/`sizeUnit` come as a pair.
  */
 export class CreatePantryItemDto {
   /**
@@ -79,6 +80,12 @@ export class CreatePantryItemDto {
   @IsOmittable()
   @IsBoolean()
   isEdible?: boolean;
+
+  /** What the item is: an ingredient's id from `GET /ingredients`. Omit or `null` for not said. */
+  @IsOptional()
+  @IsString()
+  @Length(1, MAX_INGREDIENT_ID_LENGTH)
+  ingredientId?: string | null;
 
   /** How many, as a whole number. A fractional amount is a size: `1 × 1.5 kg`. */
   @Type(() => Number)
@@ -175,6 +182,12 @@ export class UpdatePantryItemDto {
   @IsOmittable()
   @IsBoolean()
   isEdible?: boolean;
+
+  /** `null` clears it. */
+  @IsOptional()
+  @IsString()
+  @Length(1, MAX_INGREDIENT_ID_LENGTH)
+  ingredientId?: string | null;
 
   /** Zero is allowed here, unlike on create: a used-up item that has not been cleared yet. */
   @IsOmittable()
