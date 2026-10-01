@@ -2,8 +2,9 @@
  * `pnpm db:ingredients [file]` — imports the Open Food Facts ingredients
  * taxonomy into `ingredients`, as often as it is run.
  *
- * Downloads `ingredients.full.json` unless given a copy of it, and adds the
- * names the taxonomy lacks from `data/ingredient-names.<language>.json`. Glue
+ * Downloads `ingredients.full.json` unless given a copy of it, adds the names
+ * the taxonomy lacks from `data/ingredient-names.<language>.json`, and puts
+ * those of `data/ingredient-overrides.<language>.json` before its own. Glue
  * only: the parsing and the writes live in `src/ingredients-taxonomy.ts`. The
  * environment is loaded as for `db:seed`.
  */
@@ -28,8 +29,11 @@ async function loadTaxonomy() {
   return response.json();
 }
 
-/** `data/ingredient-names.ru.json` and the like, by language. */
-async function loadTranslations() {
+/**
+ * `data/ingredient-<kind>.ru.json` and the like, by language: `names` fills the
+ * taxonomy's gaps, `overrides` replaces its own names.
+ */
+async function loadNames(kind) {
   const directory = new URL('../data/', import.meta.url);
   const names = await readdir(directory).catch((error) => {
     if (error.code === 'ENOENT') return [];
@@ -37,7 +41,7 @@ async function loadTranslations() {
   });
   const loaded = await Promise.all(
     names.flatMap((name) => {
-      const language = /^ingredient-names\.([a-z]{2,3})\.json$/.exec(name)?.[1];
+      const language = new RegExp(`^ingredient-${kind}\\.([a-z]{2,3})\\.json$`).exec(name)?.[1];
       if (language === undefined) return [];
       return readFile(new URL(name, directory), 'utf8').then((text) => [
         language,
@@ -46,12 +50,15 @@ async function loadTranslations() {
     }),
   );
   for (const [language, byId] of loaded) {
-    console.log(`Translations: ${Object.keys(byId).length} in ${language}`);
+    console.log(`${kind}: ${Object.keys(byId).length} in ${language}`);
   }
   return Object.fromEntries(loaded);
 }
 
-const entries = parseOffTaxonomy(await loadTaxonomy(), { translations: await loadTranslations() });
+const entries = parseOffTaxonomy(await loadTaxonomy(), {
+  translations: await loadNames('names'),
+  overrides: await loadNames('overrides'),
+});
 const handle = createDatabase(resolveConnectionString(process.env));
 
 try {

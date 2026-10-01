@@ -119,11 +119,6 @@ export interface TaxonomyIngredient {
 }
 
 /**
- * The entries of `ingredients.full.json` worth offering, with their names in
- * `languages`. Kept: everything with an English name, outside the excluded
- * branches, that is neither an additive nor an origin or label variant.
- */
-/**
  * Names the taxonomy lacks, by language and then ingredient id: the primary
  * name first, then synonyms. `data/ingredient-names.<language>.json`, machine
  * translated and reviewed by hand; see `scripts/import-ingredients.mjs`.
@@ -140,11 +135,28 @@ export interface ParseTaxonomyOptions {
    * always wins: once it has one, a translation here only adds synonyms.
    */
   translations?: IngredientTranslations;
+  /**
+   * Names that replace the taxonomy's own, written in the same shape: their
+   * first becomes the primary name, and the taxonomy's turns into a synonym.
+   * `data/ingredient-overrides.<language>.json`, for the few names the taxonomy
+   * gets wrong for the app's readers ("ядрица" for buckwheat, which people call
+   * "гречка").
+   */
+  overrides?: IngredientTranslations;
 }
 
+/**
+ * The entries of `ingredients.full.json` worth offering, with their names in
+ * `languages`. Kept: everything with an English name, outside the excluded
+ * branches, that is neither an additive nor an origin or label variant.
+ */
 export function parseOffTaxonomy(
   raw: unknown,
-  { languages = INGREDIENT_LANGUAGES, translations = {} }: ParseTaxonomyOptions = {},
+  {
+    languages = INGREDIENT_LANGUAGES,
+    translations = {},
+    overrides = {},
+  }: ParseTaxonomyOptions = {},
 ): TaxonomyIngredient[] {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('The taxonomy is not a JSON object of entries');
@@ -180,7 +192,9 @@ export function parseOffTaxonomy(
   return [...kept].map(([id, entry]) => ({
     id,
     name: entry.name.en!.trim(),
-    names: languages.flatMap((locale) => namesIn(entry, locale, translations[locale]?.[id])),
+    names: languages.flatMap((locale) =>
+      namesIn(entry, locale, translations[locale]?.[id], overrides[locale]?.[id]),
+    ),
     parents: (entry.parents ?? []).filter((parent) => parent !== id && kept.has(parent)),
     category: categoryOf(taxonomy, id),
   }));
@@ -218,14 +232,15 @@ function categoryOf(taxonomy: Record<string, TaxonomyEntry>, id: string): string
 }
 
 /**
- * The primary name first, then the synonyms that fold to something else: the
- * taxonomy's primary, else the translation's, then the taxonomy's synonyms, then
- * the rest of the translation's.
+ * The primary name first, then the synonyms that fold to something else: an
+ * override's names, then the taxonomy's primary, else the translation's, then
+ * the taxonomy's synonyms, then the rest of the translation's.
  */
 function namesIn(
   entry: TaxonomyEntry,
   locale: string,
   translated: readonly string[] = [],
+  overridden: readonly string[] = [],
 ): TaxonomyIngredientName[] {
   const names: TaxonomyIngredientName[] = [];
   const seen = new Set<string>();
@@ -237,10 +252,15 @@ function namesIn(
     names.push({ locale, name: tidy, isPrimary });
   };
 
+  const [overridePrimary, ...overrideSynonyms] = overridden;
+  if (overridePrimary !== undefined) add(overridePrimary, true);
+  for (const synonym of overrideSynonyms) add(synonym, false);
+
   const primary = entry.name?.[locale];
   const [translatedPrimary, ...translatedSynonyms] = translated;
-  if (primary !== undefined) add(primary, true);
-  else if (translatedPrimary !== undefined) add(translatedPrimary, true);
+  const hasPrimary = overridePrimary !== undefined;
+  if (primary !== undefined) add(primary, !hasPrimary);
+  else if (translatedPrimary !== undefined) add(translatedPrimary, !hasPrimary);
   for (const synonym of entry.synonyms?.[locale] ?? []) add(synonym, false);
   if (primary !== undefined && translatedPrimary !== undefined) add(translatedPrimary, false);
   for (const synonym of translatedSynonyms) add(synonym, false);

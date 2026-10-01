@@ -19,6 +19,12 @@ always wins: once Open Food Facts has one, the names here only add synonyms.
   uncertain, mostly obscure fish, shellfish and varieties.
 - **Edit by hand** where a name is wrong; nothing regenerates these files.
 
+`ingredient-overrides.<language>.json`, in the same shape, holds the few names
+that must win over the taxonomy's own, which then becomes a synonym: Open Food
+Facts calls buckwheat "ядрица", but people say "гречка". Keep it short, and
+prefer contributing a fix to Open Food Facts where the taxonomy is plainly
+wrong.
+
 They are derived from the Open Food Facts database, so they are under the same
 licence: the Open Database License (ODbL), with the same credit to Open Food
 Facts.

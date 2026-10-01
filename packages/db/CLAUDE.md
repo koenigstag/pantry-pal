@@ -151,8 +151,10 @@ These are deliberate. Changing any of them affects the whole workspace.
     immutable and cannot be indexed; a GIN trigram index serves `LIKE '%…%'` and
     `%`, so migration `0009` creates `pg_trgm`.
   - **Names the taxonomy lacks** come from `data/ingredient-names.<language>.json`
-    (ODbL too; see `data/README.md`). The taxonomy's primary name always wins,
-    and a translation then only adds synonyms. Russian has one for every
+    (ODbL too; see `data/README.md`). The taxonomy's primary name wins, and a
+    translation then only adds synonyms, except for the few names
+    `data/ingredient-overrides.<language>.json` puts first ("гречка", not the
+    taxonomy's "ядрица"). Russian has one for every
     ingredient: about 950 from the taxonomy, 3,260 machine translated and
     reviewed. Names in Russian and Ukrainian are tidied on import: stress marks
     and Latin lookalike letters inside Cyrillic words go, and a common noun loses
