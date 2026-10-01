@@ -68,6 +68,8 @@ export class IngredientsRepository {
    * then a later word's start, then anywhere, then only alike; within each, names
    * in `language`, then English, then the closest and shortest. Each ingredient once, by its best-matching name.
    *
+   * Ingredients the reader's language names alike appear once.
+   *
    * Every language is searched, not only the reader's: a household may type in
    * two, and the taxonomy's translations have gaps that English fills.
    */
@@ -113,13 +115,24 @@ export class IngredientsRepository {
       left join ${ingredientNames} d
         on d.ingredient_id = b.ingredient_id and d.locale = ${language} and d.is_primary
       order by b.match_rank, b.language_rank, b.closeness desc, length(coalesce(d.name, i.name)), b.ingredient_id
-      limit ${limit}`);
+      limit ${limit * 2}`);
 
-    return result.rows.map(({ id, name, category, matched_name }) => ({
-      id,
-      name,
-      category,
-      matchedName: searchText(matched_name) === searchText(name) ? null : matched_name,
-    }));
+    // The taxonomy has near twins (whiskey and whisky, veal and veal meat), which
+    // a language may name alike: one of each name, the better ranked.
+    const seen = new Set<string>();
+    return result.rows
+      .filter(({ name }) => {
+        const key = searchText(name);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, limit)
+      .map(({ id, name, category, matched_name }) => ({
+        id,
+        name,
+        category,
+        matchedName: searchText(matched_name) === searchText(name) ? null : matched_name,
+      }));
   }
 }

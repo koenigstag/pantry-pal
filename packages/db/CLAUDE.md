@@ -150,11 +150,22 @@ These are deliberate. Changing any of them affects the whole workspace.
     accents or stress marks), computed by the importer since `unaccent` is not
     immutable and cannot be indexed; a GIN trigram index serves `LIKE '%…%'` and
     `%`, so migration `0009` creates `pg_trgm`.
+  - **Names the taxonomy lacks** come from `data/ingredient-names.<language>.json`
+    (ODbL too; see `data/README.md`). The taxonomy's primary name always wins,
+    and a translation then only adds synonyms. Russian has one for every
+    ingredient: about 950 from the taxonomy, 3,260 machine translated and
+    reviewed. Names in Russian and Ukrainian are tidied on import: stress marks
+    and Latin lookalike letters inside Cyrillic words go, and a common noun loses
+    its capital (`cли́вочное ма́сло` → `сливочное масло`).
+  - **Not every entry is an ingredient**: list numbering (`en:no1`), colour words
+    and label jargon are dropped by id (`NOT_AN_INGREDIENT_ID`).
   - **Search** (`IngredientsRepository.search`) looks in every stored language —
     households type in two, and English fills the taxonomy's gaps — and ranks the
     whole name, its start, a later word's start, anywhere, then only alike; within
-    each, the reader's language, then English. The taxonomy's translations are
-    uneven: Ukrainian has about 600 names, German 2,500.
+    each, the reader's language, then English. Near twins the reader's language
+    names alike (whiskey and whisky) appear once, the better ranked. The
+    taxonomy's own translations are uneven: Ukrainian has about 600 names,
+    German 2,500.
   - **A re-import never deletes an ingredient**, since items may name any
     (`items_ingredient_id_ingredients_id_fk`, `RESTRICT`). Names and parents are
     replaced whole, so one the taxonomy dropped keeps its English `name` for

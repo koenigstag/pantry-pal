@@ -83,6 +83,12 @@ export const CATEGORY_BRANCHES: readonly (readonly [branch: string, category: st
   ['en:mushroom', 'produce'],
 ];
 
+/**
+ * Entries that are no ingredient at all: numbering and markers copied from
+ * ingredient lists (`n°`, `no1`), colour words, and label jargon.
+ */
+const NOT_AN_INGREDIENT_ID = /^en:(n|no\d+|fd-c|colourful|grey|carrier|sorrel-or-acid)$/;
+
 /** Additives by their E number: `en:e330`. */
 const E_NUMBER_ID = /^[a-z]{2}:e\d/;
 
@@ -161,6 +167,7 @@ export function parseOffTaxonomy(
       english === '' ||
       excluded.has(id) ||
       E_NUMBER_ID.test(id) ||
+      NOT_AN_INGREDIENT_ID.test(id) ||
       VARIANT_ID.test(id) ||
       entry.e_number !== undefined ||
       entry.additives_classes !== undefined
