@@ -41,6 +41,8 @@ export {
   OFF_INGREDIENTS_TAXONOMY_URL,
   parseOffTaxonomy,
   type IngredientImportSummary,
+  type IngredientTranslations,
+  type ParseTaxonomyOptions,
   type TaxonomyIngredient,
   type TaxonomyIngredientName,
 } from './ingredients-taxonomy';

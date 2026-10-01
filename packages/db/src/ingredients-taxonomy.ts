@@ -117,9 +117,28 @@ export interface TaxonomyIngredient {
  * `languages`. Kept: everything with an English name, outside the excluded
  * branches, that is neither an additive nor an origin or label variant.
  */
+/**
+ * Names the taxonomy lacks, by language and then ingredient id: the primary
+ * name first, then synonyms. `data/ingredient-names.<language>.json`, machine
+ * translated and reviewed by hand; see `scripts/import-ingredients.mjs`.
+ */
+export type IngredientTranslations = Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+>;
+
+export interface ParseTaxonomyOptions {
+  /** The languages to keep names in; the app's own by default. */
+  languages?: readonly string[];
+  /**
+   * Names to add where the taxonomy has none. The taxonomy's own primary name
+   * always wins: once it has one, a translation here only adds synonyms.
+   */
+  translations?: IngredientTranslations;
+}
+
 export function parseOffTaxonomy(
   raw: unknown,
-  languages: readonly string[] = INGREDIENT_LANGUAGES,
+  { languages = INGREDIENT_LANGUAGES, translations = {} }: ParseTaxonomyOptions = {},
 ): TaxonomyIngredient[] {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('The taxonomy is not a JSON object of entries');
@@ -154,7 +173,7 @@ export function parseOffTaxonomy(
   return [...kept].map(([id, entry]) => ({
     id,
     name: entry.name.en!.trim(),
-    names: languages.flatMap((locale) => namesIn(entry, locale)),
+    names: languages.flatMap((locale) => namesIn(entry, locale, translations[locale]?.[id])),
     parents: (entry.parents ?? []).filter((parent) => parent !== id && kept.has(parent)),
     category: categoryOf(taxonomy, id),
   }));
@@ -191,23 +210,88 @@ function categoryOf(taxonomy: Record<string, TaxonomyEntry>, id: string): string
   return null;
 }
 
-/** The primary name first, then the synonyms that fold to something else. */
-function namesIn(entry: TaxonomyEntry, locale: string): TaxonomyIngredientName[] {
+/**
+ * The primary name first, then the synonyms that fold to something else: the
+ * taxonomy's primary, else the translation's, then the taxonomy's synonyms, then
+ * the rest of the translation's.
+ */
+function namesIn(
+  entry: TaxonomyEntry,
+  locale: string,
+  translated: readonly string[] = [],
+): TaxonomyIngredientName[] {
   const names: TaxonomyIngredientName[] = [];
   const seen = new Set<string>();
   const add = (name: string, isPrimary: boolean): void => {
-    const trimmed = name.trim();
-    const key = searchText(trimmed);
+    const tidy = tidyName(locale, name);
+    const key = searchText(tidy);
     if (key === '' || seen.has(key)) return;
     seen.add(key);
-    names.push({ locale, name: trimmed, isPrimary });
+    names.push({ locale, name: tidy, isPrimary });
   };
 
   const primary = entry.name?.[locale];
+  const [translatedPrimary, ...translatedSynonyms] = translated;
   if (primary !== undefined) add(primary, true);
+  else if (translatedPrimary !== undefined) add(translatedPrimary, true);
   for (const synonym of entry.synonyms?.[locale] ?? []) add(synonym, false);
+  if (primary !== undefined && translatedPrimary !== undefined) add(translatedPrimary, false);
+  for (const synonym of translatedSynonyms) add(synonym, false);
 
   return names;
+}
+
+/** Languages written in Cyrillic, whose nouns take no capital. */
+const CYRILLIC_LANGUAGES = new Set(['ru', 'uk']);
+
+/** Latin letters that look like Cyrillic ones, typed by mistake into Cyrillic words. */
+const CYRILLIC_LOOKALIKES: Readonly<Record<string, string>> = {
+  a: 'а',
+  c: 'с',
+  e: 'е',
+  k: 'к',
+  m: 'м',
+  o: 'о',
+  p: 'р',
+  x: 'х',
+  y: 'у',
+  A: 'А',
+  B: 'В',
+  C: 'С',
+  E: 'Е',
+  H: 'Н',
+  K: 'К',
+  M: 'М',
+  O: 'О',
+  P: 'Р',
+  T: 'Т',
+  X: 'Х',
+};
+
+/**
+ * A name as the taxonomy's contributors typed it, made presentable in a
+ * Cyrillic language: no stress marks (`ма́сло`), no Latin letters inside
+ * Cyrillic words (`cливочное` with a Latin c), and no capital on a common noun
+ * (`Молоко`), though an abbreviation keeps its capitals. Elsewhere it is only
+ * trimmed.
+ */
+function tidyName(locale: string, name: string): string {
+  const trimmed = name.trim().replace(/\s+/g, ' ');
+  if (!CYRILLIC_LANGUAGES.has(locale)) return trimmed;
+
+  const unstressed = trimmed
+    .normalize('NFD')
+    .replace(/[\u0300\u0301]/g, '')
+    .normalize('NFC');
+  const cyrillic = unstressed.replace(/[\p{L}]+/gu, (word) =>
+    /\p{Script=Cyrillic}/u.test(word)
+      ? word.replace(/[A-Za-z]/g, (letter) => CYRILLIC_LOOKALIKES[letter] ?? letter)
+      : word,
+  );
+  const [first = '', second = ''] = cyrillic;
+  return second === second.toLowerCase() && second !== second.toUpperCase()
+    ? first.toLowerCase() + cyrillic.slice(1)
+    : cyrillic;
 }
 
 export interface IngredientImportSummary {
