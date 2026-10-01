@@ -522,3 +522,131 @@ export interface IngredientMatch extends Ingredient {
    */
   matchedName: string | null;
 }
+
+/**
+ * An amount as a recipe wrote it. `text` is how to show it — `1/2`, `2-3`,
+ * `a pinch` — and `value` the number in it, for scaling and matching: the
+ * start of a range, `null` for words.
+ */
+export interface RecipeQuantity {
+  text: string;
+  value: number | null;
+  unit: string | null;
+}
+
+export interface RecipeIngredient {
+  name: string;
+  quantity: RecipeQuantity | null;
+  /** What follows it in parentheses: `(softened)`. */
+  note: string | null;
+  /**
+   * Whether it belongs in the ingredient list. A later mention of one already
+   * listed (`@&butter{}`) is not.
+   */
+  listed: boolean;
+}
+
+export interface RecipeCookware {
+  name: string;
+  quantity: RecipeQuantity | null;
+  note: string | null;
+  listed: boolean;
+}
+
+export interface RecipeTimer {
+  name: string | null;
+  quantity: RecipeQuantity | null;
+}
+
+/** A piece of a step: text, or a reference into the document's lists by index. */
+export type RecipeStepItem =
+  | { type: 'text'; value: string }
+  | { type: 'ingredient'; index: number }
+  | { type: 'cookware'; index: number }
+  | { type: 'timer'; index: number };
+
+/** A section holds steps — numbered from 1 within it — and notes (`> …` lines) between them. */
+export type RecipeSectionContent =
+  | { type: 'step'; number: number; items: RecipeStepItem[] }
+  | { type: 'note'; text: string };
+
+export interface RecipeSection {
+  /** `= Name`; `null` for the steps before any. */
+  name: string | null;
+  content: RecipeSectionContent[];
+}
+
+/**
+ * A recipe as the server parsed it from its Cooklang text. Kept beside the
+ * text so clients never parse, and so ingredients can be searched.
+ */
+export interface RecipeDocument {
+  version: number;
+  title: string;
+  description: string | null;
+  /** As written: `4`, `4-6`, `2 loaves`. */
+  servings: string | null;
+  /** As written: `45 min`, `1h 30m`. */
+  time: string | null;
+  tags: string[];
+  ingredients: RecipeIngredient[];
+  cookware: RecipeCookware[];
+  timers: RecipeTimer[];
+  sections: RecipeSection[];
+}
+
+/**
+ * A recipe a household sees. One with a `householdId` is the household's own,
+ * imported by a member; one without is a recommendation, the same for everyone.
+ *
+ * It arrives in the caller's language where a translation exists — the exact
+ * tag, then its language — and otherwise as written (`originalLocale`).
+ */
+export interface RecipeSummary {
+  id: string;
+  /** `null`: a recommendation. */
+  householdId: string | null;
+  title: string;
+  /** The language of the text served. */
+  locale: string;
+  /** The language it was written in. */
+  originalLocale: string;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  servings: string | null;
+  time: string | null;
+  /** How many ingredients the list shows. */
+  ingredientCount: number;
+  /** In the household's favourites: its own recipes always are, a recommendation once saved. */
+  favourite: boolean;
+  createdAt: string;
+}
+
+export interface Recipe extends RecipeSummary {
+  document: RecipeDocument;
+  /** The Cooklang text the document was parsed from, in `locale`. */
+  source: string;
+}
+
+/** A recommendation as the admin API reads and writes it: the original and every translation. */
+export interface AdminRecipe {
+  id: string;
+  locale: string;
+  source: string;
+  sourceUrl: string | null;
+  imageUrl: string | null;
+  title: string;
+  /** Cooklang text by BCP 47 tag, as `pickTranslation` looks it up. */
+  translations: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The household's recipes changed: one imported or deleted, a recommendation
+ * saved or let go. Recipes are served in each caller's language, so the event
+ * carries none: clients showing them fetch the list again.
+ */
+export interface RecipesChangedPayload {
+  householdId: string;
+}

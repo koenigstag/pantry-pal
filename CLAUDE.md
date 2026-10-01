@@ -88,6 +88,13 @@ Facts taxonomy (ODbL; the item form credits it) with
 Until that import has run, the item form's ingredient search finds nothing.
 Details in `packages/db/CLAUDE.md`.
 
+### Recipes are Cooklang
+
+A household keeps recipes imported from recipe sites by link, and sees
+recommendations written through `/admin/recipes`, translated per language. Each
+is Cooklang text plus the JSON the backend parses from it. Online only. Details
+in `apps/backend/CLAUDE.md` (Recipes).
+
 ### The frontend works offline, from a mirror
 
 `PantryStore` shows the household as the device holds it: an offline mirror

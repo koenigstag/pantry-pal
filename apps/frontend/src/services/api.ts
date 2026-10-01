@@ -10,6 +10,8 @@ import {
   type IngredientMatch,
   type PantryItem,
   type PantryLocation,
+  type Recipe,
+  type RecipeSummary,
   type ShoppingList,
   type ShoppingListEntriesChange,
   type ShoppingListEntry,
@@ -30,6 +32,7 @@ import type {
   CreatePantryItemDto,
   CreateShoppingListDto,
   DevSignInDto,
+  ImportRecipeDto,
   PutAwayShoppingListEntriesDto,
   SignInDto,
   SignUpDto,
@@ -251,6 +254,35 @@ export const pantryApi = {
       body,
     });
   },
+
+  /** The household's own recipes and every recommendation, in the caller's language where translated. */
+  listRecipes: (householdId: string): Promise<RecipeSummary[]> =>
+    request<RecipeSummary[]>(`${household(householdId)}/recipes`),
+
+  getRecipe: (householdId: string, recipeId: string): Promise<Recipe> =>
+    request<Recipe>(`${household(householdId)}/recipes/${encodeURIComponent(recipeId)}`),
+
+  /**
+   * Keeps the recipe a page marks up. A page imported before answers with that
+   * copy. A 400 or 409 names its reason in `code` (`RECIPE_IMPORT_ERROR`).
+   */
+  importRecipe: (householdId: string, dto: ImportRecipeDto): Promise<Recipe> =>
+    request<Recipe>(`${household(householdId)}/recipes/import`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    }),
+
+  /** The household's own recipe only: 409 for a recommendation. */
+  removeRecipe: (householdId: string, recipeId: string): Promise<void> =>
+    request<void>(`${household(householdId)}/recipes/${encodeURIComponent(recipeId)}`, {
+      method: 'DELETE',
+    }),
+
+  /** Saves a recommendation to the household's favourites, or takes it out. */
+  setRecipeFavourite: (householdId: string, recipeId: string, favourite: boolean): Promise<void> =>
+    request<void>(`${household(householdId)}/recipes/${encodeURIComponent(recipeId)}/favourite`, {
+      method: favourite ? 'PUT' : 'DELETE',
+    }),
 
   /** The household's backup: an .xlsx of its storage spaces, items and units. */
   exportBackup: (householdId: string): Promise<Blob> =>

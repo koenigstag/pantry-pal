@@ -13,6 +13,8 @@ export type {
   ItemRecord,
   LocationRow,
   ProductRow,
+  RecipeRow,
+  RecipeTranslationRow,
   RefreshTokenRow,
   ShoppingListEntryRow,
   ShoppingListRow,

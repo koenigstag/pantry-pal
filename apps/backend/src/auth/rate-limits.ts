@@ -24,3 +24,18 @@ export const PASSWORD_CHANGE_ATTEMPTS = {
     },
   },
 };
+
+/**
+ * `@Throttle` options for importing recipes, per account: each import makes the
+ * server fetch a page, which must not become a way to send it at a site in bulk.
+ */
+export const RECIPE_IMPORTS = {
+  default: {
+    limit: 20,
+    ttl: MINUTE,
+    getTracker: (request: object): string => {
+      const { user, ip } = request as PantryRequest;
+      return user === undefined ? `address:${ip ?? 'unknown'}` : `user:${user.id}`;
+    },
+  },
+};

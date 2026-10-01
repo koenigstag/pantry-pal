@@ -14,6 +14,7 @@ import { ItemsModule } from './items/items.module';
 import { LocationsModule } from './locations/locations.module';
 import { ChangeFeedModule } from './realtime/change-feed';
 import { RealtimeModule } from './realtime/realtime.module';
+import { RecipesModule } from './recipes/recipes.module';
 import { ShoppingListsModule } from './shopping-lists/shopping-lists.module';
 import { SyncModule } from './sync/sync.module';
 import { UnitsModule } from './units/units.module';
@@ -39,6 +40,7 @@ import { UnitsModule } from './units/units.module';
     ShoppingListsModule,
     SyncModule,
     DataModule,
+    RecipesModule,
     AdminModule,
     RealtimeModule,
   ],

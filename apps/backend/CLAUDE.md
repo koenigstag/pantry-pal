@@ -52,11 +52,12 @@ src/
   shopping-lists/ lists and their entries: the editor's save, archiving, putting away
   sync/         the offline mirror: pulls since a checkpoint, pushes through the services
   data/         the Data sheet: an .xlsx backup out; imports in, from a backup or KitchenPal
+  recipes/      recipes as Cooklang: the household's own, imported from web pages, and recommendations
   units/        GET /units (public reference data)
   categories/   GET /categories (public reference data)
   ingredients/  GET /ingredients: search and lookup (signed in; imported reference data)
   default-locations/  the storage spaces a new household starts with, and their translations
-  admin/        /admin/units, /admin/categories, /admin/default-locations, /admin/users (passwords)
+  admin/        /admin/units, /admin/categories, /admin/default-locations, /admin/recipes, /admin/users (passwords)
   realtime/     ChangeFeed, PantryGateway, Socket.IO adapter, WS exception filter
 ```
 
@@ -91,9 +92,14 @@ GET                    /households/:householdId/sync/:collection      ?updatedAt
 POST                   /households/:householdId/sync/:collection/push rows: items, entries only
 GET                    /households/:householdId/export                an .xlsx backup
 POST                   /households/:householdId/import/:source        multipart `file`; pantry-pal, kitchen-pal
+GET                    /households/:householdId/recipes               own and recommendations, in the caller's language
+POST                   /households/:householdId/recipes/import        url; 20/min per account
+GET    DELETE          /households/:householdId/recipes/:recipeId     DELETE: the household's own only
+PUT    DELETE          /households/:householdId/recipes/:recipeId/favourite   recommendations only
 GET    POST            /admin/units              GET PATCH DELETE /admin/units/:code
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
+GET    POST            /admin/recipes            GET PUT DELETE /admin/recipes/:recipeId  (recommendations)
 PUT                    /admin/users/:email/password                   sets it, ends every session; no email
 ```
 
@@ -460,6 +466,57 @@ one transaction (`ImportService`).
   directory that lies about its sizes is bounded by the upload limit alone.
 - **exceljs pulls in `uuid@8`**, which `pnpm audit` flags (bounds check in v3, v5
   and v6 with a buffer). exceljs only calls `v4()`, so it is not reachable.
+
+## Recipes
+
+A recipe is **Cooklang text** (https://cooklang.org), stored as written, beside
+the JSON the server parses from it (`RecipeDocument` in shared). Clients never
+parse: they read the document. `recipes.source` is the truth and `document` is
+derived, rewritten whenever the text is.
+
+- **Two kinds in one table.** A row with a `household_id` is the household's own,
+  imported by a member; one without is a **recommendation**, written through
+  `/admin/recipes` and seen by every household. A household's favourites are its
+  own recipes plus the recommendations it saved (`recipe_favourites`).
+- **Translations are other texts of the same recipe** (`recipe_translations`):
+  a reader gets the text for their exact tag, then their language, then the
+  original (`locale` names its language). The admin API writes them with the
+  original; a translation keyed by the original's own locale is refused.
+- **Parsing** (`cooklang.ts`) uses `@cooklang/cooklang`, cooklang-rs built to
+  WASM, **pinned to 0.18.7**: 0.19.0 was published without its WASM files. Node
+  imports the `.wasm` module natively, behind an experimental warning at boot.
+  Its unit table is switched off (`load_units`), so `500%г` stays as written;
+  timer units must still be English (`~{20%min}`) or the parser reports them.
+  The title comes from the text's `title` metadata, which is required (400).
+- **Importing a page** (`POST .../recipes/import`):
+  - **Fetching is guarded** (`page-fetcher.ts`): http(s) on the web's ports only,
+    no credentials, and every address the host resolves to must be public —
+    checked in the socket's `lookup`, so a DNS answer cannot change between
+    check and connect, and again on every redirect (at most 5). 15 s and 5 MB
+    decompressed at most. The charset comes from the header or a `<meta>`, so
+    windows-1251 pages read right.
+  - **The recipe is the site's own markup** (`page-recipe.ts`): schema.org
+    `Recipe` as JSON-LD, else as microdata (`itemprop`, as Povarenok has it). No
+    model reads the page. A page without either is a 400 `no-recipe`.
+  - **To Cooklang** (`page-to-cooklang.ts`): the ingredient lines are parsed by
+    pattern (`500 г картофеля`, `Картофель — 500 г`, `Соль — по вкусу`, notes in
+    brackets) into one first step that only lists them; the steps follow as
+    written, escaped. Moving each ingredient into its step would mean matching
+    words across grammatical cases. The frontend hides that step, as the list
+    shows it.
+  - **A page imported before** answers with that copy (unique
+    `(household_id, source_url)`), so the answer is 200 either way. No
+    transaction: the fetch takes seconds and the write is one row.
+  - Refusals carry a `code` (`RECIPE_IMPORT_ERROR`): `blocked-url`,
+    `unreachable`, `not-a-page`, `no-recipe` (400) and `too-many` (409, past
+    `MAX_RECIPES_PER_HOUSEHOLD`).
+  - **Sites behind bot protection may refuse it.** In testing, eda.ru and
+    Povarenok imported; bbcgoodfood, simplyrecipes, chefkoch and marmiton
+    answered 403 to the server whatever its User-Agent, though curl from another
+    network got bbcgoodfood. Bot protection judges the client and its network, so
+    results may differ from the production host.
+- **Announced as `recipes.changed`**, naming only the household: members may
+  read different languages, so clients fetch the list again.
 
 ## Request flow
 

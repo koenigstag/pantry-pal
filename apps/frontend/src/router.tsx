@@ -5,6 +5,8 @@ import { SignInPage } from './features/auth/SignInPage';
 import { SignUpPage } from './features/auth/SignUpPage';
 import { WelcomePage } from './features/auth/WelcomePage';
 import { PlannerPage, ProfilePage } from './features/pages';
+import { RecipePage } from './features/recipes/RecipePage';
+import { RecipesPage } from './features/recipes/RecipesPage';
 import { AppShell } from './features/shell/AppShell';
 import { ROUTES } from './features/shell/navigation';
 import { ShoppingPage } from './features/shopping/ShoppingPage';
@@ -54,6 +56,8 @@ export const router = createBrowserRouter(
             },
             { path: ROUTES.shopping, Component: ShoppingPage },
             { path: `${ROUTES.shopping}/:listId`, Component: ShoppingPage },
+            { path: ROUTES.recipes, Component: RecipesPage },
+            { path: `${ROUTES.recipes}/:recipeId`, Component: RecipePage },
             { path: ROUTES.planner, Component: PlannerPage },
             { path: ROUTES.profile, Component: ProfilePage },
             { path: '*', element: <Navigate replace to={ROUTES.storage} /> },

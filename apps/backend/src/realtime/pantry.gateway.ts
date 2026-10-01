@@ -358,6 +358,12 @@ export class PantryGateway
         });
         break;
 
+      case 'recipes.changed':
+        server
+          .to(householdRoom(change.householdId))
+          .emit(PANTRY_EVENT.RecipesChanged, { householdId: change.householdId });
+        break;
+
       case 'session.revoked':
         // Access tokens are checked only at the handshake, so a revoked session's
         // sockets would otherwise stay connected.

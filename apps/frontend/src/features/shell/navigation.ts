@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  ChefHat,
   CircleUserRound,
   Package,
   ShoppingCart,
@@ -15,6 +16,7 @@ export const ROUTES = {
   welcome: '/welcome',
   storage: '/storage',
   shopping: '/shopping',
+  recipes: '/recipes',
   planner: '/planner',
   profile: '/profile',
 } as const;
@@ -29,6 +31,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { path: ROUTES.storage, labelKey: 'storage', icon: Package },
   { path: ROUTES.shopping, labelKey: 'shopping', icon: ShoppingCart },
+  { path: ROUTES.recipes, labelKey: 'recipes', icon: ChefHat },
   { path: ROUTES.planner, labelKey: 'planner', icon: CalendarDays },
   { path: ROUTES.profile, labelKey: 'profile', icon: CircleUserRound },
 ];

@@ -6,6 +6,7 @@ import { IngredientCatalog } from './IngredientCatalog';
 import { NoticeStore } from './NoticeStore';
 import { PantryStore } from './PantryStore';
 import { QuantityUpdates } from './QuantityUpdates';
+import { RecipesStore } from './RecipesStore';
 
 /**
  * Composition root. Domain stores receive their collaborators here rather than
@@ -36,14 +37,18 @@ export class SessionStores {
   readonly pantry: PantryStore;
   readonly quantities: QuantityUpdates;
   readonly ingredients: IngredientCatalog;
+  readonly recipes: RecipesStore;
 
   constructor(notices: NoticeStore) {
-    this.pantry = new PantryStore(pantryApi, createPantrySocket(), notices);
+    const socket = createPantrySocket();
+    this.pantry = new PantryStore(pantryApi, socket, notices);
     this.quantities = new QuantityUpdates(this.pantry, notices);
     this.ingredients = new IngredientCatalog(pantryApi, LANGUAGE);
+    this.recipes = new RecipesStore(pantryApi, socket, this.pantry);
   }
 
   dispose(): void {
+    this.recipes.dispose();
     this.quantities.dispose();
     this.pantry.dispose();
   }

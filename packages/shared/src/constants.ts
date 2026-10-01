@@ -57,6 +57,7 @@ export const PANTRY_EVENT = {
   ShoppingListsUpserted: 'pantry:shopping-lists-upserted',
   ShoppingListEntriesUpserted: 'pantry:shopping-list-entries-upserted',
   ShoppingListEntriesDeleted: 'pantry:shopping-list-entries-deleted',
+  RecipesChanged: 'pantry:recipes-changed',
 } as const;
 export type PantryEventName = (typeof PANTRY_EVENT)[keyof typeof PANTRY_EVENT];
 
@@ -241,6 +242,37 @@ export const DEFAULT_SHOPPING_LIST_TRANSLATIONS: Readonly<Record<string, string>
   'fr-CA': 'Ma liste d’épicerie',
   es: 'Mi lista de la compra',
 };
+
+/**
+ * A recipe is Cooklang text (https://cooklang.org): the original as written,
+ * and a translation per language. These bound what one may hold.
+ */
+export const MAX_RECIPE_TITLE_LENGTH = 200;
+export const MAX_RECIPE_SOURCE_LENGTH = 50_000;
+export const MAX_RECIPE_URL_LENGTH = 2048;
+/** How many recipes one household may import: enough for a cookbook, not a crawl. */
+export const MAX_RECIPES_PER_HOUSEHOLD = 1000;
+/**
+ * The shape of `Recipe.document`, the JSON the server parses from Cooklang. A
+ * change to its shape raises this; rows of an older version then need parsing
+ * again from their `source` before they are served, which nothing does yet.
+ */
+export const RECIPE_DOCUMENT_VERSION = 1;
+
+/** Why a page could not be imported as a recipe: the `code` of the 4xx answer. */
+export const RECIPE_IMPORT_ERROR = {
+  /** Not an address the server will fetch: a private network, a port other than the web's. */
+  BlockedUrl: 'blocked-url',
+  /** The page did not load: unreachable, too slow, or an error status. */
+  Unreachable: 'unreachable',
+  /** It loaded, but is not a web page, or is far larger than one. */
+  NotAPage: 'not-a-page',
+  /** A page without a recipe its site marked up (schema.org `Recipe`). */
+  NoRecipe: 'no-recipe',
+  /** The household has `MAX_RECIPES_PER_HOUSEHOLD` already. */
+  TooMany: 'too-many',
+} as const;
+export type RecipeImportErrorCode = (typeof RECIPE_IMPORT_ERROR)[keyof typeof RECIPE_IMPORT_ERROR];
 
 /**
  * What the offline mirror replicates, spelled as it appears in a sync URL.

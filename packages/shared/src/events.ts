@@ -12,6 +12,7 @@ import type {
   PantryLocationsReorderedPayload,
   PantryLocationsUpsertedPayload,
   PantrySnapshotPayload,
+  RecipesChangedPayload,
   ShoppingListDeletedPayload,
   ShoppingListEntriesDeletedPayload,
   ShoppingListEntriesUpsertedPayload,
@@ -51,6 +52,7 @@ export interface ServerToClientEvents {
   [PANTRY_EVENT.ShoppingListsUpserted]: (payload: ShoppingListsUpsertedPayload) => void;
   [PANTRY_EVENT.ShoppingListEntriesUpserted]: (payload: ShoppingListEntriesUpsertedPayload) => void;
   [PANTRY_EVENT.ShoppingListEntriesDeleted]: (payload: ShoppingListEntriesDeletedPayload) => void;
+  [PANTRY_EVENT.RecipesChanged]: (payload: RecipesChangedPayload) => void;
 }
 
 export interface ClientToServerEvents {

@@ -7,9 +7,9 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Eighteen tables, the transaction layer, seed data, and repositories for users,
+Twenty-one tables, the transaction layer, seed data, and repositories for users,
 refresh tokens, households, members, locations, items (with their units), item events, units,
-categories, ingredients, the default storage spaces, shopping lists and their entries.
+categories, ingredients, recipes, the default storage spaces, shopping lists and their entries.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -436,6 +436,13 @@ trigram index needs. Verified on PGlite (PostgreSQL 17 compiled to WebAssembly,
 with its `pg_trgm`), not on PostgreSQL 18: every migration from empty, the seed,
 the real taxonomy imported twice (idempotent), and the API checks of the backend
 and the frontend over it. `drizzle-kit generate` reports no changes.
+
+`0010_recipes` adds `recipes`, `recipe_translations` and `recipe_favourites`,
+exactly as drizzle-kit generated them; verified on PostgreSQL 16 from empty with
+the seed. A recipe is Cooklang text plus the `jsonb` document the backend parses
+from it; `household_id` NULL marks a recommendation, as for `products`.
+`recipes_household_source_url_idx` (partial) keeps one copy of a page per
+household. That a favourite names a recommendation is the backend's to keep.
 
 ## Resolved: categories are a table
 

@@ -84,3 +84,7 @@ export function useQuantities(): SessionStores['quantities'] {
 export function useIngredients(): SessionStores['ingredients'] {
   return useSessionStores().ingredients;
 }
+
+export function useRecipes(): SessionStores['recipes'] {
+  return useSessionStores().recipes;
+}

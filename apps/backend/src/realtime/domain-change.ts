@@ -53,5 +53,7 @@ export type DomainChange =
       readonly householdId: string;
       readonly ids: string[];
     }
+  /** Recipes are served in each reader's language, so only the household is named. */
+  | { readonly type: 'recipes.changed'; readonly householdId: string }
   /** Signed out, or its refresh token was reused: close the sockets it opened. */
   | { readonly type: 'session.revoked'; readonly userId: string; readonly sessionId: string };

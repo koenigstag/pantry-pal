@@ -34,9 +34,10 @@ src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), 
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/shopping/     the Shopping page, the list picker, the lists editor, sharing as text
 src/features/data/         the Data sheet: exporting a backup, importing one or another app's file
+src/features/recipes/      the Recipes page (favourites, recommendations), a recipe, adding one by link
 src/features/pages.tsx     Planner placeholder, Profile
 src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore,
-                           IngredientCatalog (ingredient names and search)
+                           IngredientCatalog (ingredient names and search), RecipesStore
 src/offline/               the offline mirror: RxDB database, replication, merge rules, forgetting on sign-out
 src/services/              http (fetch), session (tokens), api (REST and sync), socket
 src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, SwipePager, cn
@@ -590,6 +591,25 @@ lists.
   its messengers. Without it (Firefox on a desktop) the text is copied to the
   clipboard, and a notice says so. Only `text` is shared, since some apps paste a
   `title` too.
+
+### Recipes
+
+`/recipes` lists the household's favourites — its own recipes and the
+recommendations it saved — and, with `?tab=recommendations`, the
+recommendations; `/recipes/:recipeId` shows one. **Online only**: recipes are not
+in the offline mirror, and `RecipesStore` reads them over REST (the service
+worker's read cache shows the last list offline). It shares the session's
+socket with `PantryStore` and fetches the list again on `RecipesChanged`.
+
+- Recipes arrive in the user's language where the server has a translation; the
+  page says which language one was written in when it differs.
+- The document is the server's parse of Cooklang (`RecipeDocument`): the
+  ingredient list is its listed ingredients, the method its sections. A step
+  that only lists ingredients — how an import writes them — is left out
+  (`isIngredientListStep`), and steps are numbered across sections.
+- Adding by link (`ImportRecipeDialog`) names a refusal by its `code`.
+- Recipe text keeps its language (`lang` on the article); the catalog's
+  headings carry the page's.
 
 ### The Data sheet
 
