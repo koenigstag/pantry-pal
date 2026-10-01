@@ -31,18 +31,24 @@ async function loadTaxonomy() {
 /** `data/ingredient-names.ru.json` and the like, by language. */
 async function loadTranslations() {
   const directory = new URL('../data/', import.meta.url);
-  const translations = {};
-  const files = await readdir(directory).catch((error) => {
+  const names = await readdir(directory).catch((error) => {
     if (error.code === 'ENOENT') return [];
     throw error;
   });
-  for (const file of files) {
-    const language = /^ingredient-names\.([a-z]{2,3})\.json$/.exec(file)?.[1];
-    if (language === undefined) continue;
-    translations[language] = JSON.parse(await readFile(new URL(file, directory), 'utf8'));
-    console.log(`Translations: ${Object.keys(translations[language]).length} in ${language}`);
+  const loaded = await Promise.all(
+    names.flatMap((name) => {
+      const language = /^ingredient-names\.([a-z]{2,3})\.json$/.exec(name)?.[1];
+      if (language === undefined) return [];
+      return readFile(new URL(name, directory), 'utf8').then((text) => [
+        language,
+        JSON.parse(text),
+      ]);
+    }),
+  );
+  for (const [language, byId] of loaded) {
+    console.log(`Translations: ${Object.keys(byId).length} in ${language}`);
   }
-  return translations;
+  return Object.fromEntries(loaded);
 }
 
 const entries = parseOffTaxonomy(await loadTaxonomy(), { translations: await loadTranslations() });
