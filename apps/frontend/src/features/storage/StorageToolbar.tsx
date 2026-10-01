@@ -1,7 +1,17 @@
-import { ArrowDown, ArrowUp, ChevronDown, FolderInput, ListPlus, Trash, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Carrot,
+  ChevronDown,
+  FolderInput,
+  ListPlus,
+  Trash,
+  X,
+} from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import { messages } from '../../i18n/messages';
+import { cn } from '../../ui/cn';
 import { IconButton } from '../../ui/IconButton';
 import { Menu } from '../../ui/Menu';
 import { SORT_FIELDS, type SortDirection, type SortField } from './itemOrder';
@@ -21,7 +31,7 @@ export function SortControl({
   onToggleDirection,
 }: SortControlProps): ReactElement {
   return (
-    <div className="ms-auto flex items-center">
+    <div className="flex items-center">
       <Menu
         label={messages.sort.menu}
         items={SORT_FIELDS.map((field) => ({
@@ -48,6 +58,34 @@ export function SortControl({
         className="text-ink-muted hover:bg-sunken hover:text-ink"
       />
     </div>
+  );
+}
+
+/**
+ * "No ingredient": shows only the items no ingredient has been chosen for, so
+ * they can be gone through one by one. A toggle, pressed while it filters.
+ */
+export function IngredientFilter({
+  pressed,
+  onToggle,
+}: {
+  pressed: boolean;
+  onToggle: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onToggle}
+      className={cn(
+        'focus-ring ms-auto flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm transition-colors',
+        pressed ? 'bg-accent-soft text-ink' : 'text-ink-muted hover:bg-sunken hover:text-ink',
+      )}
+    >
+      <Carrot aria-hidden="true" className="size-4" />
+      {/* An icon alone on a phone, where the row has no room for the words. */}
+      <span className="sr-only sm:not-sr-only">{messages.storage.withoutIngredient}</span>
+    </button>
   );
 }
 

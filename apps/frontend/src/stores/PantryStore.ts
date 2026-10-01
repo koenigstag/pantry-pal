@@ -512,6 +512,7 @@ export class PantryStore {
             name: dto.name,
             category: dto.category,
             isEdible: this.edibleFor(dto.category, dto.isEdible),
+            ingredientId: dto.ingredientId ?? null,
             quantity: dto.quantity,
             unit: dto.unit,
             sizeValue: dto.sizeValue ?? null,

@@ -16,6 +16,7 @@ import { cn } from '../../ui/cn';
 import { Field, FIELD_CONTROL, FIELD_TEXTAREA, type FieldControlProps } from '../../ui/Field';
 import { IconButton } from '../../ui/IconButton';
 import { DETAILS_GRID, DetailsSection, ItemPhoto } from './detailsLayout';
+import { IngredientPicker } from './IngredientPicker';
 import {
   draftFieldLabel,
   isQuantityUnit,
@@ -190,6 +191,22 @@ export const ItemEditForm = observer(function ItemEditForm({
                 {messages.itemForm.edible}
               </label>
             )}
+
+            <Field
+              label={messages.itemForm.ingredient}
+              hint={messages.itemForm.ingredientHint}
+              error={errors['ingredientId']}
+              className="col-span-2"
+            >
+              {(props) => (
+                <IngredientPicker
+                  controlProps={props}
+                  value={draft.ingredientId}
+                  itemName={draft.name}
+                  onChange={(ingredientId) => update({ ingredientId })}
+                />
+              )}
+            </Field>
 
             <Field
               label={messages.itemForm.shoppingList}

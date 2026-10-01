@@ -1,11 +1,11 @@
 import { daysUntil, getExpiryStatus, type PantryItem, type ShoppingList } from '@pantry-pal/shared';
-import { Clock, ListPlus, MapPin, Tag, Trash, type LucideIcon } from 'lucide-react';
+import { Carrot, Clock, ListPlus, MapPin, Tag, Trash, type LucideIcon } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import type { ReactElement, ReactNode } from 'react';
+import { useEffect, type ReactElement, type ReactNode } from 'react';
 
 import { formatCalendarDate, formatInstant, formatList } from '../../i18n/format';
 import { messages } from '../../i18n/messages';
-import { usePantryStore, useQuantities } from '../../stores/StoreContext';
+import { useIngredients, usePantryStore, useQuantities } from '../../stores/StoreContext';
 import { cn } from '../../ui/cn';
 import { DETAILS_GRID, DetailsSection, ItemPhoto } from './detailsLayout';
 import { amountText, EXPIRY_TONES } from './itemDisplay';
@@ -28,6 +28,7 @@ export const ItemDetailsView = observer(function ItemDetailsView({
 }: ItemDetailsViewProps): ReactElement {
   const pantry = usePantryStore();
   const quantities = useQuantities();
+  const ingredients = useIngredients();
   const location = pantry.locations.find((candidate) => candidate.id === item.locationId);
   const defaultList =
     item.defaultShoppingListId === null
@@ -35,6 +36,11 @@ export const ItemDetailsView = observer(function ItemDetailsView({
       : pantry.shoppingListsById.get(item.defaultShoppingListId);
   // Archived lists are frozen and hidden, so only those in use are named here.
   const lists = pantry.listsHolding(item.id).filter((list) => list.archivedAt === null);
+
+  const { ingredientId } = item;
+  useEffect(() => {
+    if (ingredientId !== null) ingredients.load([ingredientId]);
+  }, [ingredients, ingredientId]);
 
   return (
     <div className={DETAILS_GRID}>
@@ -44,6 +50,11 @@ export const ItemDetailsView = observer(function ItemDetailsView({
         <div className="flex flex-wrap gap-2">
           {location !== undefined && <Chip icon={MapPin}>{locationName(location)}</Chip>}
           <Chip icon={Tag}>{pantry.categoryName(item.category)}</Chip>
+          {ingredientId !== null && (
+            <Chip icon={Carrot} label={messages.itemDetails.ingredient}>
+              {ingredients.nameOf(ingredientId)}
+            </Chip>
+          )}
         </div>
 
         <DetailsSection title={messages.itemDetails.quantity}>
@@ -144,10 +155,20 @@ function DetailRow({ term, value }: { term: string; value: string }): ReactEleme
   );
 }
 
-function Chip({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }): ReactElement {
+function Chip({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: LucideIcon;
+  /** What the chip shows, for a screen reader, where the icon alone says it. */
+  label?: string;
+  children: ReactNode;
+}): ReactElement {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-sunken px-3 py-1 text-sm">
       <Icon aria-hidden="true" className="size-4 text-ink-muted" />
+      {label !== undefined && <span className="sr-only">{label}:</span>}
       {children}
     </span>
   );

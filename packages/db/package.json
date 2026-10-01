@@ -33,6 +33,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "turbo run build --filter=@pantry-pal/db --ui=stream --output-logs=errors-only && node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-test-household.mjs",
+    "db:ingredients": "turbo run build --filter=@pantry-pal/db --ui=stream --output-logs=errors-only && node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/import-ingredients.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },

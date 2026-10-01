@@ -18,6 +18,8 @@ export interface ItemDraft {
   category: string;
   /** The user's to set only in the default category; elsewhere it mirrors the category's. */
   isEdible: boolean;
+  /** An ingredient id, or blank for not said. */
+  ingredientId: string;
   quantity: string;
   unit: string;
   sizeValue: string;
@@ -36,6 +38,7 @@ export interface ItemPatch {
   locationId?: string;
   category?: string;
   isEdible?: boolean;
+  ingredientId?: string | null;
   quantity?: number;
   unit?: string;
   sizeValue?: number | null;
@@ -57,6 +60,7 @@ export function emptyDraft(locationId: string, isEdible: boolean): ItemDraft {
     locationId,
     category: DEFAULT_CATEGORY,
     isEdible,
+    ingredientId: '',
     quantity: '1',
     unit: COUNT_UNIT,
     sizeValue: '',
@@ -76,6 +80,7 @@ export function toDraft(item: PantryItem, quantity: number): ItemDraft {
     locationId: item.locationId,
     category: item.category,
     isEdible: item.isEdible,
+    ingredientId: item.ingredientId ?? '',
     quantity: String(quantity),
     unit: item.unit,
     sizeValue: item.sizeValue === null ? '' : String(item.sizeValue),
@@ -105,6 +110,9 @@ export function toPatch(base: ItemDraft, draft: ItemDraft): ItemPatch {
   // Elsewhere the server takes the category's value, so the form never sends one.
   if (draft.category === DEFAULT_CATEGORY && draft.isEdible !== base.isEdible) {
     patch.isEdible = draft.isEdible;
+  }
+  if (draft.ingredientId !== base.ingredientId) {
+    patch.ingredientId = blankToNull(draft.ingredientId);
   }
   if (draft.quantity !== base.quantity) patch.quantity = toNumber(draft.quantity);
   if (draft.unit !== base.unit) patch.unit = draft.unit;
@@ -146,6 +154,7 @@ export function toCreate(
     locationId: draft.locationId,
     category: draft.category,
     ...(draft.category === DEFAULT_CATEGORY && { isEdible: draft.isEdible }),
+    ingredientId: blankToNull(draft.ingredientId),
     quantity: toNumber(draft.quantity),
     unit: draft.unit,
     sizeValue: size.value,
@@ -219,6 +228,8 @@ export function draftFieldLabel(field: DraftField): string {
       return labels.category;
     case 'isEdible':
       return labels.edible;
+    case 'ingredientId':
+      return labels.ingredient;
     case 'quantity':
       return labels.howMany;
     case 'unit':

@@ -138,6 +138,9 @@ export const uk = {
     noMatches: (query: string, location: string) =>
       `У місці зберігання «${location}» немає збігів із «${query}».`,
     noLocations: 'У цьому домогосподарстві ще немає місць зберігання.',
+    withoutIngredient: 'Без інгредієнта',
+    allHaveIngredients: (location: string) =>
+      `Усе в місці зберігання «${location}» має інгредієнт.`,
     fallbackLocation: 'Інше',
   },
 
@@ -269,6 +272,15 @@ export const uk = {
     location: 'Місце зберігання',
     category: 'Категорія',
     edible: 'Їстівне',
+    ingredient: 'Інгредієнт',
+    ingredientHint: 'Що це, для рецептів: шукайте будь-якою мовою. Назви з Open Food Facts.',
+    ingredientPlaceholder: 'Пошук інгредієнтів',
+    ingredientChangePlaceholder: 'Знайти інший',
+    clearIngredient: 'Прибрати інгредієнт',
+    ingredientSuggested: 'Можливо:',
+    ingredientSearching: 'Пошук…',
+    ingredientOffline: 'Для пошуку потрібне з’єднання.',
+    ingredientNoMatches: (query: string) => `Жоден інгредієнт не збігається з «${query}».`,
     quantity: 'Кількість',
     howMany: 'Скільки',
     decreaseQuantity: 'Зменшити кількість',
@@ -298,6 +310,7 @@ export const uk = {
     name: 'Введіть назву.',
     locationId: 'Виберіть місце зберігання.',
     category: 'Виберіть категорію.',
+    ingredientId: 'Виберіть інгредієнт зі списку.',
     quantity: (min: number, max: number) =>
       `Введіть ціле число від ${formatNumber(min)} до ${formatNumber(max)}.`,
     unit: 'Виберіть одиницю.',
@@ -321,6 +334,7 @@ export const uk = {
     save: 'Зберегти',
     saving: 'Збереження…',
     details: 'Деталі',
+    ingredient: 'Інгредієнт',
     quantity: 'Кількість',
     expiry: 'Термін придатності',
     noExpiry: 'Без терміну придатності',

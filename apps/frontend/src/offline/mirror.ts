@@ -28,7 +28,7 @@ import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 import { distinctUntilChanged, map, merge, Subject, type Observable } from 'rxjs';
 
 import { MIRROR_PREFIX } from './forget';
-import { drainLegacyMirror } from './legacy';
+import { drainLegacyMirrors } from './legacy';
 import { conflictHandler, itemConflictHandler, Refusals, sameDocument } from './merge';
 import { itemSchema, locationSchema, shoppingEntrySchema, shoppingListSchema } from './schemas';
 
@@ -42,8 +42,9 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
  * database never sent is pushed from it first (`legacy.ts`).
  *
  * 2: items carry their units (`PantryItem.subItems`).
+ * 3: items carry their ingredient (`PantryItem.ingredientId`).
  */
-const MIRROR_VERSION = 2;
+const MIRROR_VERSION = 3;
 
 /**
  * A local document written once a first sync has pulled everything: from then
@@ -275,8 +276,8 @@ export class Mirror {
       }),
     ];
 
-    // The database the version before this one kept, if this device has one.
-    void drainLegacyMirror({
+    // The databases earlier versions kept, if this device has any.
+    void drainLegacyMirrors({
       userId,
       householdId,
       origin,
@@ -442,6 +443,7 @@ const ITEM_FIELDS = [
   'locationId',
   'category',
   'isEdible',
+  'ingredientId',
   'quantity',
   'unit',
   'sizeValue',

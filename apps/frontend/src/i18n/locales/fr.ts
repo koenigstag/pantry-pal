@@ -117,6 +117,8 @@ export const fr = {
     noMatches: (query: string, location: string) =>
       `Rien dans ${q(location)} ne correspond à ${q(query)}.`,
     noLocations: 'Ce foyer n’a pas encore d’emplacement.',
+    withoutIngredient: 'Sans ingrédient',
+    allHaveIngredients: (location: string) => `Tout dans ${q(location)} a un ingrédient.`,
     fallbackLocation: 'Autre',
   },
 
@@ -254,6 +256,16 @@ export const fr = {
     location: 'Emplacement',
     category: 'Catégorie',
     edible: 'Comestible',
+    ingredient: 'Ingrédient',
+    ingredientHint:
+      'Ce que c’est, pour les recettes\u00A0: cherchez dans n’importe quelle langue. Noms issus d’Open Food Facts.',
+    ingredientPlaceholder: 'Rechercher un ingrédient',
+    ingredientChangePlaceholder: 'En chercher un autre',
+    clearIngredient: 'Retirer l’ingrédient',
+    ingredientSuggested: 'Suggestions\u00A0:',
+    ingredientSearching: 'Recherche…',
+    ingredientOffline: 'La recherche nécessite une connexion.',
+    ingredientNoMatches: (query: string) => `Aucun ingrédient ne correspond à ${q(query)}.`,
     quantity: 'Quantité',
     howMany: 'Combien',
     decreaseQuantity: 'Diminuer la quantité',
@@ -283,6 +295,7 @@ export const fr = {
     name: 'Saisissez un nom.',
     locationId: 'Choisissez un emplacement.',
     category: 'Choisissez une catégorie.',
+    ingredientId: 'Choisissez un ingrédient dans la liste.',
     quantity: (min: number, max: number) =>
       `Saisissez un nombre entier de ${formatNumber(min)} à ${formatNumber(max)}.`,
     unit: 'Choisissez une unité.',
@@ -306,6 +319,7 @@ export const fr = {
     save: 'Enregistrer',
     saving: 'Enregistrement…',
     details: 'Détails',
+    ingredient: 'Ingrédient',
     quantity: 'Quantité',
     expiry: 'Péremption',
     noExpiry: 'Pas de date de péremption',

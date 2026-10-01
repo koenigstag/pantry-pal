@@ -18,6 +18,14 @@ export const TRANSLATION_LOCALES: readonly string[] = [
   ...new Set(SUPPORTED_LOCALES.flatMap((tag) => localeLookupOrder(tag).toReversed())),
 ];
 
+/**
+ * The languages of `SUPPORTED_LOCALES`, without regions: what reference data
+ * named by language rather than locale, such as ingredients, is stored in.
+ */
+export const SUPPORTED_LANGUAGES: readonly string[] = [
+  ...new Set(SUPPORTED_LOCALES.map((tag) => localeLookupOrder(tag).at(-1) ?? tag)),
+];
+
 /** The text for `tag`: its own translation, else its language's, else `base`. */
 export function pickTranslation(
   translations: Readonly<Record<string, string>>,

@@ -37,6 +37,8 @@ export interface PlannedItem {
   category: string;
   /** Read in the default category only, where each item decides; `null` takes the category's. */
   isEdible: boolean | null;
+  /** An ingredient's id; one the server does not have is left out. */
+  ingredientId: string | null;
   /** A count unit's code; anything else becomes `pcs`. */
   unit: string;
   sizeValue: number | null;

@@ -6,6 +6,8 @@ import {
   type CurrentUser,
   type ImportSource,
   type ImportSummary,
+  type Ingredient,
+  type IngredientMatch,
   type PantryItem,
   type PantryLocation,
   type ShoppingList,
@@ -103,6 +105,14 @@ export const pantryApi = {
   listUnits: (): Promise<Unit[]> => request<Unit[]>('/units'),
 
   listCategories: (): Promise<Category[]> => request<Category[]>('/categories'),
+
+  /** Ingredients any of whose names match `q`, best first, named in `lang`. */
+  searchIngredients: (q: string, lang: string): Promise<IngredientMatch[]> =>
+    request<IngredientMatch[]>(`/ingredients?${new URLSearchParams({ q, lang })}`),
+
+  /** The named ingredients, in `lang`; ids the server does not know are left out. */
+  lookupIngredients: (ids: readonly string[], lang: string): Promise<Ingredient[]> =>
+    request<Ingredient[]>(`/ingredients?${new URLSearchParams({ ids: ids.join(','), lang })}`),
 
   listLocations: (householdId: string): Promise<PantryLocation[]> =>
     request<PantryLocation[]>(`${household(householdId)}/locations`),
@@ -210,7 +220,11 @@ export const pantryApi = {
     }
     // Items with their units. A server from before them refuses the parameter,
     // so this mirror waits for one that has them rather than hold items without.
-    if (collection === SYNC_COLLECTION.Items) query.set('subItems', 'true');
+    // And with their ingredient, likewise.
+    if (collection === SYNC_COLLECTION.Items) {
+      query.set('subItems', 'true');
+      query.set('ingredients', 'true');
+    }
     return request<SyncPullPayload<T>>(`${household(householdId)}/sync/${collection}?${query}`);
   },
 

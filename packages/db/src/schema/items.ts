@@ -23,6 +23,7 @@ import {
 import { inList, literal } from './_sql';
 import { categories } from './categories';
 import { households } from './households';
+import { ingredients } from './ingredients';
 import { locations } from './locations';
 import { products } from './products';
 import { shoppingLists } from './shopping-lists';
@@ -53,6 +54,14 @@ export const items = pgTable(
      * services keep it so; no constraint can state the exception.
      */
     isEdible: boolean('is_edible').notNull(),
+    /**
+     * What the item is, whatever it is called: an `ingredients.id` such as
+     * `en:whole-milk`, which recipes name too. Optional, and set by the user;
+     * RESTRICT, because a re-import never deletes ingredients anyway.
+     */
+    ingredientId: text('ingredient_id').references(() => ingredients.id, {
+      onDelete: 'restrict',
+    }),
 
     /**
      * What the item is counted in, and what is inside one of it, so
@@ -178,6 +187,10 @@ export const items = pgTable(
     index('items_product_idx')
       .on(t.householdId, t.productId)
       .where(sql`deleted_at is null`),
+    /** Which of a household's items are which ingredient: recipe matching reads it. */
+    index('items_ingredient_idx')
+      .on(t.householdId, t.ingredientId)
+      .where(sql`ingredient_id is not null and deleted_at is null`),
     /** Clearing a deleted list from the items that went on it, and the key's own check. */
     index('items_default_shopping_list_idx')
       .on(t.householdId, t.defaultShoppingListId)

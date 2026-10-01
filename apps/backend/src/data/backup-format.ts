@@ -6,11 +6,13 @@
  *   Pantry Pal       Format, Version, Household and Exported, a key in A and its value in B
  *   Storage spaces   ID, Name, Icon, Fallback — in the household's order
  *   Items            ID, Name, Storage space ID, Storage space, Category, Edible,
- *                    Unit, Size, Size unit, Quantity, Notes
+ *                    Ingredient, Unit, Size, Size unit, Quantity, Notes
  *   Units            ID, Item ID, Item, Expires, Opened, Days after opening, Fill %
  *
  * It holds what is on the shelves: the active items and their active units.
- * Categories and units are codes (`dairy`, `pcs`), as the API names them. The
+ * Categories and units are codes (`dairy`, `pcs`), as the API names them, and an
+ * ingredient is its id (`en:whole-milk`); a backup made before ingredients has no
+ * Ingredient column, and reads as items without one. The
  * item and storage space names beside the ids, and an item's Quantity, are for
  * people reading the file; the import follows the ids, and falls back on the
  * names only where an id is missing, so rows added by hand work too.
@@ -48,6 +50,7 @@ export const ITEM_COLUMN = {
   Space: 'Storage space',
   Category: 'Category',
   Edible: 'Edible',
+  Ingredient: 'Ingredient',
   Unit: 'Unit',
   Size: 'Size',
   SizeUnit: 'Size unit',

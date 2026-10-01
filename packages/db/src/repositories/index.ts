@@ -2,6 +2,7 @@ export * from './categories.repository';
 export * from './default-locations.repository';
 export * from './household-members.repository';
 export * from './households.repository';
+export * from './ingredients.repository';
 export * from './item-events.repository';
 export * from './items.repository';
 export * from './locations.repository';

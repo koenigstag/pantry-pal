@@ -29,6 +29,7 @@ export function itemFieldErrors(
     name: t.name,
     locationId: t.locationId,
     category: t.category,
+    ingredientId: t.ingredientId,
     quantity: t.quantity(minQuantity, MAX_ITEM_QUANTITY),
     unit: t.unit,
     sizeValue: t.sizeValue(MAX_SIZE_VALUE, SIZE_DECIMAL_PLACES),

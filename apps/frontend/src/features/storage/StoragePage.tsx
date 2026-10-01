@@ -20,7 +20,7 @@ import { LocationEditorDialog } from './LocationEditorDialog';
 import { locationName } from './locationName';
 import { LocationTabs } from './LocationTabs';
 import { StorageHeader } from './StorageHeader';
-import { SelectionBar, SortControl } from './StorageToolbar';
+import { IngredientFilter, SelectionBar, SortControl } from './StorageToolbar';
 import { useStorageParams } from './useStorageParams';
 
 type OpenSheet =
@@ -106,10 +106,13 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
   }
 
   const isSearching = query.trim() !== '';
-  /** What a space shows now: its items, searched and sorted as the page asks. */
+  const { withoutIngredient } = params;
+  // Searching, or showing only the items without an ingredient: either hides some.
+  const isFiltering = isSearching || withoutIngredient;
+  /** What a space shows now: its items, searched, filtered and sorted as the page asks. */
   const visibleItemsIn = (id: string): readonly PantryItem[] =>
     sortItems(
-      filterItems(pantry.itemsIn(id), query),
+      filterItems(pantry.itemsIn(id), query, withoutIngredient),
       params.sort,
       params.direction,
       pantry.unitLabel,
@@ -122,11 +125,11 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
       ? new Set(visibleItems.filter((item) => selection.ids.has(item.id)).map((item) => item.id))
       : NOTHING_SELECTED;
 
-  const matchCounts = isSearching
+  const matchCounts = isFiltering
     ? new Map(
         pantry.locations.map((candidate) => [
           candidate.id,
-          filterItems(pantry.itemsIn(candidate.id), query).length,
+          filterItems(pantry.itemsIn(candidate.id), query, withoutIngredient).length,
         ]),
       )
     : null;
@@ -205,10 +208,14 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
           ) : (
             <>
               <p aria-live="polite" className="text-sm text-ink-muted">
-                {isSearching
+                {isFiltering
                   ? messages.storage.matchCount(visibleItems.length)
                   : messages.storage.itemCount(visibleItems.length)}
               </p>
+              <IngredientFilter
+                pressed={withoutIngredient}
+                onToggle={params.toggleWithoutIngredient}
+              />
               <SortControl
                 sort={params.sort}
                 direction={params.direction}
@@ -238,9 +245,11 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
 
             return (
               <div className="px-4 pb-6 md:px-8">
-                {isSearching && spaceItems.length === 0 ? (
+                {isFiltering && spaceItems.length === 0 ? (
                   <p className="py-16 text-center text-ink-muted">
-                    {messages.storage.noMatches(query.trim(), locationName(space))}
+                    {isSearching
+                      ? messages.storage.noMatches(query.trim(), locationName(space))
+                      : messages.storage.allHaveIngredients(locationName(space))}
                   </p>
                 ) : (
                   <ItemGrid
@@ -251,9 +260,9 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
                     }
                     onToggleSelected={toggleSelected}
                     onRemove={openRemoveSheet}
-                    // An empty space shows only the plus card. Search results don't: a new item
-                    // would not be among them.
-                    onAdd={isSearching ? undefined : () => setSheet({ kind: 'add' })}
+                    // An empty space shows only the plus card. Search and filter results don't: a
+                    // new item would not be among them.
+                    onAdd={isFiltering ? undefined : () => setSheet({ kind: 'add' })}
                   />
                 )}
               </div>

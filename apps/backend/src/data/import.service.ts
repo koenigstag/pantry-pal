@@ -3,6 +3,7 @@ import {
   CategoriesRepository,
   DefaultLocationsRepository,
   HouseholdsRepository,
+  IngredientsRepository,
   ItemEventsRepository,
   ItemsRepository,
   LocationsRepository,
@@ -70,6 +71,8 @@ interface ImportContext {
   events: RecordEventInput[];
   categories: ReadonlyMap<string, CategoryRow>;
   unitKinds: ReadonlyMap<string, UnitKind>;
+  /** The ingredients the file names that the server has. */
+  ingredients: ReadonlySet<string>;
   /** The day of the import, which a unit that is partly used but has no opened date takes. */
   today: string;
 }
@@ -110,6 +113,7 @@ export class ImportService {
     private readonly events: ItemEventsRepository,
     private readonly categories: CategoriesRepository,
     private readonly units: UnitsRepository,
+    private readonly ingredients: IngredientsRepository,
     private readonly changes: ChangeFeed,
   ) {}
 
@@ -152,6 +156,7 @@ export class ImportService {
       events: [],
       categories: await this.lockCategories(plan.items),
       unitKinds: new Map((await this.units.list()).map((unit) => [unit.code, unit.kind])),
+      ingredients: await this.knownIngredients(plan.items),
       today: new Date().toISOString().slice(0, 10),
     };
 
@@ -189,6 +194,16 @@ export class ImportService {
       if (row !== undefined) locked.set(code, row);
     }
     return locked;
+  }
+
+  /**
+   * Which of the file's ingredients the server has. No lock: ingredients are
+   * never deleted.
+   */
+  private async knownIngredients(items: readonly PlannedItem[]): Promise<Set<string>> {
+    const named = [...new Set(items.flatMap((item) => item.ingredientId ?? []))];
+    const found = await this.ingredients.findByIds(named, 'en');
+    return new Set(found.map((row) => row.id));
   }
 
   /** The household's location for each of the file's storage spaces, by the plan's key. */
@@ -473,8 +488,8 @@ export class ImportService {
   /**
    * A new item's fields, from what the server has: an unknown category is the
    * default one, an unknown or non-count unit is `pcs`, and a size in an
-   * unknown unit is left out. `isEdible` follows the category, except in the
-   * default one, where the file may say.
+   * unknown unit is left out, and so is an unknown ingredient. `isEdible`
+   * follows the category, except in the default one, where the file may say.
    */
   private fieldsOf(
     context: ImportContext,
@@ -495,6 +510,10 @@ export class ImportService {
         category.code === DEFAULT_CATEGORY
           ? (item.isEdible ?? category.isEdible)
           : category.isEdible,
+      ingredientId:
+        item.ingredientId !== null && context.ingredients.has(item.ingredientId)
+          ? item.ingredientId
+          : null,
       unit: context.unitKinds.get(item.unit) === QUANTITY_UNIT_KIND ? item.unit : COUNT_UNIT,
       sizeValue: sized ? item.sizeValue : null,
       sizeUnit: sized ? item.sizeUnit : null,
