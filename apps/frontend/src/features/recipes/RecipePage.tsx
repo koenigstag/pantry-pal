@@ -1,5 +1,5 @@
 import type { Recipe, RecipeDocument, RecipeStepItem } from '@pantry-pal/shared';
-import { ArrowLeft, Clock, ExternalLink, Star, Trash, Users } from 'lucide-react';
+import { ArrowLeft, Check, Clock, ExternalLink, Star, Trash, Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Fragment, useEffect, useState, type ReactElement } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -152,7 +152,11 @@ export const RecipePage = observer(function RecipePage(): ReactElement {
 function RecipeView({ recipe }: { recipe: Recipe }): ReactElement {
   const { document } = recipe;
   const ingredients = document.ingredients
-    .map((ingredient, index) => ({ key: `ingredient-${index}`, ingredient }))
+    .map((ingredient, index) => ({
+      key: `ingredient-${index}`,
+      ingredient,
+      atHome: recipe.inStock[index] === true,
+    }))
     .filter(({ ingredient }) => ingredient.listed);
   const cookware = document.cookware.filter((item) => item.listed);
 
@@ -189,17 +193,40 @@ function RecipeView({ recipe }: { recipe: Recipe }): ReactElement {
 
       {ingredients.length > 0 && (
         <section className="mt-6">
-          <h2 className="mb-2 text-lg font-semibold" lang={LOCALE}>
+          <h2
+            className="mb-2 flex items-baseline justify-between gap-4 text-lg font-semibold"
+            lang={LOCALE}
+          >
             {messages.recipes.ingredients}
+            {recipe.inStockCount > 0 && (
+              <span className="text-sm font-medium text-success">
+                {messages.recipes.inStock(recipe.inStockCount, recipe.ingredientCount)}
+              </span>
+            )}
           </h2>
           <ul className="divide-y divide-line rounded-xl border border-line bg-surface">
-            {ingredients.map(({ key, ingredient }) => (
+            {ingredients.map(({ key, ingredient, atHome }) => (
               <li key={key} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
-                <span className="min-w-0 break-words">
-                  {ingredient.name}
-                  {ingredient.note !== null && (
-                    <span className="text-ink-muted"> ({ingredient.note})</span>
+                <span className="flex min-w-0 items-baseline gap-2 break-words">
+                  {atHome ? (
+                    <Check
+                      aria-hidden="true"
+                      className="size-4 shrink-0 self-center text-success"
+                    />
+                  ) : (
+                    <span aria-hidden="true" className="size-4 shrink-0" />
                   )}
+                  <span>
+                    {ingredient.name}
+                    {atHome && (
+                      <span className="sr-only" lang={LOCALE}>
+                        {` (${messages.recipes.haveIt})`}
+                      </span>
+                    )}
+                    {ingredient.note !== null && (
+                      <span className="text-ink-muted"> ({ingredient.note})</span>
+                    )}
+                  </span>
                 </span>
                 <span className="shrink-0 text-end text-ink-muted tabular-nums">
                   {quantityText(ingredient.quantity)}

@@ -10,7 +10,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import type { AdminRecipe } from '@pantry-pal/shared';
+import type { AdminRecipe, RecipeRelinkSummary } from '@pantry-pal/shared';
 import { AdminRecipeDto } from '@pantry-pal/shared/dto';
 
 import { AdminOnly } from '../auth/access.decorators';
@@ -30,6 +30,17 @@ export class AdminRecipesController {
   @Get()
   list(): Promise<AdminRecipe[]> {
     return this.recipes.listRecommendations();
+  }
+
+  /**
+   * Parses every recipe again, the households' own included, and matches its
+   * ingredients anew. Run it after `pnpm db:ingredients`: recipes saved before
+   * the ingredients were there matched none. Declared before `:recipeId`.
+   */
+  @Post('relink')
+  @HttpCode(HttpStatus.OK)
+  relink(): Promise<RecipeRelinkSummary> {
+    return this.recipes.relinkAll();
   }
 
   @Get(':recipeId')

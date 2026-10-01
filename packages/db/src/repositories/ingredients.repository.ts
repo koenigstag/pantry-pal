@@ -2,7 +2,7 @@ import { searchText } from '@pantry-pal/shared';
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
-import { ingredientNames, ingredients } from '../schema';
+import { ingredientNames, ingredientParents, ingredients } from '../schema';
 
 /** An ingredient as a reader of one language sees it. */
 export interface IngredientView {
@@ -21,6 +21,20 @@ export interface IngredientMatch extends IngredientView {
    */
   readonly matchedName: string | null;
 }
+
+/**
+ * A name to resolve to one ingredient, as `resolveName` takes it: folded by
+ * `searchText`, and each of its words cut to a stem, so that an inflected
+ * form (`яйца`, `сливочным маслом`) still finds `яйцо`, `сливочное масло`.
+ */
+export interface IngredientNameQuery {
+  readonly folded: string;
+  /** One per word, each at least three letters; empty to match by the whole name only. */
+  readonly stems: readonly string[];
+}
+
+/** How alike a name must be, by trigrams, to be taken without matching whole or by stems. */
+const RESOLVE_MIN_SIMILARITY = 0.55;
 
 /** `%`, `_` and the escape character itself, taken literally by `LIKE`. */
 const escapeLike = (text: string): string => text.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -60,6 +74,50 @@ export class IngredientsRepository {
       )})`);
 
     return result.rows;
+  }
+
+  /**
+   * The one ingredient a recipe means by a name, or `null`: a name equal to it,
+   * else one whose words start with its stems (as many words, any order), else
+   * one alike by trigrams. Names in `language` win over English, which wins
+   * over the rest; then the closer, then the more general — the one more
+   * entries sit under, so `молоко` is milk rather than grade A milk.
+   */
+  async resolveName(query: IngredientNameQuery, language: string): Promise<string | null> {
+    if (query.folded === '') return null;
+
+    const byStems =
+      query.stems.length === 0
+        ? sql`false`
+        : sql`(array_length(string_to_array(n.search_name, ' '), 1) = ${query.stems.length} and ${sql.join(
+            query.stems.map((stem) => sql`(' ' || n.search_name) like ${`% ${escapeLike(stem)}%`}`),
+            sql` and `,
+          )})`;
+
+    const result = await this.db.execute<{ id: string }>(sql`
+      with candidates as (
+        select
+          n.ingredient_id,
+          n.locale,
+          n.is_primary,
+          case when n.search_name = ${query.folded} then 0 when ${byStems} then 1 else 2 end as how,
+          similarity(n.search_name, ${query.folded}) as closeness
+        from ${ingredientNames} n
+        where n.search_name = ${query.folded} or n.search_name % ${query.folded} or ${byStems}
+      )
+      select c.ingredient_id as id
+      from candidates c
+      where c.how < 2 or c.closeness >= ${RESOLVE_MIN_SIMILARITY}
+      order by
+        c.how,
+        case c.locale when ${language} then 0 when 'en' then 1 else 2 end,
+        c.closeness desc,
+        (select count(*) from ${ingredientParents} p where p.parent_id = c.ingredient_id) desc,
+        c.is_primary desc,
+        c.ingredient_id
+      limit 1`);
+
+    return result.rows[0]?.id ?? null;
   }
 
   /**

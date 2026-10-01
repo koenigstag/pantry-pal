@@ -702,16 +702,23 @@ const en = {
     tabs: 'Recipe lists',
     favourites: 'Favourites',
     recommendations: 'Recommendations',
+    cookable: 'From what you have',
     add: 'Add from a link',
     loadFailed: 'Couldn’t load the recipes.',
     retry: 'Try again',
     noFavourites: 'No favourite recipes yet',
     noFavouritesHint: 'Add one from a recipe site’s link, or save a recommendation.',
     noRecommendations: 'No recommendations yet',
+    noCookable: 'Nothing to cook from what you have yet',
+    noCookableHint:
+      'Recipes appear here once items say what they are: pick an ingredient in an item’s details.',
     servings: (servings: string) => `Serves ${servings}`,
     ingredientCount: (count: number) =>
       plural(count, { one: '# ingredient', other: '# ingredients' }),
     ingredients: 'Ingredients',
+    inStock: (have: number, total: number) =>
+      `${formatNumber(have)} of ${formatNumber(total)} at home`,
+    haveIt: 'At home',
     method: 'Method',
     cookware: 'You’ll need',
     source: 'Original recipe',

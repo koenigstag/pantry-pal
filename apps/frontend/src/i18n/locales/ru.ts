@@ -665,12 +665,16 @@ export const ru = {
     tabs: 'Списки рецептов',
     favourites: 'Избранное',
     recommendations: 'Рекомендации',
+    cookable: 'Из того, что есть',
     add: 'Добавить по ссылке',
     loadFailed: 'Не удалось загрузить рецепты.',
     retry: 'Повторить',
     noFavourites: 'В избранном пока пусто',
     noFavouritesHint: 'Добавьте рецепт по ссылке с кулинарного сайта или сохраните рекомендацию.',
     noRecommendations: 'Рекомендаций пока нет',
+    noCookable: 'Пока нечего приготовить из того, что есть',
+    noCookableHint:
+      'Рецепты появятся здесь, когда у продуктов будет указан ингредиент: выберите его в карточке продукта.',
     servings: (servings: string) => `Порций: ${servings}`,
     ingredientCount: (count: number) =>
       plural(count, {
@@ -680,6 +684,9 @@ export const ru = {
         other: '# ингредиента',
       }),
     ingredients: 'Ингредиенты',
+    inStock: (have: number, total: number) =>
+      `Есть дома: ${formatNumber(have)} из ${formatNumber(total)}`,
+    haveIt: 'Есть дома',
     method: 'Приготовление',
     cookware: 'Понадобится',
     source: 'Исходный рецепт',

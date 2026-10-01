@@ -179,8 +179,12 @@ These are deliberate. Changing any of them affects the whole workspace.
     non-food categories are never chosen. `SET NULL`, so a category stays
     deletable; a code the database lacks is left out at import.
   - **`ingredient_parents`** is the taxonomy's hierarchy, a graph (a row may have
-    several parents). Nothing reads it yet: recipe matching will, so that cheddar
-    satisfies a recipe asking for cheese.
+    several parents). Recipe matching reads it upwards
+    (`RecipesRepository.stockedIngredientIds`), so that cheddar satisfies a
+    recipe asking for cheese.
+  - **`IngredientsRepository.resolveName`** takes a recipe's name for one
+    ingredient: equal, then by word stems, then by trigrams; see the backend's
+    Recipes section.
 - **Locations are soft-deleted.** The items foreign key is `RESTRICT` and counts
   consumed, discarded and soft-deleted rows too, so a hard delete would be
   impossible for any location that ever held an item. The case-insensitive name

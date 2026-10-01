@@ -634,16 +634,23 @@ export const es = {
     tabs: 'Listas de recetas',
     favourites: 'Favoritas',
     recommendations: 'Recomendaciones',
+    cookable: 'Con lo que tengo',
     add: 'Añadir desde un enlace',
     loadFailed: 'No se pudieron cargar las recetas.',
     retry: 'Reintentar',
     noFavourites: 'Aún no hay recetas favoritas',
     noFavouritesHint: 'Añade una desde el enlace de una web de recetas o guarda una recomendación.',
     noRecommendations: 'Aún no hay recomendaciones',
+    noCookable: 'Aún no hay nada que cocinar con lo que tienes',
+    noCookableHint:
+      'Las recetas aparecen aquí cuando los productos dicen qué son: elige un ingrediente en el detalle de un producto.',
     servings: (servings: string) => `Raciones: ${servings}`,
     ingredientCount: (count: number) =>
       plural(count, { one: '# ingrediente', other: '# ingredientes' }),
     ingredients: 'Ingredientes',
+    inStock: (have: number, total: number) =>
+      `${formatNumber(have)} de ${formatNumber(total)} en casa`,
+    haveIt: 'En casa',
     method: 'Preparación',
     cookware: 'Necesitarás',
     source: 'Receta original',

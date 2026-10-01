@@ -100,6 +100,7 @@ GET    POST            /admin/units              GET PATCH DELETE /admin/units/:
 GET    POST            /admin/categories         GET PATCH DELETE /admin/categories/:code
 GET    PUT             /admin/default-locations                       PUT: the whole list, with translations
 GET    POST            /admin/recipes            GET PUT DELETE /admin/recipes/:recipeId  (recommendations)
+POST                   /admin/recipes/relink                          match every recipe's ingredients again
 PUT                    /admin/users/:email/password                   sets it, ends every session; no email
 ```
 
@@ -515,8 +516,27 @@ derived, rewritten whenever the text is.
     answered 403 to the server whatever its User-Agent, though curl from another
     network got bbcgoodfood. Bot protection judges the client and its network, so
     results may differ from the production host.
+- **Ingredients are matched when a text is written** (`ingredient-linker.ts`,
+  `IngredientsRepository.resolveName`): each ingredient's name, in the text's
+  language, to one row of `ingredients`, stored as `ingredientId` in the
+  document. A name equal to a stored one wins; else one whose words start with
+  its stems (endings cut, so `яйца` finds `яйцо` and `сливочным маслом`
+  `сливочное масло`); else one alike by trigrams (≥ 0.55). Failing all three,
+  the first word goes (`свежая спаржа` → `спаржа`) and it tries again. Among
+  equals the text's language wins, then English, then the more general entry
+  (`молоко` is milk, not grade A milk). `null` where nothing matched.
+- **Reads compare with the household's stock**: active items with a unit on the
+  shelf, by `ingredient_id`, widened to every ingredient above them in the
+  taxonomy (`RecipesRepository.stockedIngredientIds`), so whole milk satisfies
+  milk and cheddar cheese. A summary carries `inStockCount`, a recipe `inStock`
+  per ingredient. An item without an ingredient counts for nothing.
+- **`POST /admin/recipes/relink`** parses and matches every text again,
+  households' own included, without moving `updated_at`. Run it after
+  `pnpm db:ingredients`, since texts saved before then matched nothing, and
+  after raising `RECIPE_DOCUMENT_VERSION`.
 - **Announced as `recipes.changed`**, naming only the household: members may
-  read different languages, so clients fetch the list again.
+  read different languages, so clients fetch the list again. Stock changes are
+  not announced as recipe changes: the counts are as of the last fetch.
 
 ## Request flow
 

@@ -627,6 +627,7 @@ export const fr = {
     tabs: 'Listes de recettes',
     favourites: 'Favoris',
     recommendations: 'Suggestions',
+    cookable: 'Avec ce que j’ai',
     add: 'Ajouter par un lien',
     loadFailed: 'Impossible de charger les recettes.',
     retry: 'Réessayer',
@@ -634,10 +635,16 @@ export const fr = {
     noFavouritesHint:
       'Ajoutez-en une à partir du lien d’un site de recettes, ou enregistrez une suggestion.',
     noRecommendations: 'Aucune suggestion pour l’instant',
+    noCookable: 'Rien à cuisiner avec ce que vous avez pour l’instant',
+    noCookableHint:
+      'Les recettes apparaissent ici dès que vos articles disent ce qu’ils sont\u00A0: choisissez un ingrédient dans le détail d’un article.',
     servings: (servings: string) => `Portions : ${servings}`,
     ingredientCount: (count: number) =>
       plural(count, { one: '# ingrédient', other: '# ingrédients' }),
     ingredients: 'Ingrédients',
+    inStock: (have: number, total: number) =>
+      `${formatNumber(have)} sur ${formatNumber(total)} à la maison`,
+    haveIt: 'À la maison',
     method: 'Préparation',
     cookware: 'Il vous faut',
     source: 'Recette d’origine',

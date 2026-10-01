@@ -652,6 +652,7 @@ export const uk = {
     tabs: 'Списки рецептів',
     favourites: 'Обране',
     recommendations: 'Рекомендації',
+    cookable: 'З того, що є',
     add: 'Додати за посиланням',
     loadFailed: 'Не вдалося завантажити рецепти.',
     retry: 'Спробувати ще',
@@ -659,6 +660,9 @@ export const uk = {
     noFavouritesHint:
       'Додайте рецепт за посиланням із кулінарного сайту або збережіть рекомендацію.',
     noRecommendations: 'Рекомендацій поки немає',
+    noCookable: 'Поки нічого приготувати з того, що є',
+    noCookableHint:
+      'Рецепти з’являться тут, коли в продуктів буде вказано інгредієнт: виберіть його в картці продукту.',
     servings: (servings: string) => `Порцій: ${servings}`,
     ingredientCount: (count: number) =>
       plural(count, {
@@ -668,6 +672,9 @@ export const uk = {
         other: '# інгредієнта',
       }),
     ingredients: 'Інгредієнти',
+    inStock: (have: number, total: number) =>
+      `Є вдома: ${formatNumber(have)} з ${formatNumber(total)}`,
+    haveIt: 'Є вдома',
     method: 'Приготування',
     cookware: 'Знадобиться',
     source: 'Оригінальний рецепт',

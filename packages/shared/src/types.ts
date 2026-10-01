@@ -544,6 +544,13 @@ export interface RecipeIngredient {
    * listed (`@&butter{}`) is not.
    */
   listed: boolean;
+  /**
+   * The `Ingredient` the server took the name for, matched against the
+   * ingredients' names in the text's language when the recipe was saved or
+   * relinked: `en:potato` for `картофеля`. `null` where nothing matched well
+   * enough; absent from documents saved before recipes were linked.
+   */
+  ingredientId?: string | null;
 }
 
 export interface RecipeCookware {
@@ -617,6 +624,12 @@ export interface RecipeSummary {
   time: string | null;
   /** How many ingredients the list shows. */
   ingredientCount: number;
+  /**
+   * How many of those the household has: an active item in stock tagged with
+   * the ingredient or with one under it in the taxonomy (cheddar for cheese).
+   * Ingredients the server could not match count as missing.
+   */
+  inStockCount: number;
   /** In the household's favourites: its own recipes always are, a recommendation once saved. */
   favourite: boolean;
   createdAt: string;
@@ -624,6 +637,8 @@ export interface RecipeSummary {
 
 export interface Recipe extends RecipeSummary {
   document: RecipeDocument;
+  /** Whether the household has each of `document.ingredients`, by index, as `inStockCount` counts. */
+  inStock: boolean[];
   /** The Cooklang text the document was parsed from, in `locale`. */
   source: string;
 }
@@ -640,6 +655,15 @@ export interface AdminRecipe {
   translations: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What `POST /admin/recipes/relink` did: every recipe's ingredients matched again. */
+export interface RecipeRelinkSummary {
+  /** Texts relinked: originals and translations. */
+  texts: number;
+  /** Listed ingredients across them, and how many of those matched an ingredient. */
+  ingredients: number;
+  linked: number;
 }
 
 /**

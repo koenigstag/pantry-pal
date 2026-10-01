@@ -23,6 +23,8 @@ import {
   type AdminRecipe,
   type Recipe,
   type RecipeDocument,
+  type RecipeIngredient,
+  type RecipeRelinkSummary,
   type RecipeSummary,
 } from '@pantry-pal/shared';
 import type { AdminRecipeDto, ImportRecipeDto } from '@pantry-pal/shared/dto';
@@ -30,6 +32,7 @@ import type { AdminRecipeDto, ImportRecipeDto } from '@pantry-pal/shared/dto';
 import type { Membership } from '../common/request-context';
 import { ChangeFeed } from '../realtime/change-feed';
 import { CooklangTitleMissingError, parseCooklang } from './cooklang';
+import { IngredientLinker } from './ingredient-linker';
 import { checkRecipeUrl, fetchRecipePage, RecipeImportError } from './page-fetcher';
 import { findPageRecipe, languageTag } from './page-recipe';
 import { pageRecipeToCooklang } from './page-to-cooklang';
@@ -49,6 +52,10 @@ interface Text {
  * translation is another text of the same recipe. Readers get the text for
  * their exact tag, else for its language, else the original.
  *
+ * Every text's ingredients are matched to the ingredients table when it is
+ * written (`IngredientLinker`), so reads only compare them with what the
+ * household has in stock.
+ *
  * A household's changes are announced as `recipes.changed`, without the
  * recipes: members may read different languages, and a broadcast reaches the
  * whole household's room in one.
@@ -58,16 +65,20 @@ export class RecipesService {
   constructor(
     private readonly recipes: RecipesRepository,
     private readonly changes: ChangeFeed,
+    private readonly linker: IngredientLinker,
   ) {}
 
   /** The household's own recipes and every recommendation, newest first. */
   async list(membership: Membership, locale: string): Promise<RecipeSummary[]> {
-    const rows = await this.recipes.listForHousehold(membership.householdId);
+    const [rows, stock] = await Promise.all([
+      this.recipes.listForHousehold(membership.householdId),
+      this.recipes.stockedIngredientIds(membership.householdId),
+    ]);
     const texts = await this.translatedTexts(
       rows.map((row) => row.id),
       locale,
     );
-    return rows.map((row) => toSummary(row, texts.get(row.id) ?? originalText(row)));
+    return rows.map((row) => toSummary(row, texts.get(row.id) ?? originalText(row), stock));
   }
 
   async get(membership: Membership, id: string, locale: string): Promise<Recipe> {
@@ -75,14 +86,17 @@ export class RecipesService {
     if (row === undefined) throw new NotFoundException('Recipe not found');
 
     const order = localeLookupOrder(locale);
-    const translations = await this.recipes.findTranslations(id, order);
+    const [translations, stock] = await Promise.all([
+      this.recipes.findTranslations(id, order),
+      this.recipes.stockedIngredientIds(membership.householdId),
+    ]);
     const translation = order
       .map((tag) => translations.find((entry) => entry.locale === tag))
       .find((entry) => entry !== undefined);
 
     return translation === undefined
-      ? toRecipe(row, originalText(row), row.source)
-      : toRecipe(row, translation, translation.source);
+      ? toRecipe(row, originalText(row), row.source, stock)
+      : toRecipe(row, translation, translation.source, stock);
   }
 
   /**
@@ -125,7 +139,7 @@ export class RecipesService {
     const recipeLocale = found.language ?? languageTag(locale.split('-')[0] ?? locale) ?? 'en';
     const recipe = { ...found, title: found.title.slice(0, MAX_RECIPE_TITLE_LENGTH) };
     const source = pageRecipeToCooklang(recipe, url, recipeLocale);
-    const document = parseCooklang(source);
+    const document = await this.linker.link(parseCooklang(source), recipeLocale);
 
     let created: RecipeRow;
     try {
@@ -199,7 +213,7 @@ export class RecipesService {
 
   @Transactional()
   async createRecommendation(dto: AdminRecipeDto): Promise<AdminRecipe> {
-    const { original, translations } = parseAdminRecipe(dto);
+    const { original, translations } = await this.linkTexts(dto.locale, parseAdminRecipe(dto));
     const row = await this.recipes.create({
       householdId: null,
       locale: dto.locale,
@@ -217,7 +231,7 @@ export class RecipesService {
   /** Replaces the recommendation whole: its text, links and every translation. */
   @Transactional()
   async replaceRecommendation(id: string, dto: AdminRecipeDto): Promise<AdminRecipe> {
-    const { original, translations } = parseAdminRecipe(dto);
+    const { original, translations } = await this.linkTexts(dto.locale, parseAdminRecipe(dto));
     const row = await this.recipes.updateRecommendation(id, {
       locale: dto.locale,
       title: original.title.slice(0, MAX_RECIPE_TITLE_LENGTH),
@@ -235,6 +249,76 @@ export class RecipesService {
     if (!(await this.recipes.deleteRecommendation(id))) {
       throw new NotFoundException('Recommendation not found');
     }
+  }
+
+  /**
+   * Parses every stored text again and matches its ingredients anew: after the
+   * ingredients were imported or re-imported, or a new document version. One
+   * text at a time, so a large catalogue does not hold the pool; texts that no
+   * longer parse are left as they are. `updated_at` is not moved: nothing a
+   * person wrote changed.
+   */
+  async relinkAll(): Promise<RecipeRelinkSummary> {
+    const [originals, translations] = await Promise.all([
+      this.recipes.listAllSources(),
+      this.recipes.listAllTranslationSources(),
+    ]);
+    const summary: RecipeRelinkSummary = { texts: 0, ingredients: 0, linked: 0 };
+
+    const relink = async (locale: string, source: string): Promise<RecipeDocument | null> => {
+      let document: RecipeDocument;
+      try {
+        document = await this.linker.link(parseCooklang(source), locale);
+      } catch (error) {
+        if (error instanceof CooklangTitleMissingError) return null;
+        throw error;
+      }
+      const listed = document.ingredients.filter((ingredient) => ingredient.listed);
+      summary.texts += 1;
+      summary.ingredients += listed.length;
+      summary.linked += listed.filter((ingredient) => ingredient.ingredientId != null).length;
+      return document;
+    };
+
+    for (const row of originals) {
+      // One text at a time, by design: see above.
+      // oxlint-disable-next-line no-await-in-loop
+      const document = await relink(row.locale, row.source);
+      // oxlint-disable-next-line no-await-in-loop
+      if (document !== null) await this.recipes.setDocument(row.id, titleOf(document), document);
+    }
+    for (const row of translations) {
+      // oxlint-disable-next-line no-await-in-loop
+      const document = await relink(row.locale, row.source);
+      if (document !== null) {
+        // oxlint-disable-next-line no-await-in-loop
+        await this.recipes.setTranslationDocument(
+          row.recipeId,
+          row.locale,
+          titleOf(document),
+          document,
+        );
+      }
+    }
+    return summary;
+  }
+
+  /** The original and each translation with their ingredients matched, each in its own language. */
+  private async linkTexts(
+    locale: string,
+    texts: ReturnType<typeof parseAdminRecipe>,
+  ): Promise<ReturnType<typeof parseAdminRecipe>> {
+    const [original, ...translations] = await Promise.all([
+      this.linker.link(texts.original, locale),
+      ...texts.translations.map((entry) => this.linker.link(entry.document, entry.locale)),
+    ]);
+    return {
+      original: original ?? texts.original,
+      translations: texts.translations.map((entry, index) => ({
+        ...entry,
+        document: translations[index] ?? entry.document,
+      })),
+    };
   }
 
   /** Each recipe's text for `locale` where a translation has one: the exact tag, else its language. */
@@ -290,11 +374,25 @@ function parseAdminText(locale: string, source: string): RecipeDocument {
   }
 }
 
+function titleOf(document: RecipeDocument): string {
+  return document.title.slice(0, MAX_RECIPE_TITLE_LENGTH);
+}
+
+/** Whether the household has an ingredient: matched, and among what it stocks or above it. */
+function isInStock(ingredient: RecipeIngredient, stock: ReadonlySet<string>): boolean {
+  return ingredient.ingredientId != null && stock.has(ingredient.ingredientId);
+}
+
 function originalText(row: HouseholdRecipeSummaryRow): Text {
   return { locale: row.locale, title: row.title, document: row.document };
 }
 
-function toSummary(row: HouseholdRecipeSummaryRow, text: Text): RecipeSummary {
+function toSummary(
+  row: HouseholdRecipeSummaryRow,
+  text: Text,
+  stock: ReadonlySet<string>,
+): RecipeSummary {
+  const listed = text.document.ingredients.filter((ingredient) => ingredient.listed);
   return {
     id: row.id,
     householdId: row.householdId,
@@ -305,14 +403,25 @@ function toSummary(row: HouseholdRecipeSummaryRow, text: Text): RecipeSummary {
     sourceUrl: row.sourceUrl,
     servings: text.document.servings,
     time: text.document.time,
-    ingredientCount: text.document.ingredients.filter((ingredient) => ingredient.listed).length,
+    ingredientCount: listed.length,
+    inStockCount: listed.filter((ingredient) => isInStock(ingredient, stock)).length,
     favourite: row.favourite,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
-function toRecipe(row: HouseholdRecipeRow, text: Text, source: string): Recipe {
-  return { ...toSummary(row, text), document: text.document, source };
+function toRecipe(
+  row: HouseholdRecipeRow,
+  text: Text,
+  source: string,
+  stock: ReadonlySet<string>,
+): Recipe {
+  return {
+    ...toSummary(row, text, stock),
+    document: text.document,
+    inStock: text.document.ingredients.map((ingredient) => isInStock(ingredient, stock)),
+    source,
+  };
 }
 
 function toAdminRecipe(

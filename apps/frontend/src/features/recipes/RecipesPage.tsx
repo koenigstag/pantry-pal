@@ -1,5 +1,5 @@
 import type { RecipeSummary } from '@pantry-pal/shared';
-import { Clock, CookingPot, Link2, Star, Users } from 'lucide-react';
+import { Check, Clock, CookingPot, Link2, Star, Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -9,26 +9,33 @@ import { usePantryStore, useRecipes } from '../../stores/StoreContext';
 import { cn } from '../../ui/cn';
 import { PageStatus } from '../shell/PageStatus';
 import { ImportRecipeDialog } from './ImportRecipeDialog';
-import { RECIPES_TAB_PARAM, recipeLink, RECOMMENDATIONS_TAB } from './recipeRoutes';
+import { COOKABLE_TAB, RECIPES_TAB_PARAM, recipeLink, RECOMMENDATIONS_TAB } from './recipeRoutes';
 
 /**
  * The Recipes page: the household's favourites — its own recipes, imported from
- * recipe sites, and the recommendations it saved — and the recommendations.
- * The tab is a query parameter, so each is a link and Back walks through them.
+ * recipe sites, and the recommendations it saved — the recommendations, and
+ * what can be cooked from what the household has. The tab is a query
+ * parameter, so each is a link and Back walks through them.
  */
 export const RecipesPage = observer(function RecipesPage(): ReactElement {
   const pantry = usePantryStore();
   const recipes = useRecipes();
   const [params] = useSearchParams();
   const [importing, setImporting] = useState(false);
-  const showRecommendations = params.get(RECIPES_TAB_PARAM) === RECOMMENDATIONS_TAB;
+  const tab = params.get(RECIPES_TAB_PARAM);
+  const showRecommendations = tab === RECOMMENDATIONS_TAB;
+  const showCookable = tab === COOKABLE_TAB;
   const householdId = pantry.householdId;
 
   useEffect(() => {
     if (householdId !== null) void recipes.load();
   }, [recipes, householdId]);
 
-  const shown = showRecommendations ? recipes.recommendations : recipes.favourites;
+  const shown = showCookable
+    ? recipes.cookable
+    : showRecommendations
+      ? recipes.recommendations
+      : recipes.favourites;
 
   return (
     <div className="flex min-h-[calc(100dvh-var(--spacing-tab-bar))] flex-col md:min-h-dvh">
@@ -48,8 +55,17 @@ export const RecipesPage = observer(function RecipesPage(): ReactElement {
         </div>
 
         <nav aria-label={messages.recipes.tabs} className="px-4 pb-3 md:px-8">
-          <ul className="flex gap-2 p-1">
-            <RecipeTab to="." active={!showRecommendations} label={messages.recipes.favourites} />
+          <ul className="scrollbar-none flex gap-2 overflow-x-auto p-1">
+            <RecipeTab
+              to="."
+              active={!showRecommendations && !showCookable}
+              label={messages.recipes.favourites}
+            />
+            <RecipeTab
+              to={`?${RECIPES_TAB_PARAM}=${COOKABLE_TAB}`}
+              active={showCookable}
+              label={messages.recipes.cookable}
+            />
             <RecipeTab
               to={`?${RECIPES_TAB_PARAM}=${RECOMMENDATIONS_TAB}`}
               active={showRecommendations}
@@ -72,12 +88,16 @@ export const RecipesPage = observer(function RecipesPage(): ReactElement {
           <div className="flex flex-col items-center gap-2 py-16 text-center text-ink-muted">
             <CookingPot aria-hidden="true" className="size-10" strokeWidth={1.5} />
             <p className="font-medium text-ink">
-              {showRecommendations
-                ? messages.recipes.noRecommendations
-                : messages.recipes.noFavourites}
+              {showCookable
+                ? messages.recipes.noCookable
+                : showRecommendations
+                  ? messages.recipes.noRecommendations
+                  : messages.recipes.noFavourites}
             </p>
             {!showRecommendations && (
-              <p className="max-w-sm text-sm">{messages.recipes.noFavouritesHint}</p>
+              <p className="max-w-sm text-sm">
+                {showCookable ? messages.recipes.noCookableHint : messages.recipes.noFavouritesHint}
+              </p>
             )}
           </div>
         ) : (
@@ -154,6 +174,12 @@ const RecipeCard = observer(function RecipeCard({
               <span>{messages.recipes.ingredientCount(recipe.ingredientCount)}</span>
             )}
           </p>
+          {recipe.inStockCount > 0 && (
+            <p className="flex items-center gap-1 text-xs font-medium text-success">
+              <Check aria-hidden="true" className="size-3.5" />
+              {messages.recipes.inStock(recipe.inStockCount, recipe.ingredientCount)}
+            </p>
+          )}
           {recipe.householdId === null && recipe.favourite && (
             <p className="flex items-center gap-1 text-xs text-accent">
               <Star aria-hidden="true" className="size-3.5 fill-current" />

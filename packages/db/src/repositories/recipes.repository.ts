@@ -1,7 +1,10 @@
+import { ITEM_STATUS, type RecipeDocument } from '@pantry-pal/shared';
 import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
 import {
+  ingredientParents,
+  items,
   recipeFavourites,
   recipes,
   recipeTranslations,
@@ -9,6 +12,7 @@ import {
   type NewRecipeTranslationRow,
   type RecipeRow,
   type RecipeTranslationRow,
+  subItems,
 } from '../schema';
 
 /** A recipe as a household sees it: whether it is among its favourites, too. */
@@ -166,6 +170,72 @@ export class RecipesRepository {
       )
       .returning({ recipeId: recipeFavourites.recipeId });
     return removed.length > 0;
+  }
+
+  /**
+   * The ingredients the household has, as a recipe asks for them: those of its
+   * active items with a unit on the shelf, and every ingredient above them in
+   * the taxonomy, since cheddar is cheese and whole milk is milk.
+   */
+  async stockedIngredientIds(householdId: string): Promise<Set<string>> {
+    const result = await this.db.execute<{ id: string }>(sql`
+      with recursive stocked(id) as (
+        select distinct i.ingredient_id
+        from ${items} i
+        where i.household_id = ${householdId}
+          and i.ingredient_id is not null
+          and i.deleted_at is null
+          and i.status = ${ITEM_STATUS.Active}
+          and exists (
+            select 1 from ${subItems} s
+            where s.item_id = i.id and s.deleted_at is null and s.status = ${ITEM_STATUS.Active}
+          )
+        union
+        select p.parent_id from ${ingredientParents} p join stocked on p.ingredient_id = stocked.id
+      )
+      select id from stocked`);
+    return new Set(result.rows.map((row) => row.id));
+  }
+
+  /** Every recipe's original text, for relinking: household recipes and recommendations alike. */
+  listAllSources(): Promise<Array<Pick<RecipeRow, 'id' | 'locale' | 'source'>>> {
+    return this.db
+      .select({ id: recipes.id, locale: recipes.locale, source: recipes.source })
+      .from(recipes)
+      .orderBy(asc(recipes.id));
+  }
+
+  listAllTranslationSources(): Promise<
+    Array<Pick<RecipeTranslationRow, 'recipeId' | 'locale' | 'source'>>
+  > {
+    return this.db
+      .select({
+        recipeId: recipeTranslations.recipeId,
+        locale: recipeTranslations.locale,
+        source: recipeTranslations.source,
+      })
+      .from(recipeTranslations)
+      .orderBy(asc(recipeTranslations.recipeId), asc(recipeTranslations.locale));
+  }
+
+  /** A text parsed again: its document and the title that came with it. Leaves `updated_at` alone. */
+  async setDocument(id: string, title: string, document: RecipeDocument): Promise<void> {
+    await this.db
+      .update(recipes)
+      .set({ title, document, updatedAt: sql`${recipes.updatedAt}` })
+      .where(eq(recipes.id, id));
+  }
+
+  async setTranslationDocument(
+    recipeId: string,
+    locale: string,
+    title: string,
+    document: RecipeDocument,
+  ): Promise<void> {
+    await this.db
+      .update(recipeTranslations)
+      .set({ title, document })
+      .where(and(eq(recipeTranslations.recipeId, recipeId), eq(recipeTranslations.locale, locale)));
   }
 
   // ── Recommendations, through the admin API ─────────────────────────────────

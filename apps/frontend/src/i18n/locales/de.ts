@@ -622,6 +622,7 @@ export const de = {
     tabs: 'Rezeptlisten',
     favourites: 'Favoriten',
     recommendations: 'Empfehlungen',
+    cookable: 'Aus dem Vorrat',
     add: 'Per Link hinzufügen',
     loadFailed: 'Die Rezepte konnten nicht geladen werden.',
     retry: 'Erneut versuchen',
@@ -629,9 +630,15 @@ export const de = {
     noFavouritesHint:
       'Füge eines per Link von einer Rezeptseite hinzu oder speichere eine Empfehlung.',
     noRecommendations: 'Noch keine Empfehlungen',
+    noCookable: 'Noch nichts, das sich aus dem Vorrat kochen lässt',
+    noCookableHint:
+      'Rezepte erscheinen hier, sobald Artikel sagen, was sie sind: Wähle in den Details eines Artikels eine Zutat.',
     servings: (servings: string) => `Portionen: ${servings}`,
     ingredientCount: (count: number) => plural(count, { one: '# Zutat', other: '# Zutaten' }),
     ingredients: 'Zutaten',
+    inStock: (have: number, total: number) =>
+      `${formatNumber(have)} von ${formatNumber(total)} im Haus`,
+    haveIt: 'Im Haus',
     method: 'Zubereitung',
     cookware: 'Du brauchst',
     source: 'Originalrezept',

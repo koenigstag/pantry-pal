@@ -253,11 +253,11 @@ export const MAX_RECIPE_URL_LENGTH = 2048;
 /** How many recipes one household may import: enough for a cookbook, not a crawl. */
 export const MAX_RECIPES_PER_HOUSEHOLD = 1000;
 /**
- * The shape of `Recipe.document`, the JSON the server parses from Cooklang. A
- * change to its shape raises this; rows of an older version then need parsing
- * again from their `source` before they are served, which nothing does yet.
+ * The shape of `Recipe.document`, the JSON the server parses from Cooklang.
+ * Raised whenever that shape changes; `POST /admin/recipes/relink` parses
+ * every stored text again from its `source`. Version 2 added `ingredientId`.
  */
-export const RECIPE_DOCUMENT_VERSION = 1;
+export const RECIPE_DOCUMENT_VERSION = 2;
 
 /** Why a page could not be imported as a recipe: the `code` of the 4xx answer. */
 export const RECIPE_IMPORT_ERROR = {

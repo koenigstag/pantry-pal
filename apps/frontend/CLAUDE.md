@@ -595,8 +595,9 @@ lists.
 ### Recipes
 
 `/recipes` lists the household's favourites — its own recipes and the
-recommendations it saved — and, with `?tab=recommendations`, the
-recommendations; `/recipes/:recipeId` shows one. **Online only**: recipes are not
+recommendations it saved — with `?tab=cookable` every recipe the household has
+an ingredient of, the fewest missing first, and with `?tab=recommendations`
+the recommendations; `/recipes/:recipeId` shows one. **Online only**: recipes are not
 in the offline mirror, and `RecipesStore` reads them over REST (the service
 worker's read cache shows the last list offline). It shares the session's
 socket with `PantryStore` and fetches the list again on `RecipesChanged`.
@@ -607,6 +608,8 @@ socket with `PantryStore` and fetches the list again on `RecipesChanged`.
   ingredient list is its listed ingredients, the method its sections. A step
   that only lists ingredients — how an import writes them — is left out
   (`isIngredientListStep`), and steps are numbered across sections.
+- What is at home is the server's count (`inStockCount`, `inStock`), from items
+  tagged with an ingredient; cards and the ingredient list show it.
 - Adding by link (`ImportRecipeDialog`) names a refusal by its `code`.
 - Recipe text keeps its language (`lang` on the article); the catalog's
   headings carry the page's.

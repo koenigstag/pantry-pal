@@ -64,6 +64,21 @@ export class RecipesStore {
     return this.recipes.filter((recipe) => recipe.householdId === null);
   }
 
+  /**
+   * Every recipe the household has at least one ingredient for: the fewest
+   * missing first, then the larger share at home, then newest. What is at home
+   * is the server's count, as of the last fetch.
+   */
+  get cookable(): readonly RecipeSummary[] {
+    return this.recipes
+      .filter((recipe) => recipe.inStockCount > 0)
+      .toSorted(
+        (a, b) =>
+          missing(a) - missing(b) ||
+          b.inStockCount / b.ingredientCount - a.inStockCount / a.ingredientCount,
+      );
+  }
+
   /** Fetches the list, keeping the one on screen while it does. */
   async load(): Promise<void> {
     const householdId = this.pantry.householdId;
@@ -155,6 +170,9 @@ export class RecipesStore {
     if (payload.householdId === this.loadedFor) void this.load();
   }
 }
+
+/** How many of a recipe's ingredients the household lacks, or cannot be told it has. */
+const missing = (recipe: RecipeSummary): number => recipe.ingredientCount - recipe.inStockCount;
 
 /** The catalog's words for a refusal's `code`. */
 function importError(error: unknown): string {
