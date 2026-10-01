@@ -159,6 +159,14 @@ These are deliberate. Changing any of them affects the whole workspace.
     (`items_ingredient_id_ingredients_id_fk`, `RESTRICT`). Names and parents are
     replaced whole, so one the taxonomy dropped keeps its English `name` for
     display but leaves search.
+  - **`ingredients.category`** is the category an item tagged with it most likely
+    belongs in (cheese → `dairy`), so the item form can fill it in. The importer
+    works it out from `CATEGORY_BRANCHES`: the nearest of a few taxonomy branches
+    above the entry decides, ties going to the first listed, plus juices by id,
+    which the taxonomy files only under their fruit. About two thirds get one;
+    oils, sugar, honey, nuts and the like get none, and canned, frozen and the
+    non-food categories are never chosen. `SET NULL`, so a category stays
+    deletable; a code the database lacks is left out at import.
   - **`ingredient_parents`** is the taxonomy's hierarchy, a graph (a row may have
     several parents). Nothing reads it yet: recipe matching will, so that cheddar
     satisfies a recipe asking for cheese.
@@ -408,8 +416,9 @@ from empty and seeded, the API check scripts from the offline sync work (35 pull
 units, among them the `sub_items` constraints in a rolled-back transaction.
 `drizzle-kit generate` reports no changes.
 
-`0009_ingredients` adds the three ingredient tables and the nullable
-`items.ingredient_id` with its key and a partial index. It is drizzle-kit's own
+`0009_ingredients` adds the three ingredient tables, `ingredients.category` and
+the nullable `items.ingredient_id` with its key and a partial index. It was
+regenerated in place for `ingredients.category` before it was ever released. It is drizzle-kit's own
 output with one hand-added statement first, `CREATE EXTENSION IF NOT EXISTS
 pg_trgm` (a trusted extension, so the database's owner may create it), which the
 trigram index needs. Verified on PGlite (PostgreSQL 17 compiled to WebAssembly,

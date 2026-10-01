@@ -1,4 +1,8 @@
-import { MAX_INGREDIENT_QUERY_LENGTH, type IngredientMatch } from '@pantry-pal/shared';
+import {
+  MAX_INGREDIENT_QUERY_LENGTH,
+  type Ingredient,
+  type IngredientMatch,
+} from '@pantry-pal/shared';
 import { Carrot, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useId, useState, type KeyboardEvent, type ReactElement } from 'react';
@@ -22,7 +26,8 @@ interface IngredientPickerProps {
   value: string;
   /** The item's name, which suggests ingredients while none is chosen. */
   itemName: string;
-  onChange: (ingredientId: string) => void;
+  /** The ingredient chosen, or `null` when it was removed. */
+  onChange: (ingredient: Ingredient | null) => void;
 }
 
 type Search =
@@ -108,7 +113,7 @@ export const IngredientPicker = observer(function IngredientPicker({
 
   function choose(match: IngredientMatch): void {
     catalog.remember(match);
-    onChange(match.id);
+    onChange(match);
     setQuery('');
   }
 
@@ -143,7 +148,7 @@ export const IngredientPicker = observer(function IngredientPicker({
           <IconButton
             icon={X}
             label={messages.itemForm.clearIngredient}
-            onClick={() => onChange('')}
+            onClick={() => onChange(null)}
             className="text-ink-muted hover:bg-sunken hover:text-ink"
           />
         </div>

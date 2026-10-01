@@ -349,6 +349,11 @@ it matched by when that is another (a synonym, another language). While none is
 chosen, the item's name suggests three, one tap each. The details show the chosen
 one as a chip beside the space and the category.
 
+- **Choosing one fills in the category** (`Ingredient.category`) while the item
+  is still in the default category, where a new item starts, along with
+  `isEdible`. A category the user picked stays, and removing the ingredient
+  changes nothing.
+
 - **Searching needs the server** (`GET /ingredients`); offline, the field says so.
   Choosing one is an item edit like any other, so it goes through the mirror.
 - **Names live in `IngredientCatalog`**, looked up by id in batches and kept in

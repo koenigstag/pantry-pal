@@ -9,6 +9,8 @@ export interface IngredientView {
   readonly id: string;
   /** In the reader's language, else English. */
   readonly name: string;
+  /** The category its items most likely belong in, or `null`. */
+  readonly category: string | null;
 }
 
 export interface IngredientMatch extends IngredientView {
@@ -47,8 +49,8 @@ export class IngredientsRepository {
   async findByIds(ids: readonly string[], language: string): Promise<IngredientView[]> {
     if (ids.length === 0) return [];
 
-    const result = await this.db.execute<{ id: string; name: string }>(sql`
-      select i.id, coalesce(d.name, i.name) as name
+    const result = await this.db.execute<{ id: string; name: string; category: string | null }>(sql`
+      select i.id, coalesce(d.name, i.name) as name, i.category
       from ${ingredients} i
       left join ${ingredientNames} d
         on d.ingredient_id = i.id and d.locale = ${language} and d.is_primary
@@ -79,6 +81,7 @@ export class IngredientsRepository {
     const result = await this.db.execute<{
       id: string;
       name: string;
+      category: string | null;
       matched_name: string;
     }>(sql`
       with matches as (
@@ -103,7 +106,8 @@ export class IngredientsRepository {
         from matches
         order by ingredient_id, match_rank, language_rank, is_primary desc, closeness desc
       )
-      select b.ingredient_id as id, coalesce(d.name, i.name) as name, b.name as matched_name
+      select b.ingredient_id as id, coalesce(d.name, i.name) as name, i.category,
+        b.name as matched_name
       from best b
       join ${ingredients} i on i.id = b.ingredient_id
       left join ${ingredientNames} d
@@ -111,9 +115,10 @@ export class IngredientsRepository {
       order by b.match_rank, b.language_rank, b.closeness desc, length(coalesce(d.name, i.name)), b.ingredient_id
       limit ${limit}`);
 
-    return result.rows.map(({ id, name, matched_name }) => ({
+    return result.rows.map(({ id, name, category, matched_name }) => ({
       id,
       name,
+      category,
       matchedName: searchText(matched_name) === searchText(name) ? null : matched_name,
     }));
   }

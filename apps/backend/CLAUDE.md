@@ -268,7 +268,8 @@ that expires first.
 
 `GET /ingredients?q=молоко&lang=uk` searches every stored name, any language,
 best first (`INGREDIENT_SEARCH_LIMIT`); `?ids=en:milk,en:egg&lang=uk` names the
-ingredients items hold, in the order asked, leaving out unknown ids. Exactly one
+ingredients items hold, in the order asked, leaving out unknown ids. Each comes
+with the category its items most likely belong in, or `null`. Exactly one
 of `q` and `ids` (400 otherwise). Names come in `lang`, a language of
 `SUPPORTED_LOCALES` without its region, else English. The language is a
 parameter rather than the account's, so an answer never depends on who asked.

@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { boolean, check, index, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
+import { categories } from './categories';
+
 /**
  * What an item is, independent of its name, brand or language: `en:whole-milk`.
  * Recipes will name the same rows, so an item tagged with one can be matched
@@ -18,6 +20,13 @@ export const ingredients = pgTable('ingredients', {
   id: text('id').primaryKey(),
   /** English, the name wherever the reader's language has none. */
   name: text('name').notNull(),
+  /**
+   * The category an item tagged with it most likely belongs in, a
+   * `categories.code`: worked out by the importer from the taxonomy's branches
+   * (cheese is `dairy`). `null` where no branch says, which leaves an item's
+   * category as it is. SET NULL, so a category stays deletable.
+   */
+  category: text('category').references(() => categories.code, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()

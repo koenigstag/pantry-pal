@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Database } from './client';
 import {
+  categories,
   ingredientNames,
   ingredientParents,
   ingredients,
@@ -46,6 +47,42 @@ const EXCLUDED_BRANCHES = [
  */
 const VARIANT_ID = /-from-|-of-origin|-origin$|^en:organic-/;
 
+/**
+ * Which category an ingredient's items most likely belong in, by the branch of
+ * the taxonomy it sits under: the nearest such branch decides, and among
+ * branches equally near, the first listed here — tomato juice is a juice before
+ * it is a vegetable. Codes of `CATEGORY_SEED`. Canned and frozen are how a thing
+ * is kept, not what it is, so no branch leads there; nor to the non-food
+ * categories. Anything else gets none, and an item keeps its own.
+ */
+export const CATEGORY_BRANCHES: readonly (readonly [branch: string, category: string])[] = [
+  ['en:juice', 'beverages'],
+  ['en:alcohol', 'beverages'],
+  ['en:coffee', 'beverages'],
+  ['en:tea', 'beverages'],
+  ['en:water', 'beverages'],
+  ['en:fish', 'fish'],
+  ['en:shellfish', 'fish'],
+  ['en:meat', 'meat'],
+  ['en:poultry', 'meat'],
+  ['en:game-animal', 'meat'],
+  ['en:dairy', 'dairy'],
+  ['en:egg', 'dairy'],
+  ['en:cereal', 'grains'],
+  ['en:flour', 'grains'],
+  ['en:rice', 'grains'],
+  ['en:bread', 'grains'],
+  ['en:dough', 'grains'],
+  ['en:pulse', 'grains'],
+  ['en:spice', 'spices'],
+  ['en:herb', 'spices'],
+  ['en:salt', 'spices'],
+  ['en:pepper', 'spices'],
+  ['en:vegetable', 'produce'],
+  ['en:fruit', 'produce'],
+  ['en:mushroom', 'produce'],
+];
+
 /** Additives by their E number: `en:e330`. */
 const E_NUMBER_ID = /^[a-z]{2}:e\d/;
 
@@ -71,6 +108,8 @@ export interface TaxonomyIngredient {
   readonly names: readonly TaxonomyIngredientName[];
   /** Parents that were kept too; an edge to a dropped entry is dropped with it. */
   readonly parents: readonly string[];
+  /** A category code from `CATEGORY_BRANCHES`, or `null`. */
+  readonly category: string | null;
 }
 
 /**
@@ -117,7 +156,39 @@ export function parseOffTaxonomy(
     name: entry.name.en!.trim(),
     names: languages.flatMap((locale) => namesIn(entry, locale)),
     parents: (entry.parents ?? []).filter((parent) => parent !== id && kept.has(parent)),
+    category: categoryOf(taxonomy, id),
   }));
+}
+
+/**
+ * Juices the taxonomy files only under their fruit — tomato juice sits under
+ * tomato alone — named for what they are: `…-juice`, but not `…-in-…-juice`,
+ * tomatoes in their juice.
+ */
+const JUICE_ID = /^(?!.*-in-).*-juice$/;
+
+const BRANCH_RANK = new Map(CATEGORY_BRANCHES.map(([branch], rank) => [branch, rank]));
+const BRANCH_CATEGORY = new Map(CATEGORY_BRANCHES);
+
+/**
+ * The category of the nearest branch above `id`, itself included, walking the
+ * whole taxonomy — dropped entries too, which still say where a thing sits.
+ */
+function categoryOf(taxonomy: Record<string, TaxonomyEntry>, id: string): string | null {
+  if (JUICE_ID.test(id)) return 'beverages';
+  const seen = new Set<string>([id]);
+  let level = [id];
+  while (level.length > 0) {
+    const branch = level
+      .filter((node) => BRANCH_RANK.has(node))
+      .toSorted((a, b) => BRANCH_RANK.get(a)! - BRANCH_RANK.get(b)!)[0];
+    if (branch !== undefined) return BRANCH_CATEGORY.get(branch) ?? null;
+
+    level = level
+      .flatMap((node) => taxonomy[node]?.parents ?? [])
+      .filter((parent) => !seen.has(parent) && seen.add(parent));
+  }
+  return null;
 }
 
 /** The primary name first, then the synonyms that fold to something else. */
@@ -156,7 +227,7 @@ const chunks = <T>(rows: readonly T[]): T[][] =>
 /**
  * Writes the taxonomy in one transaction, as often as it is run.
  *
- * - Ingredients are upserted and **never deleted**: items may name any of them.
+ * - Ingredients are upserted, their categories with them, and **never deleted**: items may name any of them.
  *   One the taxonomy dropped keeps its row and its English `name`, so items
  *   tagged with it still show it.
  * - Names and parents are replaced whole, so a dropped ingredient has no names
@@ -166,7 +237,15 @@ export async function importIngredients(
   db: Database,
   entries: readonly TaxonomyIngredient[],
 ): Promise<IngredientImportSummary> {
-  const ingredientRows: NewIngredientRow[] = entries.map(({ id, name }) => ({ id, name }));
+  // A category an admin has deleted since is left out rather than failing the key.
+  const known = new Set(
+    (await db.select({ code: categories.code }).from(categories)).map((row) => row.code),
+  );
+  const ingredientRows: NewIngredientRow[] = entries.map(({ id, name, category }) => ({
+    id,
+    name,
+    category: category !== null && known.has(category) ? category : null,
+  }));
   const nameRows: NewIngredientNameRow[] = entries.flatMap(({ id, names }) =>
     names.map(({ locale, name, isPrimary }) => ({
       ingredientId: id,
@@ -189,9 +268,13 @@ export async function importIngredients(
         .values(rows)
         .onConflictDoUpdate({
           target: ingredients.id,
-          set: { name: sql`excluded.name`, updatedAt: sql`now()` },
+          set: {
+            name: sql`excluded.name`,
+            category: sql`excluded.category`,
+            updatedAt: sql`now()`,
+          },
           // Leaves `updated_at` alone where nothing changed.
-          setWhere: sql`${ingredients.name} is distinct from excluded.name`,
+          setWhere: sql`(${ingredients.name}, ${ingredients.category}) is distinct from (excluded.name, excluded.category)`,
         });
     }
 

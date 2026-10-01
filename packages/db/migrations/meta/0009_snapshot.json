@@ -1,5 +1,5 @@
 {
-  "id": "4a672ffd-9d7a-45b4-847c-d66f99851f63",
+  "id": "a5df68d1-250a-4aec-aa94-5ef2caa6947b",
   "prevId": "82a0e56f-744b-4f07-b907-0198b0595a98",
   "version": "7",
   "dialect": "postgresql",
@@ -289,6 +289,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -305,7 +311,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "ingredients_category_categories_code_fk": {
+          "name": "ingredients_category_categories_code_fk",
+          "tableFrom": "ingredients",
+          "tableTo": "categories",
+          "columnsFrom": [
+            "category"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

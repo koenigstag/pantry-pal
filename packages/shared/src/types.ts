@@ -507,6 +507,11 @@ export interface Ingredient {
   /** The taxonomy's id: `en:whole-milk`. Stable, and what items store. */
   id: string;
   name: string;
+  /**
+   * The `Category.code` its items most likely belong in — cheese is `dairy` —
+   * or `null` where the taxonomy does not say. The item form fills it in.
+   */
+  category: string | null;
 }
 
 /** An ingredient a search found. */

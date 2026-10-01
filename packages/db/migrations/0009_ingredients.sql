@@ -20,6 +20,7 @@ CREATE TABLE "ingredient_parents" (
 CREATE TABLE "ingredients" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
+	"category" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -28,6 +29,7 @@ ALTER TABLE "items" ADD COLUMN "ingredient_id" text;--> statement-breakpoint
 ALTER TABLE "ingredient_names" ADD CONSTRAINT "ingredient_names_ingredient_id_ingredients_id_fk" FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ingredient_parents" ADD CONSTRAINT "ingredient_parents_ingredient_id_ingredients_id_fk" FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ingredient_parents" ADD CONSTRAINT "ingredient_parents_parent_id_ingredients_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ingredients" ADD CONSTRAINT "ingredients_category_categories_code_fk" FOREIGN KEY ("category") REFERENCES "public"."categories"("code") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "ingredient_names_search_idx" ON "ingredient_names" USING gin ("search_name" gin_trgm_ops);--> statement-breakpoint
 CREATE INDEX "ingredient_parents_parent_idx" ON "ingredient_parents" USING btree ("parent_id");--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_ingredient_id_ingredients_id_fk" FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
