@@ -31,7 +31,16 @@ export interface AppConfig {
     /** `undefined` disables every `/admin` route. */
     apiKey: string | undefined;
   };
+  assistant: {
+    /** `ANTHROPIC_API_KEY`. `undefined` turns the text assistant off: its routes answer 404. */
+    apiKey: string | undefined;
+    /** `ASSISTANT_MODEL`: the Claude model that reads the text. */
+    model: string;
+  };
 }
+
+/** The model the text assistant uses unless `ASSISTANT_MODEL` names another. */
+const DEFAULT_ASSISTANT_MODEL = 'claude-sonnet-5-5';
 
 /** Long enough that it cannot be a placeholder someone forgot to change. */
 const MIN_ADMIN_API_KEY_LENGTH = 16;
@@ -128,5 +137,9 @@ export function configuration(): AppConfig {
       generatedSecrets: JWT_SECRET_NAMES.filter((name) => secrets[name].generated),
     },
     admin: { apiKey },
+    assistant: {
+      apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
+      model: process.env.ASSISTANT_MODEL?.trim() || DEFAULT_ASSISTANT_MODEL,
+    },
   };
 }

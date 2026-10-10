@@ -1,6 +1,10 @@
 import {
   IMPORT_FILE_FIELD,
   SYNC_COLLECTION,
+  type AssistantAction,
+  type AssistantApplyResult,
+  type AssistantInterpretation,
+  type AssistantStatus,
   type AuthSession,
   type Category,
   type CurrentUser,
@@ -241,6 +245,26 @@ export const pantryApi = {
   /** The household's backup: an .xlsx of its storage spaces, items and units. */
   exportBackup: (householdId: string): Promise<Blob> =>
     authorized((token) => receive(`${household(householdId)}/export`, {}, token)),
+
+  /** Whether the server has the text assistant. */
+  assistantStatus: (): Promise<AssistantStatus> => request<AssistantStatus>('/assistant'),
+
+  /** The changes a text describes, proposed for the user to confirm. Writes nothing. */
+  interpretText: (householdId: string, text: string): Promise<AssistantInterpretation> =>
+    request<AssistantInterpretation>(`${household(householdId)}/assistant/interpret`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  /** The proposals the user kept, applied all or nothing. */
+  applyAssistantActions: (
+    householdId: string,
+    actions: readonly AssistantAction[],
+  ): Promise<AssistantApplyResult> =>
+    request<AssistantApplyResult>(`${household(householdId)}/assistant/apply`, {
+      method: 'POST',
+      body: JSON.stringify({ actions }),
+    }),
 };
 
 export type PantryApi = typeof pantryApi;

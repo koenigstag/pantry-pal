@@ -603,6 +603,63 @@ export const de = {
     },
   },
 
+  assistant: {
+    open: 'Dem Assistenten erzählen',
+    title: 'Assistent',
+    intro:
+      'In eigenen Worten schreiben, was verbraucht, gekauft oder eingeräumt wurde. Jede Änderung erscheint zur Prüfung, bevor etwas gespeichert wird.',
+    placeholder: 'In der Küche sind noch 3 Packungen Nudeln, dazu eine halb aufgebrauchte',
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Änderungen zeigen',
+    interpreting: 'Wird gelesen …',
+    offline:
+      'Der Assistent braucht eine Verbindung. Der Text bleibt hier, bis wieder eine besteht.',
+    editText: 'Text bearbeiten',
+    preview: 'Die gewünschten Änderungen ankreuzen',
+    nothingFound: 'Dieser Text sagt nicht, was sich ändern soll.',
+    unresolved: 'Nicht verstanden',
+    unresolvedReason: 'Das passt zu nichts im Haushalt.',
+    apply: (count: number) =>
+      plural(count, { one: '# Änderung übernehmen', other: '# Änderungen übernehmen' }),
+    applyShort: 'Übernehmen',
+    applying: 'Wird übernommen …',
+    applied: (count: number) =>
+      plural(count, { one: '# Änderung übernommen.', other: '# Änderungen übernommen.' }),
+    someItem: 'ein Artikel',
+    quoted: (text: string) => `„${text}“`,
+    actions: {
+      addItem: (name: string, space: string) => `„${name}“ hinzufügen → ${space}`,
+      addUnits: (name: string) => `Mehr „${name}“`,
+      setQuantity: (name: string, amount: string) => `„${name}“: jetzt ${amount}`,
+      useUp: (name: string) => `Verbraucht: „${name}“`,
+      discard: (name: string) => `Weggeworfen: „${name}“`,
+      updateUnit: (name: string) => `„${name}“, ein Stück davon`,
+      moveItem: (name: string, space: string) => `„${name}“ umräumen → ${space}`,
+      addToList: (name: string, list: string) => `„${name}“ auf „${list}“ setzen`,
+      checkEntry: (name: string) => `Im Korb: „${name}“`,
+      uncheckEntry: (name: string) => `Wieder zu kaufen: „${name}“`,
+      buyEntry: (name: string) => `Gekauft: „${name}“`,
+      removeEntry: (name: string, list: string) => `„${name}“ von „${list}“ nehmen`,
+    },
+    details: {
+      all: 'alles',
+      some: (count: number, of: number) => `${formatNumber(count)} von ${formatNumber(of)}`,
+      opened: (date: string) => `geöffnet am ${date}`,
+      left: (percent: string) => `noch ${percent}`,
+      expires: (date: string) => `haltbar bis ${date}`,
+      newItem: 'neu',
+      toBuy: (amount: string) => `${amount} kaufen`,
+      restocked: (amount: string) => `${amount} zurück ins Lager`,
+    },
+    errors: {
+      unavailable: 'Auf diesem Server gibt es keinen Assistenten.',
+      tooMany: 'Zu viele Anfragen hintereinander. Eine Minute warten und erneut versuchen.',
+      unreadable:
+        'Der Assistent konnte diesen Text nicht lesen. Anders formulieren und erneut versuchen.',
+      busy: 'Der Assistent ist gerade ausgelastet. Gleich noch einmal versuchen.',
+    },
+  },
+
   planner: {
     title: 'Planer',
     description: 'Die Essensplanung kommt bald.',

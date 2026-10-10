@@ -615,6 +615,62 @@ export const es = {
     },
   },
 
+  assistant: {
+    open: 'Contárselo al asistente',
+    title: 'Asistente',
+    intro:
+      'Escribe con tus palabras lo que has usado, comprado o guardado. Verás cada cambio antes de que se guarde nada.',
+    placeholder: 'En la cocina me quedan 3 paquetes de pasta, más uno a medias',
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Ver los cambios',
+    interpreting: 'Leyendo…',
+    offline:
+      'El asistente necesita conexión. Lo que has escrito se queda aquí hasta que vuelvas a estar en línea.',
+    editText: 'Editar el texto',
+    preview: 'Marca los cambios que quieres hacer',
+    nothingFound: 'Este texto no dice qué cambiar.',
+    unresolved: 'No entendido',
+    unresolvedReason: 'No coincide con nada de tu despensa.',
+    apply: (count: number) =>
+      plural(count, { one: 'Aplicar # cambio', other: 'Aplicar # cambios' }),
+    applyShort: 'Aplicar',
+    applying: 'Aplicando…',
+    applied: (count: number) =>
+      plural(count, { one: '# cambio aplicado.', other: '# cambios aplicados.' }),
+    someItem: 'un artículo',
+    quoted: (text: string) => `«${text}»`,
+    actions: {
+      addItem: (name: string, space: string) => `Añadir «${name}» → ${space}`,
+      addUnits: (name: string) => `Más «${name}»`,
+      setQuantity: (name: string, amount: string) => `«${name}»: ahora ${amount}`,
+      useUp: (name: string) => `Gastado: «${name}»`,
+      discard: (name: string) => `Tirado: «${name}»`,
+      updateUnit: (name: string) => `«${name}», uno de ellos`,
+      moveItem: (name: string, space: string) => `Mover «${name}» → ${space}`,
+      addToList: (name: string, list: string) => `Poner «${name}» en «${list}»`,
+      checkEntry: (name: string) => `En el carrito: «${name}»`,
+      uncheckEntry: (name: string) => `Otra vez por comprar: «${name}»`,
+      buyEntry: (name: string) => `Comprado: «${name}»`,
+      removeEntry: (name: string, list: string) => `Quitar «${name}» de «${list}»`,
+    },
+    details: {
+      all: 'todo',
+      some: (count: number, of: number) => `${formatNumber(count)} de ${formatNumber(of)}`,
+      opened: (date: string) => `abierto el ${date}`,
+      left: (percent: string) => `queda ${percent}`,
+      expires: (date: string) => `caduca el ${date}`,
+      newItem: 'nuevo',
+      toBuy: (amount: string) => `comprar ${amount}`,
+      restocked: (amount: string) => `${amount} de vuelta a la despensa`,
+    },
+    errors: {
+      unavailable: 'El asistente no está disponible en este servidor.',
+      tooMany: 'Demasiadas peticiones seguidas. Espera un minuto y vuelve a intentarlo.',
+      unreadable: 'El asistente no ha podido leer este texto. Prueba a decirlo de otra forma.',
+      busy: 'El asistente está ocupado. Vuelve a intentarlo en un momento.',
+    },
+  },
+
   planner: {
     title: 'Planificador',
     description: 'La planificación de comidas llegará pronto.',

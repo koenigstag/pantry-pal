@@ -16,6 +16,7 @@ import {
   type RecordEventInput,
 } from '@pantry-pal/db';
 import {
+  ASSISTANT_SOURCE,
   COUNT_UNIT,
   DEFAULT_CATEGORY,
   ITEM_EVENT_TYPE,
@@ -61,11 +62,17 @@ interface ItemOutcomes {
   unchanged: Set<string>;
 }
 
+/** What wrote a plan: a file's source, or the text assistant adding what someone wrote. */
+type PlanSource = ImportSource | typeof ASSISTANT_SOURCE;
+
+/** An import's summary before it is labelled with its source. */
+type PlanSummary = Omit<ImportSummary, 'source'>;
+
 /** What one import's writes need to hand, gathered once before the first of them. */
 interface ImportContext {
   membership: Membership;
-  source: ImportSource;
-  summary: ImportSummary;
+  source: PlanSource;
+  summary: PlanSummary;
   outcomes: ItemOutcomes;
   events: RecordEventInput[];
   categories: ReadonlyMap<string, CategoryRow>;
@@ -121,14 +128,35 @@ export class ImportService {
     source: ImportSource,
     plan: ImportPlan,
   ): Promise<ImportSummary> {
+    const { summary } = await this.write(membership, locale, source, plan);
+    return { source, ...summary };
+  }
+
+  /**
+   * Adds what the text assistant planned, as an import would, recorded as the
+   * assistant's. Answers with the household's item each planned item landed in,
+   * in the plan's order: the one it created, or the one of that name in that
+   * space it added units to, or would have but had no room for more.
+   */
+  @Transactional()
+  async addPlanned(membership: Membership, locale: string, plan: ImportPlan): Promise<string[]> {
+    const { itemIds } = await this.write(membership, locale, ASSISTANT_SOURCE, plan);
+    return itemIds;
+  }
+
+  private async write(
+    membership: Membership,
+    locale: string,
+    source: PlanSource,
+    plan: ImportPlan,
+  ): Promise<{ summary: PlanSummary; itemIds: string[] }> {
     const { householdId } = membership;
 
     // Creating spaces counts them and appends after the last, which the
     // locations service does under this same lock.
     await this.households.lock(householdId);
 
-    const summary: ImportSummary = {
-      source,
+    const summary: PlanSummary = {
       createdItems: 0,
       updatedItems: 0,
       restoredItems: 0,
@@ -156,7 +184,7 @@ export class ImportService {
     };
 
     const spaces = await this.resolveSpaces(householdId, locale, plan.spaces, summary);
-    await this.writeItems(context, plan.items, spaces);
+    const itemIds = await this.writeItems(context, plan.items, spaces);
     await this.events.recordMany(context.events);
 
     summary.createdItems = outcomes.created.size;
@@ -167,7 +195,7 @@ export class ImportService {
     summary.unchangedItems = [...outcomes.unchanged].filter(
       (id) => !outcomes.created.has(id) && !outcomes.restored.has(id) && !outcomes.updated.has(id),
     ).length;
-    return summary;
+    return { summary, itemIds };
   }
 
   /**
@@ -196,7 +224,7 @@ export class ImportService {
     householdId: string,
     locale: string,
     planned: readonly PlannedSpace[],
-    summary: ImportSummary,
+    summary: PlanSummary,
   ): Promise<Map<string, LocationRow>> {
     const live = await this.locations.list(householdId);
     const defaults = await this.defaultSpaces();
@@ -292,11 +320,12 @@ export class ImportService {
     });
   }
 
+  /** Answers with the household's item each planned one landed in, in the plan's order. */
   private async writeItems(
     context: ImportContext,
     planned: readonly PlannedItem[],
     spaces: ReadonlyMap<string, LocationRow>,
-  ): Promise<void> {
+  ): Promise<string[]> {
     const { householdId } = context.membership;
 
     // Every live item, whatever its status: a backup of this household matches them by id.
@@ -321,6 +350,7 @@ export class ImportService {
       planned.flatMap((item) => item.units.flatMap((unit) => (unit.id === null ? [] : [unit.id]))),
     );
 
+    const itemIds: string[] = [];
     for (const item of planned) {
       const location = spaces.get(item.spaceKey);
       if (location === undefined) throw new Error(`No location resolved for "${item.spaceKey}"`);
@@ -336,13 +366,17 @@ export class ImportService {
       // In order, as the file lists them: a later row can add to an item an earlier one created.
       /* oxlint-disable no-await-in-loop */
       let written: ItemRow | undefined;
+      let landed: string;
       if (gone !== undefined) {
         written = await this.restore(context, item, gone.id, location.id, units);
+        landed = written.id;
       } else if (target !== undefined) {
         written = await this.addTo(context, item, target.id, units);
         if (written === undefined) context.outcomes.unchanged.add(target.id);
+        landed = target.id;
       } else {
         written = await this.create(context, item, location.id, units);
+        landed = written.id;
       }
       /* oxlint-enable no-await-in-loop */
 
@@ -352,7 +386,9 @@ export class ImportService {
           onShelf.set(shelfKey(written.locationId, written.name), written);
         }
       }
+      itemIds.push(landed);
     }
+    return itemIds;
   }
 
   private async create(

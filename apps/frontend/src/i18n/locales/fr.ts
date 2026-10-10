@@ -607,6 +607,62 @@ export const fr = {
     },
   },
 
+  assistant: {
+    open: 'Parler à l’assistant',
+    title: 'Assistant',
+    intro:
+      'Écrivez avec vos mots ce que vous avez utilisé, acheté ou rangé. Vous verrez chaque changement avant que rien ne soit enregistré.',
+    placeholder: 'Dans la cuisine, il me reste 3 paquets de pâtes, plus un à moitié entamé',
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Voir les changements',
+    interpreting: 'Lecture…',
+    offline:
+      'L’assistant a besoin d’une connexion. Votre texte reste ici jusqu’à votre retour en ligne.',
+    editText: 'Modifier le texte',
+    preview: 'Cochez les changements à faire',
+    nothingFound: 'Ce texte ne dit pas quoi changer.',
+    unresolved: 'Non compris',
+    unresolvedReason: 'Rien chez vous ne correspond à ceci.',
+    apply: (count: number) =>
+      plural(count, { one: 'Appliquer # changement', other: 'Appliquer # changements' }),
+    applyShort: 'Appliquer',
+    applying: 'Application…',
+    applied: (count: number) =>
+      plural(count, { one: '# changement appliqué.', other: '# changements appliqués.' }),
+    someItem: 'un article',
+    quoted: (text: string) => q(text),
+    actions: {
+      addItem: (name: string, space: string) => `Ajouter ${q(name)} → ${space}`,
+      addUnits: (name: string) => `Plus de ${q(name)}`,
+      setQuantity: (name: string, amount: string) => `${q(name)} : ${amount} maintenant`,
+      useUp: (name: string) => `Utilisé : ${q(name)}`,
+      discard: (name: string) => `Jeté : ${q(name)}`,
+      updateUnit: (name: string) => `${q(name)}, l’un d’eux`,
+      moveItem: (name: string, space: string) => `Déplacer ${q(name)} → ${space}`,
+      addToList: (name: string, list: string) => `Mettre ${q(name)} sur ${q(list)}`,
+      checkEntry: (name: string) => `Dans le panier : ${q(name)}`,
+      uncheckEntry: (name: string) => `Encore à acheter : ${q(name)}`,
+      buyEntry: (name: string) => `Acheté : ${q(name)}`,
+      removeEntry: (name: string, list: string) => `Retirer ${q(name)} de ${q(list)}`,
+    },
+    details: {
+      all: 'tout',
+      some: (count: number, of: number) => `${formatNumber(count)} sur ${formatNumber(of)}`,
+      opened: (date: string) => `ouvert le ${date}`,
+      left: (percent: string) => `reste ${percent}`,
+      expires: (date: string) => `à consommer avant le ${date}`,
+      newItem: 'nouveau',
+      toBuy: (amount: string) => `${amount} à acheter`,
+      restocked: (amount: string) => `${amount} de retour en réserve`,
+    },
+    errors: {
+      unavailable: 'L’assistant n’est pas disponible sur ce serveur.',
+      tooMany: 'Trop de demandes d’affilée. Attendez une minute, puis réessayez.',
+      unreadable: 'L’assistant n’a pas pu lire ce texte. Essayez de le formuler autrement.',
+      busy: 'L’assistant est occupé. Réessayez dans un instant.',
+    },
+  },
+
   planner: {
     title: 'Planning',
     description: 'La planification des repas arrive bientôt.',

@@ -70,6 +70,13 @@ async function bootstrap(): Promise<void> {
   logger.log(
     `Admin API ${config.get<string>('admin.apiKey') === undefined ? 'disabled' : 'enabled'}`,
   );
+  logger.log(
+    `Assistant ${
+      config.get<string>('assistant.apiKey') === undefined
+        ? 'disabled'
+        : `enabled, ${config.get<string>('assistant.model') ?? ''}`
+    }`,
+  );
 }
 
 void bootstrap();

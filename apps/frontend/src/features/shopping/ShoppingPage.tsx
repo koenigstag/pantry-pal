@@ -5,6 +5,7 @@ import {
 } from '@pantry-pal/shared';
 import {
   EllipsisVertical,
+  MessageSquareText,
   PackageCheck,
   RefreshCw,
   Share2,
@@ -21,6 +22,7 @@ import { useNotices, usePantryStore } from '../../stores/StoreContext';
 import { IconButton } from '../../ui/IconButton';
 import { Menu, type MenuItem } from '../../ui/Menu';
 import { SwipePager } from '../../ui/SwipePager';
+import { AssistantDialog } from '../assistant/AssistantDialog';
 import { PageStatus } from '../shell/PageStatus';
 import { shareText, shoppingListText } from './shareList';
 import { ShoppingEntryRow } from './ShoppingEntryRow';
@@ -71,6 +73,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
 
   const [editor, setEditor] = useState<EditorState>(EDITOR_CLOSED);
   const [isMarkingBought, setMarkingBought] = useState(false);
+  const [isAssistantOpen, setAssistantOpen] = useState(false);
 
   if (pantry.household === null) {
     return pantry.loadState === 'failed' ? (
@@ -168,6 +171,14 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
           )}
 
           <div className="ms-auto flex items-center gap-1">
+            {pantry.assistantEnabled && (
+              <IconButton
+                icon={MessageSquareText}
+                label={messages.assistant.open}
+                onClick={() => setAssistantOpen(true)}
+                className={HEADER_BUTTON}
+              />
+            )}
             {list !== undefined && (
               <IconButton
                 icon={Share2}
@@ -313,6 +324,7 @@ export const ShoppingPage = observer(function ShoppingPage(): ReactElement {
         newListName={editor.open ? editor.newListName : null}
         onClose={() => setEditor(EDITOR_CLOSED)}
       />
+      <AssistantDialog open={isAssistantOpen} onClose={() => setAssistantOpen(false)} />
     </div>
   );
 });

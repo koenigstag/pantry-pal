@@ -1,4 +1,4 @@
-import { EllipsisVertical, Search, WifiOff, X } from 'lucide-react';
+import { EllipsisVertical, MessageSquareText, Search, WifiOff, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useId, useRef, type ReactElement, type ReactNode } from 'react';
 
@@ -13,6 +13,8 @@ interface StorageHeaderProps {
   isSearchOpen: boolean;
   onSearchOpenChange: (open: boolean) => void;
   menuItems: readonly MenuItem[];
+  /** Opens the text assistant; its button shows only while the server has one. */
+  onAssistant: () => void;
   /** The location tabs, which sit inside the header band. */
   children: ReactNode;
 }
@@ -27,6 +29,7 @@ export const StorageHeader = observer(function StorageHeader({
   isSearchOpen,
   onSearchOpenChange,
   menuItems,
+  onAssistant,
   children,
 }: StorageHeaderProps): ReactElement {
   const pantry = usePantryStore();
@@ -57,6 +60,14 @@ export const StorageHeader = observer(function StorageHeader({
         )}
 
         <div className="ms-auto flex items-center gap-1">
+          {pantry.assistantEnabled && (
+            <IconButton
+              icon={MessageSquareText}
+              label={messages.assistant.open}
+              onClick={onAssistant}
+              className={HEADER_BUTTON}
+            />
+          )}
           <IconButton
             icon={isSearchOpen ? X : Search}
             label={isSearchOpen ? messages.storage.closeSearch : messages.storage.search}

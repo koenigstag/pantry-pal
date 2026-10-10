@@ -682,6 +682,72 @@ const en = {
     },
   },
 
+  /**
+   * The text assistant's sheet, from a speech bubble in the Storage and Shopping
+   * headers: what someone writes becomes changes they tick, then apply.
+   */
+  assistant: {
+    open: 'Tell the assistant',
+    title: 'Assistant',
+    intro:
+      'Write what you used, bought or put away, in your own words. You’ll see every change before anything is saved.',
+    placeholder: 'In the kitchen I have 3 packs of pasta left, plus one half used',
+    /** Under the text box: how much of the limit is used. */
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Show changes',
+    interpreting: 'Reading…',
+    offline:
+      'The assistant needs a connection. What you wrote stays here until you’re back online.',
+    editText: 'Edit text',
+    preview: 'Tick the changes to make',
+    nothingFound: 'Nothing in this text says what to change.',
+    unresolved: 'Not understood',
+    /** When the server, not the model, turned part of the text down. */
+    unresolvedReason: 'Couldn’t match this to anything in your household.',
+    apply: (count: number) => plural(count, { one: 'Apply # change', other: 'Apply # changes' }),
+    /** The header bar's button, where a phone has little room. */
+    applyShort: 'Apply',
+    applying: 'Applying…',
+    applied: (count: number) =>
+      plural(count, { one: '# change applied.', other: '# changes applied.' }),
+    /** An item the device does not hold, which only the server knows by name. */
+    someItem: 'an item',
+    /** The words of the text a change or a question comes from. */
+    quoted: (text: string) => `“${text}”`,
+    /** The title of each preview line; names are what the household typed. */
+    actions: {
+      addItem: (name: string, space: string) => `Add “${name}” to ${space}`,
+      addUnits: (name: string) => `More “${name}”`,
+      setQuantity: (name: string, amount: string) => `“${name}”: ${amount} now`,
+      useUp: (name: string) => `Used up: “${name}”`,
+      discard: (name: string) => `Thrown out: “${name}”`,
+      updateUnit: (name: string) => `“${name}”: one of them`,
+      moveItem: (name: string, space: string) => `Move “${name}” to ${space}`,
+      addToList: (name: string, list: string) => `Put “${name}” on ${list}`,
+      checkEntry: (name: string) => `In the basket: “${name}”`,
+      uncheckEntry: (name: string) => `Still to buy: “${name}”`,
+      buyEntry: (name: string) => `Bought: “${name}”`,
+      removeEntry: (name: string, list: string) => `Take “${name}” off ${list}`,
+    },
+    /** The line under a title: what exactly changes. */
+    details: {
+      all: 'all of it',
+      some: (count: number, of: number) => `${formatNumber(count)} of ${formatNumber(of)}`,
+      opened: (date: string) => `opened ${date}`,
+      left: (percent: string) => `${percent} left`,
+      expires: (date: string) => `expires ${date}`,
+      newItem: 'new',
+      toBuy: (amount: string) => `${amount} to buy`,
+      restocked: (amount: string) => `${amount} back on the shelf`,
+    },
+    errors: {
+      unavailable: 'The assistant isn’t available on this server.',
+      tooMany: 'That’s a lot of requests in a row. Wait a minute and try again.',
+      unreadable: 'The assistant couldn’t read this text. Try putting it differently.',
+      busy: 'The assistant is busy. Try again in a moment.',
+    },
+  },
+
   planner: {
     title: 'Planner',
     description: 'Meal planning is coming soon.',

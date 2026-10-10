@@ -13,6 +13,15 @@ export function IsOmittable(): PropertyDecorator {
   return ValidateIf((_object, value) => value !== undefined);
 }
 
+/**
+ * Skips validation only when the property is `null`: present it must be, as
+ * `null` or as a value the rules that follow accept. For wire shapes whose
+ * nullable fields are always sent, so code reading them never meets `undefined`.
+ */
+export function IsNullable(): PropertyDecorator {
+  return ValidateIf((_object, value) => value !== null);
+}
+
 /** Trims strings before validation, so `"  "` fails a minimum length of 1. */
 export function Trim(): PropertyDecorator {
   return Transform(({ value }: { value: unknown }) =>

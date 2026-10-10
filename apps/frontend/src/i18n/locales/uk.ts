@@ -632,6 +632,72 @@ export const uk = {
     },
   },
 
+  assistant: {
+    open: 'Розповісти помічнику',
+    title: 'Помічник',
+    intro:
+      'Напишіть своїми словами, що ви використали, купили чи поклали на місце. Перед збереженням ви побачите кожну зміну.',
+    placeholder: 'На кухні в мене лишилося 3 пачки макаронів і ще одна наполовину використана',
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Показати зміни',
+    interpreting: 'Читаємо…',
+    offline:
+      'Помічнику потрібен зв’язок. Написане залишиться тут, доки ви не повернетеся в мережу.',
+    editText: 'Змінити текст',
+    preview: 'Позначте зміни, які треба внести',
+    nothingFound: 'У цьому тексті не сказано, що змінити.',
+    unresolved: 'Не зрозуміло',
+    unresolvedReason: 'Не вдалося зіставити це ні з чим у ваших запасах.',
+    apply: (count: number) =>
+      plural(count, {
+        one: 'Застосувати # зміну',
+        few: 'Застосувати # зміни',
+        many: 'Застосувати # змін',
+        other: 'Застосувати # зміни',
+      }),
+    applyShort: 'Застосувати',
+    applying: 'Застосовуємо…',
+    applied: (count: number) =>
+      plural(count, {
+        one: 'Застосовано # зміну.',
+        few: 'Застосовано # зміни.',
+        many: 'Застосовано # змін.',
+        other: 'Застосовано # зміни.',
+      }),
+    someItem: 'предмет',
+    quoted: (text: string) => `«${text}»`,
+    actions: {
+      addItem: (name: string, space: string) => `Додати «${name}» → ${space}`,
+      addUnits: (name: string) => `Ще «${name}»`,
+      setQuantity: (name: string, amount: string) => `«${name}»: тепер ${amount}`,
+      useUp: (name: string) => `Використано: «${name}»`,
+      discard: (name: string) => `Викинуто: «${name}»`,
+      updateUnit: (name: string) => `«${name}», одна штука`,
+      moveItem: (name: string, space: string) => `Перекласти «${name}» → ${space}`,
+      addToList: (name: string, list: string) => `Додати «${name}» до списку «${list}»`,
+      checkEntry: (name: string) => `У кошику: «${name}»`,
+      uncheckEntry: (name: string) => `Знову купити: «${name}»`,
+      buyEntry: (name: string) => `Куплено: «${name}»`,
+      removeEntry: (name: string, list: string) => `Прибрати «${name}» зі списку «${list}»`,
+    },
+    details: {
+      all: 'усе',
+      some: (count: number, of: number) => `${formatNumber(count)} з ${formatNumber(of)}`,
+      opened: (date: string) => `відкрито ${date}`,
+      left: (percent: string) => `лишилося ${percent}`,
+      expires: (date: string) => `придатний до ${date}`,
+      newItem: 'новий',
+      toBuy: (amount: string) => `купити ${amount}`,
+      restocked: (amount: string) => `${amount} повернеться на полицю`,
+    },
+    errors: {
+      unavailable: 'На цьому сервері помічник недоступний.',
+      tooMany: 'Забагато запитів поспіль. Зачекайте хвилину й спробуйте знову.',
+      unreadable: 'Помічник не зміг розібрати цей текст. Спробуйте сформулювати інакше.',
+      busy: 'Помічник зайнятий. Спробуйте трохи згодом.',
+    },
+  },
+
   planner: {
     title: 'Планувальник',
     description: 'Планування меню з’явиться незабаром.',
