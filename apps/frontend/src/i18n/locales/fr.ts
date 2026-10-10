@@ -663,6 +663,37 @@ export const fr = {
     },
   },
 
+  connect: {
+    heading: 'Connecter un assistant',
+    title: (client: string) => `Connecter ${q(client)}\u00A0?`,
+    access: (client: string) =>
+      `${q(client)} pourra voir et modifier tout ce qui se trouve dans vos foyers\u00A0: emplacements, articles et listes de courses, en votre nom.`,
+    redirect: (host: string) => `Votre réponse sera envoyée à ${host}.`,
+    revoke: 'Vous pourrez le déconnecter à tout moment depuis votre profil.',
+    allow: 'Autoriser',
+    allowing: 'Connexion…',
+    deny: 'Refuser',
+    leaving: 'Retour à l’assistant…',
+    expired:
+      'Cette demande a expiré ou a déjà reçu une réponse. Recommencez la connexion depuis l’assistant.',
+    incomplete: 'Ce lien est incomplet. Recommencez la connexion depuis l’assistant.',
+    backToApp: 'Retour à Pantry Pal',
+  },
+
+  connections: {
+    title: 'Assistants connectés',
+    intro:
+      'Dites à Claude, ChatGPT ou un autre assistant ce que vous avez utilisé ou acheté, et il met vos réserves à jour. Dans ses réglages, ajoutez un connecteur personnalisé avec cette adresse\u00A0:',
+    copy: 'Copier',
+    copied: 'Copié',
+    none: 'Aucun assistant connecté pour l’instant.',
+    since: (date: string) => `Connecté le ${date}`,
+    lastUsed: (date: string) => `dernière utilisation le ${date}`,
+    disconnect: 'Déconnecter',
+    disconnecting: 'Déconnexion…',
+    loadFailed: 'Impossible de charger les assistants connectés.',
+  },
+
   planner: {
     title: 'Planning',
     description: 'La planification des repas arrive bientôt.',

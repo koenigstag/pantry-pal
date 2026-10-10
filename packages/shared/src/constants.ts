@@ -367,3 +367,15 @@ export const MAX_ASSISTANT_TEXT_LENGTH = 2000;
 export const MAX_ASSISTANT_ACTIONS = 40;
 /** How the items the assistant writes are recorded in their history, as an import names its file. */
 export const ASSISTANT_SOURCE = 'assistant';
+
+/**
+ * Where the MCP endpoint is served, at the backend's origin rather than under
+ * `API_BASE_PATH`: an assistant elsewhere (claude.ai, ChatGPT) is given this URL.
+ */
+export const MCP_PATH = '/mcp';
+/** The one OAuth scope a connected assistant is granted: everything a member can do with items and lists. */
+export const MCP_SCOPE = 'pantry';
+/** The frontend route an OAuth authorization request lands on, for the user to allow or deny it. */
+export const OAUTH_CONSENT_ROUTE = '/connect';
+/** The query parameter that names the pending request on that route. */
+export const OAUTH_REQUEST_PARAM = 'request';

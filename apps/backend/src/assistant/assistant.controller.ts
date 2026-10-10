@@ -8,6 +8,7 @@ import type {
 import { ApplyAssistantActionsDto, InterpretTextDto } from '@pantry-pal/shared/dto';
 
 import { ASSISTANT_REQUESTS } from '../auth/rate-limits';
+import { ChangesService } from '../changes/changes.service';
 import {
   CurrentMembership,
   CurrentUser,
@@ -24,7 +25,10 @@ import { AssistantService } from './assistant.service';
  */
 @Controller()
 export class AssistantController {
-  constructor(private readonly assistant: AssistantService) {}
+  constructor(
+    private readonly assistant: AssistantService,
+    private readonly changes: ChangesService,
+  ) {}
 
   @Get('assistant')
   status(): AssistantStatus {
@@ -53,6 +57,7 @@ export class AssistantController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: ApplyAssistantActionsDto,
   ): Promise<AssistantApplyResult> {
-    return this.assistant.apply(membership, user, dto);
+    this.assistant.assertEnabled();
+    return this.changes.apply(membership, user, dto);
   }
 }

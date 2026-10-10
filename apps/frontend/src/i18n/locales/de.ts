@@ -660,6 +660,37 @@ export const de = {
     },
   },
 
+  connect: {
+    heading: 'Assistenten verbinden',
+    title: (client: string) => `„${client}“ verbinden?`,
+    access: (client: string) =>
+      `„${client}“ kann dann alles in den Haushalten sehen und ändern: Lagerorte, Artikel und Einkaufslisten – im eigenen Namen.`,
+    redirect: (host: string) => `Die Antwort geht an ${host}.`,
+    revoke: 'Die Verbindung lässt sich jederzeit im Profil trennen.',
+    allow: 'Erlauben',
+    allowing: 'Wird verbunden …',
+    deny: 'Ablehnen',
+    leaving: 'Zurück zum Assistenten …',
+    expired:
+      'Diese Anfrage ist abgelaufen oder wurde schon beantwortet. Das Verbinden im Assistenten neu beginnen.',
+    incomplete: 'Dieser Link ist unvollständig. Das Verbinden im Assistenten neu beginnen.',
+    backToApp: 'Zurück zu Pantry Pal',
+  },
+
+  connections: {
+    title: 'Verbundene Assistenten',
+    intro:
+      'Claude, ChatGPT oder einem anderen Assistenten erzählen, was verbraucht oder gekauft wurde – er aktualisiert die Vorräte. In seinen Einstellungen einen eigenen Connector mit dieser Adresse hinzufügen:',
+    copy: 'Kopieren',
+    copied: 'Kopiert',
+    none: 'Noch kein Assistent verbunden.',
+    since: (date: string) => `Verbunden am ${date}`,
+    lastUsed: (date: string) => `zuletzt ${date}`,
+    disconnect: 'Trennen',
+    disconnecting: 'Wird getrennt …',
+    loadFailed: 'Die verbundenen Assistenten konnten nicht geladen werden.',
+  },
+
   planner: {
     title: 'Planer',
     description: 'Die Essensplanung kommt bald.',

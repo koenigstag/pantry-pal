@@ -671,6 +671,37 @@ export const es = {
     },
   },
 
+  connect: {
+    heading: 'Conectar un asistente',
+    title: (client: string) => `¿Conectar «${client}»?`,
+    access: (client: string) =>
+      `«${client}» podrá ver y cambiar todo lo de tus hogares: lugares de almacenamiento, artículos y listas de la compra, en tu nombre.`,
+    redirect: (host: string) => `Tu respuesta irá a ${host}.`,
+    revoke: 'Puedes desconectarlo cuando quieras desde tu perfil.',
+    allow: 'Permitir',
+    allowing: 'Conectando…',
+    deny: 'Denegar',
+    leaving: 'Volviendo al asistente…',
+    expired:
+      'Esta solicitud ha caducado o ya tiene respuesta. Vuelve a empezar la conexión desde el asistente.',
+    incomplete: 'Este enlace está incompleto. Vuelve a empezar la conexión desde el asistente.',
+    backToApp: 'Volver a Pantry Pal',
+  },
+
+  connections: {
+    title: 'Asistentes conectados',
+    intro:
+      'Cuéntale a Claude, ChatGPT u otro asistente lo que has usado o comprado, y actualizará tu despensa. En sus ajustes, añade un conector personalizado con esta dirección:',
+    copy: 'Copiar',
+    copied: 'Copiado',
+    none: 'Todavía no hay ningún asistente conectado.',
+    since: (date: string) => `Conectado el ${date}`,
+    lastUsed: (date: string) => `último uso el ${date}`,
+    disconnect: 'Desconectar',
+    disconnecting: 'Desconectando…',
+    loadFailed: 'No se han podido cargar los asistentes conectados.',
+  },
+
   planner: {
     title: 'Planificador',
     description: 'La planificación de comidas llegará pronto.',

@@ -16,6 +16,7 @@ import {
 import { ASSISTANT_ACTION_DTOS, validateDto } from '@pantry-pal/shared/dto';
 import type { ClassConstructor } from 'class-transformer';
 
+import { total } from '../changes/changes.service';
 import type { Aliases } from './household-context';
 
 /** The codes the server has, for normalising what the model picked. */
@@ -243,9 +244,6 @@ function unitGroups(value: unknown): AssistantUnitGroup[] | undefined {
   }
   return groups;
 }
-
-export const total = (groups: readonly AssistantUnitGroup[]): number =>
-  groups.reduce((sum, group) => sum + group.count, 0);
 
 const dateOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 

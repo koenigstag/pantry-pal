@@ -8,18 +8,7 @@ import {
   type SubItem,
 } from '@pantry-pal/shared';
 
-/** A household as the assistant reads it: what is on its shelves and its lists in use. */
-export interface HouseholdSnapshot {
-  locations: PantryLocation[];
-  /** Active items, with their units. */
-  items: PantryItem[];
-  /** Lists in use: an archived list is frozen, so nothing is proposed for it. */
-  lists: ShoppingList[];
-  /** The entries of those lists. */
-  entries: ShoppingListEntry[];
-  /** Every item an entry names, whatever its status: a used-up one is off the shelf. */
-  listedItems: PantryItem[];
-}
+import type { HouseholdSnapshot } from '../changes/changes.service';
 
 /**
  * The short ids the prompt names things by, and what each stands for. Short ids

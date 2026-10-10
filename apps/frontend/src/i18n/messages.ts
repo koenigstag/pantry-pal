@@ -748,6 +748,41 @@ const en = {
     },
   },
 
+  /** Where an assistant elsewhere (claude.ai, ChatGPT) asks for access over MCP. */
+  connect: {
+    /** While the request loads, and when it cannot be shown. */
+    heading: 'Connect an assistant',
+    /** `client` is the name the assistant registered itself with. */
+    title: (client: string) => `Connect “${client}”?`,
+    access: (client: string) =>
+      `${client} will be able to see and change everything in your households: storage spaces, items and shopping lists. It acts as you.`,
+    redirect: (host: string) => `Your answer goes to ${host}.`,
+    revoke: 'You can disconnect it at any time in Profile.',
+    allow: 'Allow',
+    allowing: 'Connecting…',
+    deny: 'Deny',
+    leaving: 'Returning to the assistant…',
+    expired:
+      'This request has expired or was answered already. Start connecting again from the assistant.',
+    incomplete: 'This link is incomplete. Start connecting again from the assistant.',
+    backToApp: 'Back to Pantry Pal',
+  },
+
+  /** Profile's list of the assistants connected over MCP. */
+  connections: {
+    title: 'Connected assistants',
+    intro:
+      'Tell Claude, ChatGPT or another assistant what you used or bought, and it updates your pantry. In its settings, add a custom connector with this address:',
+    copy: 'Copy',
+    copied: 'Copied',
+    none: 'No assistant is connected yet.',
+    since: (date: string) => `Connected ${date}`,
+    lastUsed: (date: string) => `last used ${date}`,
+    disconnect: 'Disconnect',
+    disconnecting: 'Disconnecting…',
+    loadFailed: 'Couldn’t load the connected assistants.',
+  },
+
   planner: {
     title: 'Planner',
     description: 'Meal planning is coming soon.',

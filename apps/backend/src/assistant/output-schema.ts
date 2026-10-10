@@ -1,5 +1,17 @@
 import { ASSISTANT_ACTION, type AssistantActionType } from '@pantry-pal/shared';
 
+import {
+  boolean,
+  date,
+  integer,
+  literal,
+  nullable,
+  number,
+  object,
+  string,
+  type JsonSchema,
+} from '../common/json-schema';
+
 /*
  * The JSON the model answers with, held to this schema by structured outputs.
  *
@@ -13,26 +25,8 @@ import { ASSISTANT_ACTION, type AssistantActionType } from '@pantry-pal/shared';
  * `update-unit` takes the unit alone.
  */
 
-type JsonSchema = Record<string, unknown>;
-
-const string: JsonSchema = { type: 'string' };
-const integer: JsonSchema = { type: 'integer' };
-const number: JsonSchema = { type: 'number' };
-const boolean: JsonSchema = { type: 'boolean' };
-const date: JsonSchema = { type: 'string', format: 'date' };
-const nullable = (schema: JsonSchema): JsonSchema => ({ anyOf: [schema, { type: 'null' }] });
-
-function object(properties: Record<string, JsonSchema>): JsonSchema {
-  return {
-    type: 'object',
-    properties,
-    required: Object.keys(properties),
-    additionalProperties: false,
-  };
-}
-
 function action(type: AssistantActionType, properties: Record<string, JsonSchema>): JsonSchema {
-  return object({ type: { type: 'string', enum: [type] }, quote: string, ...properties });
+  return object({ type: literal(type), quote: string, ...properties });
 }
 
 const unitGroups: JsonSchema = {

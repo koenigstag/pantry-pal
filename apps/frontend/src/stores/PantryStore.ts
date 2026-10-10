@@ -19,6 +19,8 @@ import {
   type AssistantApplyResult,
   type AssistantInterpretation,
   type AssistantStatus,
+  type OAuthConnections,
+  type OAuthConsentRequest,
   type Category,
   type CurrentUser,
   type HouseholdDeletedPayload,
@@ -134,6 +136,13 @@ function importError(source: ImportSource, error: unknown): string {
 }
 
 const BYTES_PER_MB = 1024 * 1024;
+
+/** A request answered already or past its ten minutes is a 404: the assistant has to start again. */
+function oauthError(error: unknown): string {
+  return error instanceof ApiError && error.status === 404
+    ? messages.connect.expired
+    : toMessage(error);
+}
 
 /**
  * Why the assistant could not help. A 502 is the model failing to read the
@@ -962,6 +971,44 @@ export class PantryStore {
       return { ok: true, value: result };
     } catch (error) {
       return { ok: false, error: assistantError(error) };
+    }
+  }
+
+  /* ------------------------------------------------- connected assistants */
+
+  /** An assistant's request for access, as the consent page shows it. */
+  async oauthRequest(id: string): Promise<WriteResult<OAuthConsentRequest>> {
+    try {
+      return { ok: true, value: await this.api.oauthRequest(id) };
+    } catch (error) {
+      return { ok: false, error: oauthError(error) };
+    }
+  }
+
+  /** Allows or denies it; the value is where to send the browser, back to the assistant. */
+  async answerOAuthRequest(id: string, allow: boolean): Promise<WriteResult<string>> {
+    try {
+      return { ok: true, value: (await this.api.answerOAuthRequest(id, allow)).redirectTo };
+    } catch (error) {
+      return { ok: false, error: oauthError(error) };
+    }
+  }
+
+  async connections(): Promise<WriteResult<OAuthConnections>> {
+    try {
+      return { ok: true, value: await this.api.connections() };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
+    }
+  }
+
+  /** Returns the message to show, or `null`. */
+  async disconnect(id: string): Promise<string | null> {
+    try {
+      await this.api.disconnect(id);
+      return null;
+    } catch (error) {
+      return toMessage(error);
     }
   }
 

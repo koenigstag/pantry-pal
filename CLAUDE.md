@@ -96,6 +96,14 @@ their own words — "съел йогурт", "добавь хлеб в спис�
 changes as a preview they tick. Only the user's Apply writes, through the same
 services as the forms. Details in `apps/backend/CLAUDE.md`.
 
+### Assistants elsewhere, over MCP
+
+`POST /mcp` at the backend's origin is an MCP server that claude.ai, ChatGPT or
+any MCP client can connect to as a custom connector. It authorizes with OAuth
+2.1 — dynamic registration, PKCE, a consent page in the web app — and its tools
+read a household and apply the same actions as the built-in assistant, through
+the same services. Details in `apps/backend/CLAUDE.md` (MCP endpoint).
+
 ## Gotchas that will bite
 
 ### NestJS 12 is ESM-only

@@ -655,3 +655,40 @@ export interface AssistantStatus {
 export interface AssistantApplyResult {
   applied: number;
 }
+
+/*
+ * Connecting an assistant elsewhere — claude.ai, ChatGPT — over MCP. It asks
+ * through OAuth; the user allows or denies it on the consent page, and can
+ * disconnect it later from their profile.
+ */
+
+/** A pending authorization request, as the consent page shows it. */
+export interface OAuthConsentRequest {
+  id: string;
+  /** The name the client registered itself with, or its redirect's host when it gave none. */
+  clientName: string;
+  /** Where the answer goes, so the user can tell a client that only borrows a known name. */
+  redirectHost: string;
+  scopes: string[];
+  expiresAt: string;
+}
+
+/** Where to send the browser after the user answered: the client's redirect URI, with the code or the error. */
+export interface OAuthRedirect {
+  redirectTo: string;
+}
+
+/** `GET /me/connections`: where to connect an assistant, and the ones connected. */
+export interface OAuthConnections {
+  /** The MCP endpoint's address, to paste into claude.ai's or ChatGPT's connector settings. */
+  mcpUrl: string;
+  connections: OAuthConnection[];
+}
+
+/** An assistant the user connected, as their profile lists it. */
+export interface OAuthConnection {
+  id: string;
+  clientName: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}

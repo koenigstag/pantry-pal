@@ -35,6 +35,7 @@ src/features/storage/      the Storage page: location tabs, search, sort, select
 src/features/shopping/     the Shopping page, the list picker, the lists editor, sharing as text
 src/features/data/         the Data sheet: exporting a backup, importing one or another app's file
 src/features/assistant/    the text assistant's sheet: write, preview the proposed changes, apply
+src/features/connect/      MCP: the consent page an assistant elsewhere sends the user to; Profile's connections
 src/features/pages.tsx     Planner placeholder, Profile
 src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore
 src/offline/               the offline mirror: RxDB database, replication, merge rules, forgetting on sign-out
@@ -617,6 +618,26 @@ understands and how the changes are applied.
   words of the text each change came from, then what was not understood: the
   model's reason, or the catalog's when the server turned a proposal down.
   Every change starts ticked, and Apply sends the ticked ones, all or nothing.
+
+### Connected assistants (MCP)
+
+An assistant elsewhere — claude.ai, ChatGPT — connects to the backend's MCP
+endpoint over OAuth; the backend's `CLAUDE.md` (MCP endpoint) has the protocol.
+The web app holds the user's side of it, in `src/features/connect/`:
+
+- **The consent page**, `/connect?request=<id>` (`ConsentPage`), is where the
+  backend's `/authorize` sends the browser. It is signed in, outside the app
+  shell like `/welcome`, so a signed-out user signs in first and comes back with
+  the query intact (`RequireSession` keeps the search). It names the assistant
+  as it registered itself and the host the answer goes to, says what access
+  means, and Allow or Deny leaves the app for the assistant's redirect
+  (`window.location.assign`). A request answered already or past its ten
+  minutes is a 404, which the page words as "start again from the assistant".
+- **Profile's connected assistants** (`ConnectionsSection`) show the MCP address
+  to paste into the assistant's connector settings, with a copy button, and each
+  connection with when it was made and last used, and Disconnect.
+- Both are online REST calls through `PantryStore` (`oauthRequest`,
+  `answerOAuthRequest`, `connections`, `disconnect`).
 
 ## Installable, and usable offline
 

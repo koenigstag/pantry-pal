@@ -12,6 +12,8 @@ import { HealthController } from './health/health.controller';
 import { HouseholdsModule } from './households/households.module';
 import { ItemsModule } from './items/items.module';
 import { LocationsModule } from './locations/locations.module';
+import { McpModule } from './mcp/mcp.module';
+import { OAuthModule } from './oauth/oauth.module';
 import { ChangeFeedModule } from './realtime/change-feed';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ShoppingListsModule } from './shopping-lists/shopping-lists.module';
@@ -39,6 +41,8 @@ import { UnitsModule } from './units/units.module';
     SyncModule,
     DataModule,
     AssistantModule,
+    OAuthModule,
+    McpModule,
     AdminModule,
     RealtimeModule,
   ],
