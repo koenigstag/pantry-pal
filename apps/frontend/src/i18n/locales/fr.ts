@@ -607,6 +607,93 @@ export const fr = {
     },
   },
 
+  assistant: {
+    open: 'Parler à l’assistant',
+    title: 'Assistant',
+    intro:
+      'Écrivez avec vos mots ce que vous avez utilisé, acheté ou rangé. Vous verrez chaque changement avant que rien ne soit enregistré.',
+    placeholder: 'Dans la cuisine, il me reste 3 paquets de pâtes, plus un à moitié entamé',
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Voir les changements',
+    interpreting: 'Lecture…',
+    offline:
+      'L’assistant a besoin d’une connexion. Votre texte reste ici jusqu’à votre retour en ligne.',
+    editText: 'Modifier le texte',
+    preview: 'Cochez les changements à faire',
+    nothingFound: 'Ce texte ne dit pas quoi changer.',
+    unresolved: 'Non compris',
+    unresolvedReason: 'Rien chez vous ne correspond à ceci.',
+    apply: (count: number) =>
+      plural(count, { one: 'Appliquer # changement', other: 'Appliquer # changements' }),
+    applyShort: 'Appliquer',
+    applying: 'Application…',
+    applied: (count: number) =>
+      plural(count, { one: '# changement appliqué.', other: '# changements appliqués.' }),
+    someItem: 'un article',
+    quoted: (text: string) => q(text),
+    actions: {
+      addItem: (name: string, space: string) => `Ajouter ${q(name)} → ${space}`,
+      addUnits: (name: string) => `Plus de ${q(name)}`,
+      setQuantity: (name: string, amount: string) => `${q(name)} : ${amount} maintenant`,
+      useUp: (name: string) => `Utilisé : ${q(name)}`,
+      discard: (name: string) => `Jeté : ${q(name)}`,
+      updateUnit: (name: string) => `${q(name)}, l’un d’eux`,
+      moveItem: (name: string, space: string) => `Déplacer ${q(name)} → ${space}`,
+      addToList: (name: string, list: string) => `Mettre ${q(name)} sur ${q(list)}`,
+      checkEntry: (name: string) => `Dans le panier : ${q(name)}`,
+      uncheckEntry: (name: string) => `Encore à acheter : ${q(name)}`,
+      buyEntry: (name: string) => `Acheté : ${q(name)}`,
+      removeEntry: (name: string, list: string) => `Retirer ${q(name)} de ${q(list)}`,
+    },
+    details: {
+      all: 'tout',
+      some: (count: number, of: number) => `${formatNumber(count)} sur ${formatNumber(of)}`,
+      opened: (date: string) => `ouvert le ${date}`,
+      left: (percent: string) => `reste ${percent}`,
+      expires: (date: string) => `à consommer avant le ${date}`,
+      newItem: 'nouveau',
+      toBuy: (amount: string) => `${amount} à acheter`,
+      restocked: (amount: string) => `${amount} de retour en réserve`,
+    },
+    errors: {
+      unavailable: 'L’assistant n’est pas disponible sur ce serveur.',
+      tooMany: 'Trop de demandes d’affilée. Attendez une minute, puis réessayez.',
+      unreadable: 'L’assistant n’a pas pu lire ce texte. Essayez de le formuler autrement.',
+      busy: 'L’assistant est occupé. Réessayez dans un instant.',
+    },
+  },
+
+  connect: {
+    heading: 'Connecter un assistant',
+    title: (client: string) => `Connecter ${q(client)}\u00A0?`,
+    access: (client: string) =>
+      `${q(client)} pourra voir et modifier tout ce qui se trouve dans vos foyers\u00A0: emplacements, articles et listes de courses, en votre nom.`,
+    redirect: (host: string) => `Votre réponse sera envoyée à ${host}.`,
+    revoke: 'Vous pourrez le déconnecter à tout moment depuis votre profil.',
+    allow: 'Autoriser',
+    allowing: 'Connexion…',
+    deny: 'Refuser',
+    leaving: 'Retour à l’assistant…',
+    expired:
+      'Cette demande a expiré ou a déjà reçu une réponse. Recommencez la connexion depuis l’assistant.',
+    incomplete: 'Ce lien est incomplet. Recommencez la connexion depuis l’assistant.',
+    backToApp: 'Retour à Pantry Pal',
+  },
+
+  connections: {
+    title: 'Assistants connectés',
+    intro:
+      'Dites à Claude, ChatGPT ou un autre assistant ce que vous avez utilisé ou acheté, et il met vos réserves à jour. Dans ses réglages, ajoutez un connecteur personnalisé avec cette adresse\u00A0:',
+    copy: 'Copier',
+    copied: 'Copié',
+    none: 'Aucun assistant connecté pour l’instant.',
+    since: (date: string) => `Connecté le ${date}`,
+    lastUsed: (date: string) => `dernière utilisation le ${date}`,
+    disconnect: 'Déconnecter',
+    disconnecting: 'Déconnexion…',
+    loadFailed: 'Impossible de charger les assistants connectés.',
+  },
+
   planner: {
     title: 'Planning',
     description: 'La planification des repas arrive bientôt.',

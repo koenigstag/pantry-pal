@@ -7,9 +7,10 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Fifteen tables, the transaction layer, seed data, and repositories for users,
+Eighteen tables, the transaction layer, seed data, and repositories for users,
 refresh tokens, households, members, locations, items (with their units), item events, units,
-categories, the default storage spaces, shopping lists and their entries.
+categories, the default storage spaces, shopping lists and their entries, and the
+OAuth authorization server behind the backend's MCP endpoint.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -377,6 +378,13 @@ from empty and seeded, the API check scripts from the offline sync work (35 pull
 37 push, 82 shopping) all pass, as do 30 checks of what each write does to the
 units, among them the `sub_items` constraints in a rolled-back transaction.
 `drizzle-kit generate` reports no changes.
+
+`0009_oauth` adds `oauth_clients`, `oauth_authorizations` and `oauth_grants`
+(`schema/oauth.ts`, `OAuthRepository`), exactly as drizzle-kit generated them.
+They reference `users` and nothing of a household: an OAuth grant is the user's,
+and the backend checks membership on every MCP call. Codes and tokens are
+stored as their SHA-256 only. Applied on PostgreSQL 16 over a database migrated
+to `0008` and seeded, and exercised through the backend's whole OAuth flow.
 
 ## Resolved: categories are a table
 

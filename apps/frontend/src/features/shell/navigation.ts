@@ -1,3 +1,4 @@
+import { OAUTH_CONSENT_ROUTE } from '@pantry-pal/shared';
 import {
   CalendarDays,
   CircleUserRound,
@@ -13,6 +14,8 @@ export const ROUTES = {
   signUp: '/sign-up',
   /** Sign-up's last step: the optional onboarding questions. */
   welcome: '/welcome',
+  /** An assistant elsewhere asking for access over MCP: the user allows or denies it. */
+  connect: OAUTH_CONSENT_ROUTE,
   storage: '/storage',
   shopping: '/shopping',
   planner: '/planner',

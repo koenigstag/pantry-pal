@@ -632,6 +632,102 @@ export const uk = {
     },
   },
 
+  assistant: {
+    open: 'Розповісти помічнику',
+    title: 'Помічник',
+    intro:
+      'Напишіть своїми словами, що ви використали, купили чи поклали на місце. Перед збереженням ви побачите кожну зміну.',
+    placeholder: 'На кухні в мене лишилося 3 пачки макаронів і ще одна наполовину використана',
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Показати зміни',
+    interpreting: 'Читаємо…',
+    offline:
+      'Помічнику потрібен зв’язок. Написане залишиться тут, доки ви не повернетеся в мережу.',
+    editText: 'Змінити текст',
+    preview: 'Позначте зміни, які треба внести',
+    nothingFound: 'У цьому тексті не сказано, що змінити.',
+    unresolved: 'Не зрозуміло',
+    unresolvedReason: 'Не вдалося зіставити це ні з чим у ваших запасах.',
+    apply: (count: number) =>
+      plural(count, {
+        one: 'Застосувати # зміну',
+        few: 'Застосувати # зміни',
+        many: 'Застосувати # змін',
+        other: 'Застосувати # зміни',
+      }),
+    applyShort: 'Застосувати',
+    applying: 'Застосовуємо…',
+    applied: (count: number) =>
+      plural(count, {
+        one: 'Застосовано # зміну.',
+        few: 'Застосовано # зміни.',
+        many: 'Застосовано # змін.',
+        other: 'Застосовано # зміни.',
+      }),
+    someItem: 'предмет',
+    quoted: (text: string) => `«${text}»`,
+    actions: {
+      addItem: (name: string, space: string) => `Додати «${name}» → ${space}`,
+      addUnits: (name: string) => `Ще «${name}»`,
+      setQuantity: (name: string, amount: string) => `«${name}»: тепер ${amount}`,
+      useUp: (name: string) => `Використано: «${name}»`,
+      discard: (name: string) => `Викинуто: «${name}»`,
+      updateUnit: (name: string) => `«${name}», одна штука`,
+      moveItem: (name: string, space: string) => `Перекласти «${name}» → ${space}`,
+      addToList: (name: string, list: string) => `Додати «${name}» до списку «${list}»`,
+      checkEntry: (name: string) => `У кошику: «${name}»`,
+      uncheckEntry: (name: string) => `Знову купити: «${name}»`,
+      buyEntry: (name: string) => `Куплено: «${name}»`,
+      removeEntry: (name: string, list: string) => `Прибрати «${name}» зі списку «${list}»`,
+    },
+    details: {
+      all: 'усе',
+      some: (count: number, of: number) => `${formatNumber(count)} з ${formatNumber(of)}`,
+      opened: (date: string) => `відкрито ${date}`,
+      left: (percent: string) => `лишилося ${percent}`,
+      expires: (date: string) => `придатний до ${date}`,
+      newItem: 'новий',
+      toBuy: (amount: string) => `купити ${amount}`,
+      restocked: (amount: string) => `${amount} повернеться на полицю`,
+    },
+    errors: {
+      unavailable: 'На цьому сервері помічник недоступний.',
+      tooMany: 'Забагато запитів поспіль. Зачекайте хвилину й спробуйте знову.',
+      unreadable: 'Помічник не зміг розібрати цей текст. Спробуйте сформулювати інакше.',
+      busy: 'Помічник зайнятий. Спробуйте трохи згодом.',
+    },
+  },
+
+  connect: {
+    heading: 'Підключення асистента',
+    title: (client: string) => `Підключити «${client}»?`,
+    access: (client: string) =>
+      `«${client}» зможе бачити й змінювати все у ваших господарствах: місця зберігання, предмети та списки покупок — від вашого імені.`,
+    redirect: (host: string) => `Відповідь піде на ${host}.`,
+    revoke: 'Відключити його можна будь-коли в профілі.',
+    allow: 'Дозволити',
+    allowing: 'Підключаємо…',
+    deny: 'Відмовити',
+    leaving: 'Повертаємося до асистента…',
+    expired: 'Цей запит минув або на нього вже відповіли. Почніть підключення знову з асистента.',
+    incomplete: 'Посилання неповне. Почніть підключення знову з асистента.',
+    backToApp: 'Повернутися до Pantry Pal',
+  },
+
+  connections: {
+    title: 'Підключені асистенти',
+    intro:
+      'Розкажіть Claude, ChatGPT чи іншому асистенту, що ви використали або купили, — і він оновить ваші запаси. У його налаштуваннях додайте власний конектор із цією адресою:',
+    copy: 'Копіювати',
+    copied: 'Скопійовано',
+    none: 'Поки що жоден асистент не підключений.',
+    since: (date: string) => `Підключено ${date}`,
+    lastUsed: (date: string) => `востаннє ${date}`,
+    disconnect: 'Відключити',
+    disconnecting: 'Відключаємо…',
+    loadFailed: 'Не вдалося завантажити підключених асистентів.',
+  },
+
   planner: {
     title: 'Планувальник',
     description: 'Планування меню з’явиться незабаром.',

@@ -1,7 +1,14 @@
 import {
   IMPORT_FILE_FIELD,
   SYNC_COLLECTION,
+  type AssistantAction,
+  type AssistantApplyResult,
+  type AssistantInterpretation,
+  type AssistantStatus,
   type AuthSession,
+  type OAuthConnections,
+  type OAuthConsentRequest,
+  type OAuthRedirect,
   type Category,
   type CurrentUser,
   type ImportSource,
@@ -241,6 +248,44 @@ export const pantryApi = {
   /** The household's backup: an .xlsx of its storage spaces, items and units. */
   exportBackup: (householdId: string): Promise<Blob> =>
     authorized((token) => receive(`${household(householdId)}/export`, {}, token)),
+
+  /** An assistant's pending request for access, for the consent page. 404 once answered or expired. */
+  oauthRequest: (id: string): Promise<OAuthConsentRequest> =>
+    request<OAuthConsentRequest>(`/oauth/requests/${encodeURIComponent(id)}`),
+
+  /** The user's answer: where to send the browser, back to the assistant. */
+  answerOAuthRequest: (id: string, allow: boolean): Promise<OAuthRedirect> =>
+    request<OAuthRedirect>(
+      `/oauth/requests/${encodeURIComponent(id)}/${allow ? 'approve' : 'deny'}`,
+      { method: 'POST' },
+    ),
+
+  /** The MCP address, and the assistants connected to the account. */
+  connections: (): Promise<OAuthConnections> => request<OAuthConnections>('/me/connections'),
+
+  /** Ends a connection: every token it was given stops working. */
+  disconnect: (id: string): Promise<void> =>
+    request<void>(`/me/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Whether the server has the text assistant. */
+  assistantStatus: (): Promise<AssistantStatus> => request<AssistantStatus>('/assistant'),
+
+  /** The changes a text describes, proposed for the user to confirm. Writes nothing. */
+  interpretText: (householdId: string, text: string): Promise<AssistantInterpretation> =>
+    request<AssistantInterpretation>(`${household(householdId)}/assistant/interpret`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  /** The proposals the user kept, applied all or nothing. */
+  applyAssistantActions: (
+    householdId: string,
+    actions: readonly AssistantAction[],
+  ): Promise<AssistantApplyResult> =>
+    request<AssistantApplyResult>(`${household(householdId)}/assistant/apply`, {
+      method: 'POST',
+      body: JSON.stringify({ actions }),
+    }),
 };
 
 export type PantryApi = typeof pantryApi;

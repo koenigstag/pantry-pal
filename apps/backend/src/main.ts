@@ -3,10 +3,17 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { API_BASE_PATH, API_PREFIX, API_VERSION, PANTRY_WS_NAMESPACE } from '@pantry-pal/shared';
+import {
+  API_BASE_PATH,
+  API_PREFIX,
+  API_VERSION,
+  MCP_PATH,
+  PANTRY_WS_NAMESPACE,
+} from '@pantry-pal/shared';
 
 import { AppModule } from './app.module';
 import type { JwtSecretName } from './config/configuration';
+import { mountMcp } from './mcp/mount';
 import { PantryIoAdapter } from './realtime/io-adapter';
 
 async function bootstrap(): Promise<void> {
@@ -29,6 +36,9 @@ async function bootstrap(): Promise<void> {
   // `X-Forwarded-For` — but only for the proxies this names.
   const trustProxy = config.get<boolean | number | string>('trustProxy');
   if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
+
+  // At the origin, ahead of Nest's middleware and routes: see `mountMcp`.
+  mountMcp(app);
 
   app.setGlobalPrefix(`${API_PREFIX}/${API_VERSION}`);
   app.enableCors({ origin: corsOrigins, credentials: true });
@@ -69,6 +79,14 @@ async function bootstrap(): Promise<void> {
   );
   logger.log(
     `Admin API ${config.get<string>('admin.apiKey') === undefined ? 'disabled' : 'enabled'}`,
+  );
+  logger.log(`MCP       ${config.getOrThrow<string>('publicUrl')}${MCP_PATH} (OAuth)`);
+  logger.log(
+    `Assistant ${
+      config.get<string>('assistant.apiKey') === undefined
+        ? 'disabled'
+        : `enabled, ${config.get<string>('assistant.model') ?? ''}`
+    }`,
   );
 }
 

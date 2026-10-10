@@ -23,3 +23,4 @@ export * from './items';
 export * from './sub-items';
 export * from './item-events';
 export * from './shopping-list-entries';
+export * from './oauth';

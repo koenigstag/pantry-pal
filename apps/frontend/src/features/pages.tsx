@@ -10,6 +10,7 @@ import { cn } from '../ui/cn';
 import { FIELD_CONTROL } from '../ui/Field';
 import { SECONDARY_BUTTON } from './auth/AuthPage';
 import { ChangePasswordForm } from './auth/ChangePasswordForm';
+import { ConnectionsSection } from './connect/ConnectionsSection';
 import { canRenameHousehold } from './profile/details';
 import { DetailsForm } from './profile/DetailsForm';
 import { ComingSoonPage } from './shell/ComingSoonPage';
@@ -49,6 +50,7 @@ export const ProfilePage = observer(function ProfilePage(): ReactElement {
           <DetailsForm user={user} household={household} />
           <LanguageField />
           {user.hasPassword && <ChangePasswordForm />}
+          <ConnectionsSection />
         </>
       )}
 

@@ -24,3 +24,19 @@ export const PASSWORD_CHANGE_ATTEMPTS = {
     },
   },
 };
+
+/**
+ * `@Throttle` options for the text assistant's interpreting, per account: each
+ * request costs a call to the model. Generous for someone dictating a shelf
+ * line by line, and a ceiling on what a copied access token can spend.
+ */
+export const ASSISTANT_REQUESTS = {
+  default: {
+    limit: 10,
+    ttl: MINUTE,
+    getTracker: (request: object): string => {
+      const { user, ip } = request as PantryRequest;
+      return user === undefined ? `address:${ip ?? 'unknown'}` : `assistant:${user.id}`;
+    },
+  },
+};

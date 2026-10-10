@@ -9,5 +9,7 @@ import { ImportService } from './import.service';
   imports: [HouseholdsModule],
   controllers: [DataController],
   providers: [ExportService, ImportService],
+  // The text assistant adds items as an import does.
+  exports: [ImportService],
 })
 export class DataModule {}

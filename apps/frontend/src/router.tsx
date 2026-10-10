@@ -4,6 +4,7 @@ import { GuestOnly, RequireSession } from './features/auth/sessionRoutes';
 import { SignInPage } from './features/auth/SignInPage';
 import { SignUpPage } from './features/auth/SignUpPage';
 import { WelcomePage } from './features/auth/WelcomePage';
+import { ConsentPage } from './features/connect/ConsentPage';
 import { PlannerPage, ProfilePage } from './features/pages';
 import { AppShell } from './features/shell/AppShell';
 import { ROUTES } from './features/shell/navigation';
@@ -19,7 +20,8 @@ import { StoragePage } from './features/storage/StoragePage';
  * Two branches: the sign-in pages, which a signed-in visitor skips (`GuestOnly`),
  * and everything else, which needs a session (`RequireSession`) and owns the
  * pantry's stores while it is mounted. Sign-up's onboarding step is in the
- * second branch, outside the app shell: the account exists by then.
+ * second branch, outside the app shell: the account exists by then. So is the
+ * page where an assistant elsewhere asks for access over MCP (`/connect`).
  *
  * `/storage` alone redirects to the first location; an item's details are a
  * child of its location, rendered over the list. `/shopping` alone redirects to
@@ -42,6 +44,7 @@ export const router = createBrowserRouter(
       Component: RequireSession,
       children: [
         { path: ROUTES.welcome, Component: WelcomePage },
+        { path: ROUTES.connect, Component: ConsentPage },
         {
           Component: AppShell,
           children: [

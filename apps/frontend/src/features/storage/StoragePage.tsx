@@ -8,6 +8,7 @@ import { messages } from '../../i18n/messages';
 import { usePantryStore } from '../../stores/StoreContext';
 import type { MenuItem } from '../../ui/Menu';
 import { SwipePager } from '../../ui/SwipePager';
+import { AssistantDialog } from '../assistant/AssistantDialog';
 import { DataDialog } from '../data/DataDialog';
 import { PageStatus } from '../shell/PageStatus';
 import { AddToListSheet, type ListPick } from '../shopping/AddToListSheet';
@@ -31,7 +32,8 @@ type OpenSheet =
   | { kind: 'pick-list'; pick: ListPick }
   | { kind: 'add' }
   | { kind: 'locations' }
-  | { kind: 'data' };
+  | { kind: 'data' }
+  | { kind: 'assistant' };
 
 /** A selection belongs to the location it was made in; switching tabs leaves it behind. */
 interface Selection {
@@ -179,6 +181,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
         isSearchOpen={isSearchOpen}
         onSearchOpenChange={setSearchOpen}
         menuItems={menuItems}
+        onAssistant={() => setSheet({ kind: 'assistant' })}
       >
         <LocationTabs
           locations={pantry.locations}
@@ -295,6 +298,7 @@ export const StoragePage = observer(function StoragePage(): ReactElement {
       />
       <LocationEditorDialog open={sheet.kind === 'locations'} onClose={closeSheet} />
       <DataDialog open={sheet.kind === 'data'} onClose={closeSheet} />
+      <AssistantDialog open={sheet.kind === 'assistant'} onClose={closeSheet} />
     </div>
   );
 });

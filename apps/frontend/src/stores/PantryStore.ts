@@ -15,6 +15,12 @@ import {
   PANTRY_EVENT,
   QUANTITY_UNIT_KIND,
   withSubItems,
+  type AssistantAction,
+  type AssistantApplyResult,
+  type AssistantInterpretation,
+  type AssistantStatus,
+  type OAuthConnections,
+  type OAuthConsentRequest,
   type Category,
   type CurrentUser,
   type HouseholdDeletedPayload,
@@ -131,6 +137,35 @@ function importError(source: ImportSource, error: unknown): string {
 
 const BYTES_PER_MB = 1024 * 1024;
 
+/** A request answered already or past its ten minutes is a 404: the assistant has to start again. */
+function oauthError(error: unknown): string {
+  return error instanceof ApiError && error.status === 404
+    ? messages.connect.expired
+    : toMessage(error);
+}
+
+/**
+ * Why the assistant could not help. A 502 is the model failing to read the
+ * text, not a server that is down, so it has words of its own.
+ */
+function assistantError(error: unknown): string {
+  if (!(error instanceof ApiError)) return toMessage(error);
+
+  const t = messages.assistant.errors;
+  switch (error.status) {
+    case 404:
+      return t.unavailable;
+    case 429:
+      return t.tooMany;
+    case 502:
+      return t.unreadable;
+    case 503:
+      return t.busy;
+    default:
+      return toMessage(error);
+  }
+}
+
 const isActive = (item: PantryItem): boolean => item.status === ITEM_STATUS.Active;
 
 /** On the shelf with some left. Running out is leaving this state. */
@@ -192,6 +227,8 @@ export class PantryStore {
   locations: readonly PantryLocation[] = [];
   units: readonly Unit[] = [];
   categories: readonly Category[] = [];
+  /** Whether the server has the text assistant: its entry points are hidden until it says so. */
+  assistantEnabled = false;
   shoppingLists: readonly ShoppingList[] = [];
   shoppingEntries: readonly ShoppingListEntry[] = NO_ENTRIES;
   /** Items that are not active but are on a shopping list: never in `items` at the same time. */
@@ -440,6 +477,7 @@ export class PantryStore {
   private async runLoad(): Promise<void> {
     this.startLoad();
     void this.refreshCategories();
+    void this.refreshAssistant();
 
     try {
       const [user, households, units] = await Promise.all([
@@ -471,6 +509,15 @@ export class PantryStore {
       this.applyCategories(await this.api.listCategories());
     } catch {
       // Keep whatever loaded before; see above.
+    }
+  }
+
+  /** Whether the server has the assistant. Offline or failing, it stays as it was. */
+  async refreshAssistant(): Promise<void> {
+    try {
+      this.applyAssistantStatus(await this.api.assistantStatus());
+    } catch {
+      // A server that predates the assistant has no such route: it stays hidden.
     }
   }
 
@@ -885,6 +932,87 @@ export class PantryStore {
   }
 
   /**
+   * The changes a text describes, as the assistant proposes them, online. This
+   * device's changes go up first, so the assistant reads the household as the
+   * user sees it.
+   */
+  async interpretText(text: string): Promise<WriteResult<AssistantInterpretation>> {
+    const mirror = this.mirror;
+    const householdId = this.householdId;
+    if (mirror === null || householdId === null) {
+      return { ok: false, error: messages.errors.loadFailed };
+    }
+
+    try {
+      if (this.isOnline) await mirror.pushed(PUSH_WAIT_MS);
+      return { ok: true, value: await this.api.interpretText(householdId, text) };
+    } catch (error) {
+      return { ok: false, error: assistantError(error) };
+    }
+  }
+
+  /**
+   * Applies the proposals the user kept, online and all or nothing; the pull
+   * that follows brings what they changed into the mirror.
+   */
+  async applyAssistant(
+    actions: readonly AssistantAction[],
+  ): Promise<WriteResult<AssistantApplyResult>> {
+    const mirror = this.mirror;
+    const householdId = this.householdId;
+    if (mirror === null || householdId === null) {
+      return { ok: false, error: messages.errors.loadFailed };
+    }
+
+    try {
+      if (this.isOnline) await mirror.pushed(PUSH_WAIT_MS);
+      const result = await this.api.applyAssistantActions(householdId, actions);
+      mirror.reSync();
+      return { ok: true, value: result };
+    } catch (error) {
+      return { ok: false, error: assistantError(error) };
+    }
+  }
+
+  /* ------------------------------------------------- connected assistants */
+
+  /** An assistant's request for access, as the consent page shows it. */
+  async oauthRequest(id: string): Promise<WriteResult<OAuthConsentRequest>> {
+    try {
+      return { ok: true, value: await this.api.oauthRequest(id) };
+    } catch (error) {
+      return { ok: false, error: oauthError(error) };
+    }
+  }
+
+  /** Allows or denies it; the value is where to send the browser, back to the assistant. */
+  async answerOAuthRequest(id: string, allow: boolean): Promise<WriteResult<string>> {
+    try {
+      return { ok: true, value: (await this.api.answerOAuthRequest(id, allow)).redirectTo };
+    } catch (error) {
+      return { ok: false, error: oauthError(error) };
+    }
+  }
+
+  async connections(): Promise<WriteResult<OAuthConnections>> {
+    try {
+      return { ok: true, value: await this.api.connections() };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
+    }
+  }
+
+  /** Returns the message to show, or `null`. */
+  async disconnect(id: string): Promise<string | null> {
+    try {
+      await this.api.disconnect(id);
+      return null;
+    } catch (error) {
+      return toMessage(error);
+    }
+  }
+
+  /**
    * The household's backup, online, once this device's changes are up: an
    * .xlsx that importing a Pantry Pal backup reads back.
    */
@@ -1151,6 +1279,10 @@ export class PantryStore {
 
   private applyCategories(categories: readonly Category[]): void {
     this.categories = categories;
+  }
+
+  private applyAssistantStatus({ enabled }: AssistantStatus): void {
+    this.assistantEnabled = enabled;
   }
 
   private failLoad(message: string): void {

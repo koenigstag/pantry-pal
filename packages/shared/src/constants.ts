@@ -328,3 +328,54 @@ export const MAX_UNIT_LABEL_LENGTH = 16;
 
 export const MAX_CATEGORY_CODE_LENGTH = 32;
 export const MAX_CATEGORY_LABEL_LENGTH = 40;
+
+/**
+ * What the text assistant can propose: each action one change the user ticks
+ * or leaves out in the preview, applied through the same services as the forms.
+ * Spelled as in the wire's `type` field.
+ */
+export const ASSISTANT_ACTION = {
+  /** A new item with its units, or more units of the item of that name in that space. */
+  AddItem: 'add-item',
+  /** More units of an item the household has. */
+  AddUnits: 'add-units',
+  /** How many there are now: more adds fresh units, fewer uses up the ones to go first. */
+  SetQuantity: 'set-quantity',
+  /** Some of an item used up, or all of it. */
+  UseUp: 'use-up',
+  /** Some of an item thrown out, or all of it. */
+  Discard: 'discard',
+  /** One unit's dates or how much is left: opened, half used, a new printed date. */
+  UpdateUnit: 'update-unit',
+  /** An item to another storage space. */
+  MoveItem: 'move-item',
+  /** An item on a shopping list: one the household has, or a new one. */
+  AddToList: 'add-to-list',
+  /** An entry ticked off, or back to still to buy. */
+  CheckEntry: 'check-entry',
+  /** An entry bought: its item restocked and the entry off its list. */
+  BuyEntry: 'buy-entry',
+  /** An entry off its list. */
+  RemoveEntry: 'remove-entry',
+} as const;
+export type AssistantActionType = (typeof ASSISTANT_ACTION)[keyof typeof ASSISTANT_ACTION];
+export const ASSISTANT_ACTIONS = Object.values(ASSISTANT_ACTION);
+
+/** The longest text the assistant reads: a few sentences, or a shelf described item by item. */
+export const MAX_ASSISTANT_TEXT_LENGTH = 2000;
+/** The most actions one text may turn into; past that, the assistant reports the rest as unresolved. */
+export const MAX_ASSISTANT_ACTIONS = 40;
+/** How the items the assistant writes are recorded in their history, as an import names its file. */
+export const ASSISTANT_SOURCE = 'assistant';
+
+/**
+ * Where the MCP endpoint is served, at the backend's origin rather than under
+ * `API_BASE_PATH`: an assistant elsewhere (claude.ai, ChatGPT) is given this URL.
+ */
+export const MCP_PATH = '/mcp';
+/** The one OAuth scope a connected assistant is granted: everything a member can do with items and lists. */
+export const MCP_SCOPE = 'pantry';
+/** The frontend route an OAuth authorization request lands on, for the user to allow or deny it. */
+export const OAUTH_CONSENT_ROUTE = '/connect';
+/** The query parameter that names the pending request on that route. */
+export const OAUTH_REQUEST_PARAM = 'request';

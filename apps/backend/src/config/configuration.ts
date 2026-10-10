@@ -9,6 +9,18 @@ export interface AppConfig {
   port: number;
   corsOrigins: string[];
   /**
+   * `PUBLIC_URL`: the backend's own origin as the outside world reaches it. The
+   * OAuth issuer and the MCP endpoint's address are built from it, so behind a
+   * proxy it must be the public HTTPS origin, not the bind address.
+   */
+  publicUrl: string;
+  /**
+   * `FRONTEND_URL`: where the web app is served, base path included
+   * (`https://user.github.io/pantry-pal/`). An assistant asking for access sends
+   * the user to its consent page. Defaults to the first `CORS_ORIGIN`.
+   */
+  frontendUrl: string;
+  /**
    * Express's `trust proxy`: which proxies may name the client in
    * `X-Forwarded-For`. `undefined` trusts none, so the client is the socket's peer.
    */
@@ -31,7 +43,16 @@ export interface AppConfig {
     /** `undefined` disables every `/admin` route. */
     apiKey: string | undefined;
   };
+  assistant: {
+    /** `ANTHROPIC_API_KEY`. `undefined` turns the text assistant off: its routes answer 404. */
+    apiKey: string | undefined;
+    /** `ASSISTANT_MODEL`: the Claude model that reads the text. */
+    model: string;
+  };
 }
+
+/** The model the text assistant uses unless `ASSISTANT_MODEL` names another. */
+const DEFAULT_ASSISTANT_MODEL = 'claude-sonnet-5-5';
 
 /** Long enough that it cannot be a placeholder someone forgot to change. */
 const MIN_ADMIN_API_KEY_LENGTH = 16;
@@ -57,6 +78,20 @@ function tokenSecret(name: JwtSecretName, nodeEnv: string): { value: string; gen
     throw new Error(`${name} must be at least ${MIN_JWT_SECRET_BYTES} bytes.`);
   }
   return { value: configured, generated: false };
+}
+
+/** An absolute http(s) URL with no query or fragment, without a trailing slash; throws otherwise. */
+function toBaseUrl(name: string, value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} must be an absolute URL, such as https://pantry.example.com`);
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.search !== '' || url.hash !== '') {
+    throw new Error(`${name} must be an http(s) URL without a query or fragment`);
+  }
+  return url.href.replace(/\/+$/, '');
 }
 
 function toBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -106,14 +141,34 @@ export function configuration(): AppConfig {
     throw new Error(`ADMIN_API_KEY must be at least ${MIN_ADMIN_API_KEY_LENGTH} characters.`);
   }
 
+  const port = toPositiveInteger(process.env.PORT, DEFAULT_BACKEND_PORT, 65_535);
+  const corsOrigins = (process.env.CORS_ORIGIN ?? `http://localhost:${DEFAULT_FRONTEND_PORT}`)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  const publicUrl = toBaseUrl(
+    'PUBLIC_URL',
+    process.env.PUBLIC_URL?.trim() || `http://localhost:${port}`,
+  );
+  // OAuth refuses a plain-HTTP issuer anywhere but on this machine.
+  const { protocol, hostname } = new URL(publicUrl);
+  if (protocol !== 'https:' && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    throw new Error('PUBLIC_URL must be https unless it is localhost.');
+  }
+
   return {
     nodeEnv,
     host: process.env.HOST ?? '0.0.0.0',
-    port: toPositiveInteger(process.env.PORT, DEFAULT_BACKEND_PORT, 65_535),
-    corsOrigins: (process.env.CORS_ORIGIN ?? `http://localhost:${DEFAULT_FRONTEND_PORT}`)
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0),
+    port,
+    corsOrigins,
+    publicUrl,
+    frontendUrl: toBaseUrl(
+      'FRONTEND_URL',
+      process.env.FRONTEND_URL?.trim() ||
+        corsOrigins[0] ||
+        `http://localhost:${DEFAULT_FRONTEND_PORT}`,
+    ),
     trustProxy: toTrustProxy(process.env.TRUST_PROXY),
     database: {
       // Same resolution rules as drizzle-kit and `pnpm db:seed`: DATABASE_URL, or
@@ -128,5 +183,9 @@ export function configuration(): AppConfig {
       generatedSecrets: JWT_SECRET_NAMES.filter((name) => secrets[name].generated),
     },
     admin: { apiKey },
+    assistant: {
+      apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
+      model: process.env.ASSISTANT_MODEL?.trim() || DEFAULT_ASSISTANT_MODEL,
+    },
   };
 }

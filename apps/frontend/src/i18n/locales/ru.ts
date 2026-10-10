@@ -645,6 +645,102 @@ export const ru = {
     },
   },
 
+  assistant: {
+    open: 'Рассказать помощнику',
+    title: 'Помощник',
+    intro:
+      'Напишите своими словами, что вы использовали, купили или убрали на место. Перед сохранением вы увидите каждое изменение.',
+    placeholder: 'На кухне у меня осталось 3 упаковки макарон плюс одна наполовину использованная',
+    length: (used: number, max: number) => `${formatNumber(used)} / ${formatNumber(max)}`,
+    interpret: 'Показать изменения',
+    interpreting: 'Читаем…',
+    offline: 'Помощнику нужна связь. Написанное останется здесь, пока вы не вернётесь в сеть.',
+    editText: 'Изменить текст',
+    preview: 'Отметьте изменения, которые нужно внести',
+    nothingFound: 'В этом тексте не сказано, что изменить.',
+    unresolved: 'Не понято',
+    unresolvedReason: 'Не удалось сопоставить это ни с чем в ваших запасах.',
+    apply: (count: number) =>
+      plural(count, {
+        one: 'Применить # изменение',
+        few: 'Применить # изменения',
+        many: 'Применить # изменений',
+        other: 'Применить # изменения',
+      }),
+    applyShort: 'Применить',
+    applying: 'Применяем…',
+    applied: (count: number) =>
+      plural(count, {
+        one: 'Применено # изменение.',
+        few: 'Применено # изменения.',
+        many: 'Применено # изменений.',
+        other: 'Применено # изменения.',
+      }),
+    someItem: 'предмет',
+    quoted: (text: string) => `«${text}»`,
+    actions: {
+      addItem: (name: string, space: string) => `Добавить «${name}» → ${space}`,
+      addUnits: (name: string) => `Ещё «${name}»`,
+      setQuantity: (name: string, amount: string) => `«${name}»: теперь ${amount}`,
+      useUp: (name: string) => `Использовано: «${name}»`,
+      discard: (name: string) => `Выброшено: «${name}»`,
+      updateUnit: (name: string) => `«${name}», одна штука`,
+      moveItem: (name: string, space: string) => `Переложить «${name}» → ${space}`,
+      addToList: (name: string, list: string) => `Добавить «${name}» в список «${list}»`,
+      checkEntry: (name: string) => `В корзине: «${name}»`,
+      uncheckEntry: (name: string) => `Снова купить: «${name}»`,
+      buyEntry: (name: string) => `Куплено: «${name}»`,
+      removeEntry: (name: string, list: string) => `Убрать «${name}» из списка «${list}»`,
+    },
+    details: {
+      all: 'всё',
+      some: (count: number, of: number) => `${formatNumber(count)} из ${formatNumber(of)}`,
+      opened: (date: string) => `открыто ${date}`,
+      left: (percent: string) => `осталось ${percent}`,
+      expires: (date: string) => `годен до ${date}`,
+      newItem: 'новый',
+      toBuy: (amount: string) => `купить ${amount}`,
+      restocked: (amount: string) => `${amount} вернётся на полку`,
+    },
+    errors: {
+      unavailable: 'На этом сервере помощник недоступен.',
+      tooMany: 'Слишком много запросов подряд. Подождите минуту и попробуйте снова.',
+      unreadable: 'Помощник не смог разобрать этот текст. Попробуйте сформулировать иначе.',
+      busy: 'Помощник занят. Попробуйте чуть позже.',
+    },
+  },
+
+  connect: {
+    heading: 'Подключение ассистента',
+    title: (client: string) => `Подключить «${client}»?`,
+    access: (client: string) =>
+      `«${client}» сможет видеть и менять всё в ваших хозяйствах: места хранения, предметы и списки покупок — от вашего имени.`,
+    redirect: (host: string) => `Ответ уйдёт на ${host}.`,
+    revoke: 'Отключить его можно в любой момент в профиле.',
+    allow: 'Разрешить',
+    allowing: 'Подключаем…',
+    deny: 'Отказать',
+    leaving: 'Возвращаемся к ассистенту…',
+    expired:
+      'Этот запрос истёк или на него уже ответили. Начните подключение заново из ассистента.',
+    incomplete: 'Ссылка неполная. Начните подключение заново из ассистента.',
+    backToApp: 'Вернуться в Pantry Pal',
+  },
+
+  connections: {
+    title: 'Подключённые ассистенты',
+    intro:
+      'Расскажите Claude, ChatGPT или другому ассистенту, что вы использовали или купили, — и он обновит ваши запасы. В его настройках добавьте свой коннектор с этим адресом:',
+    copy: 'Копировать',
+    copied: 'Скопировано',
+    none: 'Пока ни один ассистент не подключён.',
+    since: (date: string) => `Подключён ${date}`,
+    lastUsed: (date: string) => `последний раз ${date}`,
+    disconnect: 'Отключить',
+    disconnecting: 'Отключаем…',
+    loadFailed: 'Не удалось загрузить подключённых ассистентов.',
+  },
+
   planner: {
     title: 'Планировщик',
     description: 'Планирование меню скоро появится.',

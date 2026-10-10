@@ -1,4 +1,5 @@
 import type {
+  ASSISTANT_ACTION,
   HOUSEHOLD_ROLE,
   ImportSkipReason,
   ImportSource,
@@ -491,4 +492,203 @@ export interface ImportSummary {
   /** Items that reached `MAX_ITEM_QUANTITY`, by name, with how many of the file's units did not fit. */
   capped: Array<{ name: string; units: number }>;
   skipped: ImportSkippedRow[];
+}
+
+/*
+ * The text assistant. It reads what someone wrote — "в холодильнике молоко, два
+ * пакета до пятницы" — and proposes changes, which apply only once the user has
+ * seen them in a preview and kept them. Every action names what it acts on by
+ * id, and `quote` is the part of the text it came from, for the preview.
+ */
+
+/** Units alike, as an action adds them: three sealed packs, or one opened and half used. */
+export interface AssistantUnitGroup {
+  /** How many units are in this state. */
+  count: number;
+  /** The printed date, `YYYY-MM-DD`. */
+  expiresAt: string | null;
+  /** `null` with a fill under full takes the day the change is applied: a used unit was opened. */
+  openedAt: string | null;
+  periodAfterOpeningDays: number | null;
+  /** `MIN_FILL_PERCENT` to `FULL_FILL_PERCENT`. */
+  fillPercent: number;
+}
+
+interface AssistantActionBase {
+  /** The words of the text the action comes from. */
+  quote: string;
+}
+
+/**
+ * A new item, or more units of the active item of that name in that storage
+ * space if the household has one, as an import adds them.
+ */
+export interface AssistantAddItemAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.AddItem;
+  locationId: string;
+  name: string;
+  /** A category code; one the server does not have becomes the default category. */
+  category: string;
+  /** A count unit's code; any other becomes `pcs`. */
+  unit: string;
+  sizeValue: number | null;
+  sizeUnit: string | null;
+  units: AssistantUnitGroup[];
+}
+
+export interface AssistantAddUnitsAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.AddUnits;
+  itemId: string;
+  units: AssistantUnitGroup[];
+}
+
+/** How many there are now, as stepping the quantity sets it. */
+export interface AssistantSetQuantityAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.SetQuantity;
+  itemId: string;
+  quantity: number;
+}
+
+/**
+ * `count` units used up or thrown out, those to go first; `null`, or as many as
+ * it has, the whole item.
+ */
+export interface AssistantUseUpAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.UseUp;
+  itemId: string;
+  count: number | null;
+}
+
+export interface AssistantDiscardAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.Discard;
+  itemId: string;
+  count: number | null;
+}
+
+/** One unit's state. A `null` field is left as it is. */
+export interface AssistantUpdateUnitAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.UpdateUnit;
+  itemId: string;
+  subItemId: string;
+  expiresAt: string | null;
+  openedAt: string | null;
+  fillPercent: number | null;
+}
+
+export interface AssistantMoveItemAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.MoveItem;
+  itemId: string;
+  locationId: string;
+}
+
+/** A thing to buy that the household has never had: made as an item that ran out. */
+export interface AssistantNewListItem {
+  name: string;
+  category: string;
+  unit: string;
+  /** Where it goes once bought. */
+  locationId: string;
+}
+
+/** Exactly one of `itemId` and `newItem`. */
+export interface AssistantAddToListAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.AddToList;
+  listId: string;
+  itemId: string | null;
+  newItem: AssistantNewListItem | null;
+  quantity: number;
+}
+
+export interface AssistantCheckEntryAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.CheckEntry;
+  entryId: string;
+  checked: boolean;
+}
+
+/** As the Bought button does: the item restocked by the entry's quantity, the entry off its list. */
+export interface AssistantBuyEntryAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.BuyEntry;
+  entryId: string;
+}
+
+export interface AssistantRemoveEntryAction extends AssistantActionBase {
+  type: typeof ASSISTANT_ACTION.RemoveEntry;
+  entryId: string;
+}
+
+export type AssistantAction =
+  | AssistantAddItemAction
+  | AssistantAddUnitsAction
+  | AssistantSetQuantityAction
+  | AssistantUseUpAction
+  | AssistantDiscardAction
+  | AssistantUpdateUnitAction
+  | AssistantMoveItemAction
+  | AssistantAddToListAction
+  | AssistantCheckEntryAction
+  | AssistantBuyEntryAction
+  | AssistantRemoveEntryAction;
+
+/** Part of the text the assistant could not turn into a change. */
+export interface AssistantUnresolved {
+  quote: string;
+  /**
+   * Why, in the user's language, as the model put it; `null` when the server
+   * turned a proposal down — one naming something the household does not have,
+   * say — and the client says so in its own words.
+   */
+  reason: string | null;
+}
+
+/** What `POST .../assistant/interpret` answers: proposals only, nothing written. */
+export interface AssistantInterpretation {
+  actions: AssistantAction[];
+  unresolved: AssistantUnresolved[];
+}
+
+/** `GET /assistant`: whether this server has the assistant, so clients can hide it when not. */
+export interface AssistantStatus {
+  enabled: boolean;
+}
+
+/** What `POST .../assistant/apply` answers once every action kept has been applied. */
+export interface AssistantApplyResult {
+  applied: number;
+}
+
+/*
+ * Connecting an assistant elsewhere — claude.ai, ChatGPT — over MCP. It asks
+ * through OAuth; the user allows or denies it on the consent page, and can
+ * disconnect it later from their profile.
+ */
+
+/** A pending authorization request, as the consent page shows it. */
+export interface OAuthConsentRequest {
+  id: string;
+  /** The name the client registered itself with, or its redirect's host when it gave none. */
+  clientName: string;
+  /** Where the answer goes, so the user can tell a client that only borrows a known name. */
+  redirectHost: string;
+  scopes: string[];
+  expiresAt: string;
+}
+
+/** Where to send the browser after the user answered: the client's redirect URI, with the code or the error. */
+export interface OAuthRedirect {
+  redirectTo: string;
+}
+
+/** `GET /me/connections`: where to connect an assistant, and the ones connected. */
+export interface OAuthConnections {
+  /** The MCP endpoint's address, to paste into claude.ai's or ChatGPT's connector settings. */
+  mcpUrl: string;
+  connections: OAuthConnection[];
+}
+
+/** An assistant the user connected, as their profile lists it. */
+export interface OAuthConnection {
+  id: string;
+  clientName: string;
+  createdAt: string;
+  lastUsedAt: string | null;
 }
