@@ -88,6 +88,7 @@ async function bootstrap(): Promise<void> {
         : `enabled, ${config.get<string>('assistant.model') ?? ''}`
     }`,
   );
+  logger.log(`Push      ${config.get('push.vapid') === undefined ? 'disabled' : 'enabled'}`);
 }
 
 void bootstrap();

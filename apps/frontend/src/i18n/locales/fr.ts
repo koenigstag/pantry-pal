@@ -694,6 +694,48 @@ export const fr = {
     loadFailed: 'Impossible de charger les assistants connectés.',
   },
 
+  notifications: {
+    title: 'Notifications',
+    intro:
+      'Suivez vos réserves sur cet appareil, même quand l’app est fermée. Chaque appareil a ses propres réglages.',
+    loadFailed: 'Impossible de charger les réglages des notifications.',
+    unsupported: 'Ce navigateur ne peut pas afficher les notifications de Pantry Pal.',
+    needsInstall:
+      'Sur un iPhone ou un iPad, ajoutez d’abord Pantry Pal à l’écran d’accueil (Partager, puis «\u00A0Sur l’écran d’accueil\u00A0»), puis activez les notifications depuis l’app ainsi ajoutée.',
+    blocked:
+      'Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du site de votre navigateur, puis revenez ici.',
+    turnOn: 'Activer les notifications',
+    turningOn: 'Activation…',
+    notAllowed: 'Les notifications n’ont pas été autorisées\u00A0: rien n’a changé.',
+    turnOnFailed: 'Impossible d’activer les notifications. Réessayez.',
+    saveFailed: 'Impossible d’enregistrer la modification. Réessayez.',
+    topicsLegend: 'M’avertir pour',
+    topics: {
+      expiry: {
+        label: 'Dernier jour pour utiliser un produit',
+        hint: (time: string) => `À ${time}, ce qui expire aujourd’hui.`,
+      },
+      'list-added': {
+        label: 'Ajouts à une liste de courses',
+        hint: 'Ce qu’un autre membre ajoute, ou ce qu’il a fini.',
+      },
+      'list-bought': {
+        label: 'Courses faites',
+        hint: 'Quand un autre membre marque des articles d’une liste comme achetés.',
+      },
+      members: {
+        label: 'Membres du foyer',
+        hint: 'Quelqu’un rejoint votre foyer, ou vous ajoute au sien.',
+      },
+    },
+    sendTest: 'Envoyer un test',
+    sendingTest: 'Envoi…',
+    testSent: 'Envoyé. La notification devrait apparaître dans un instant.',
+    testFailed: 'Le test n’a pas pu être envoyé. Réessayez plus tard.',
+    turnOff: 'Désactiver sur cet appareil',
+    turningOff: 'Désactivation…',
+  },
+
   planner: {
     title: 'Planning',
     description: 'La planification des repas arrive bientôt.',

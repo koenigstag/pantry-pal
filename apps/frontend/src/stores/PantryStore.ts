@@ -31,6 +31,9 @@ import {
   type ItemStatus,
   type PantryItem,
   type PantryLocation,
+  type PushDevice,
+  type PushStatus,
+  type PushTestResult,
   type ShoppingList,
   type ShoppingListEntry,
   type SubItem,
@@ -42,6 +45,7 @@ import {
 import type {
   ChangePasswordDto,
   CreatePantryItemDto,
+  RegisterPushDeviceDto,
   UpdateMeDto,
   UpdatePantryItemDto,
   UpdateShoppingListEntryDto,
@@ -57,6 +61,7 @@ import { messages } from '../i18n/messages';
 import type { Mirror, MirrorRefusal, MirrorTransport } from '../offline/mirror';
 import { ApiError, type PantryApi } from '../services/api';
 import { backendOrigin } from '../services/backendOrigin';
+import { deviceTimeZone } from '../services/push';
 import type { PantrySocket } from '../services/socket';
 import type { NoticeStore } from './NoticeStore';
 import { reconcileById } from './reconcile';
@@ -493,6 +498,7 @@ export class PantryStore {
       // The account's language outranks this browser's copy of it — on a new
       // device, say. When they differ, the page reloads in the account's.
       switchLocale(user.locale);
+      void this.syncTimeZone(user.timezone);
     } catch (error) {
       this.failLoad(toMessage(error));
     }
@@ -1012,6 +1018,49 @@ export class PantryStore {
     }
   }
 
+  /** Whether the server sends notifications, and the key to subscribe with. Online only. */
+  async pushStatus(): Promise<WriteResult<PushStatus>> {
+    try {
+      return { ok: true, value: await this.api.pushStatus() };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
+    }
+  }
+
+  async pushDevices(): Promise<WriteResult<PushDevice[]>> {
+    try {
+      return { ok: true, value: await this.api.pushDevices() };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
+    }
+  }
+
+  async registerPushDevice(dto: RegisterPushDeviceDto): Promise<WriteResult<PushDevice>> {
+    try {
+      return { ok: true, value: await this.api.registerPushDevice(dto) };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
+    }
+  }
+
+  /** Returns the message to show, or `null`. */
+  async removePushDevice(id: string): Promise<string | null> {
+    try {
+      await this.api.removePushDevice(id);
+      return null;
+    } catch (error) {
+      return toMessage(error);
+    }
+  }
+
+  async testPush(): Promise<WriteResult<PushTestResult>> {
+    try {
+      return { ok: true, value: await this.api.testPush() };
+    } catch (error) {
+      return { ok: false, error: toMessage(error) };
+    }
+  }
+
   /**
    * The household's backup, online, once this device's changes are up: an
    * .xlsx that importing a Pantry Pal backup reads back.
@@ -1267,6 +1316,21 @@ export class PantryStore {
   private applySynced(synced: boolean): void {
     this.synced = synced;
     this.showIfSynced();
+  }
+
+  /**
+   * Keeps the account's time zone this device's, so "today" — the morning
+   * expiry notification, the assistant's dates — is where the user is. Quietly
+   * best-effort: offline, the next load tries again.
+   */
+  private async syncTimeZone(saved: string): Promise<void> {
+    const zone = deviceTimeZone();
+    if (zone === undefined || zone === saved) return;
+    try {
+      this.applyUser(await this.api.updateMe({ timezone: zone }));
+    } catch {
+      // Not worth a notice: nothing on screen depends on it.
+    }
   }
 
   private applyUser(user: CurrentUser): void {

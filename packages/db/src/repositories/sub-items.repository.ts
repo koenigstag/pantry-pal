@@ -1,7 +1,17 @@
-import { and, count, eq, isNull, sql } from 'drizzle-orm';
+import { ITEM_STATUS } from '@pantry-pal/shared';
+import { and, asc, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
 import { items, subItems, type SubItemRow } from '../schema';
+
+/** Units of one item whose last day is a given day, as the expiry notification lists them. */
+export interface ExpiringItem {
+  householdId: string;
+  itemId: string;
+  name: string;
+  /** How many of its units expire that day. */
+  units: number;
+}
 
 /** What a write may change on one unit. */
 export type UpdateSubItemInput = Partial<
@@ -31,6 +41,40 @@ export class SubItemsRepository {
       .limit(1);
 
     return row;
+  }
+
+  /**
+   * The items on the shelf in these households with units whose last day is
+   * `day` (`YYYY-MM-DD`): active units of active items, by `effective_expires_at`,
+   * so an opened jar's period after opening counts. By name within a household.
+   */
+  expiringOn(householdIds: readonly string[], day: string): Promise<ExpiringItem[]> {
+    if (householdIds.length === 0) return Promise.resolve([]);
+
+    return this.db
+      .select({
+        householdId: items.householdId,
+        itemId: items.id,
+        name: items.name,
+        units: count(),
+      })
+      .from(subItems)
+      .innerJoin(
+        items,
+        and(eq(items.householdId, subItems.householdId), eq(items.id, subItems.itemId)),
+      )
+      .where(
+        and(
+          inArray(subItems.householdId, [...householdIds]),
+          eq(subItems.effectiveExpiresAt, day),
+          eq(subItems.status, ITEM_STATUS.Active),
+          isNull(subItems.deletedAt),
+          eq(items.status, ITEM_STATUS.Active),
+          isNull(items.deletedAt),
+        ),
+      )
+      .groupBy(items.householdId, items.id, items.name)
+      .orderBy(asc(items.householdId), asc(sql`lower(${items.name})`), asc(items.id));
   }
 
   /** How many units the item has, whatever their status: an item keeps at least one. */

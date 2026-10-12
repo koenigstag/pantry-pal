@@ -104,6 +104,17 @@ any MCP client can connect to as a custom connector. It authorizes with OAuth
 read a household and apply the same actions as the built-in assistant, through
 the same services. Details in `apps/backend/CLAUDE.md` (MCP endpoint).
 
+### Push notifications
+
+With VAPID keys set on the backend, a device can be told — app closed — what
+expires today (at nine, where its user is), what other members put on a list or
+bought, and who joined the household; each a switch per device, on Profile. It
+is Web Push: the generated service worker imports `public/push-handler.js` to
+show them. Writes record what happened in an outbox, inside their own
+transaction, and pg-boss jobs send it in each recipient's language once the
+member has paused. Details in `apps/backend/CLAUDE.md` (Push notifications) and
+`apps/frontend/CLAUDE.md` (Push notifications).
+
 ## Gotchas that will bite
 
 ### NestJS 12 is ESM-only

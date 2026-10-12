@@ -49,6 +49,22 @@ export interface AppConfig {
     /** `ASSISTANT_MODEL`: the Claude model that reads the text. */
     model: string;
   };
+  push: {
+    /**
+     * `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, set together.
+     * `undefined` turns push notifications off: `GET /push` answers a null key,
+     * the frontend hides its switches, and no job runs.
+     */
+    vapid: VapidDetails | undefined;
+  };
+}
+
+/** What signs every push this server sends, and who push services may contact about it. */
+export interface VapidDetails {
+  publicKey: string;
+  privateKey: string;
+  /** A `mailto:` or `https:` URL. */
+  subject: string;
 }
 
 /** The model the text assistant uses unless `ASSISTANT_MODEL` names another. */
@@ -92,6 +108,37 @@ function toBaseUrl(name: string, value: string): string {
     throw new Error(`${name} must be an http(s) URL without a query or fragment`);
   }
   return url.href.replace(/\/+$/, '');
+}
+
+const VAPID_VARIABLES = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'] as const;
+
+/**
+ * The VAPID pair and subject, or `undefined` when none is set. Some but not all,
+ * or a value of the wrong shape, throws: a server offering a switch that could
+ * only fail is worse than one without push.
+ */
+function toVapidDetails(): VapidDetails | undefined {
+  const [publicKey, privateKey, subject] = VAPID_VARIABLES.map(
+    (name) => process.env[name]?.trim() || undefined,
+  );
+  if (publicKey === undefined && privateKey === undefined && subject === undefined) {
+    return undefined;
+  }
+  if (publicKey === undefined || privateKey === undefined || subject === undefined) {
+    throw new Error(
+      `Set all of ${VAPID_VARIABLES.join(', ')} to turn push notifications on, or none.`,
+    );
+  }
+  // An uncompressed P-256 point is 65 bytes and the private key 32: base64url, 87 and 43 characters.
+  if (!/^[A-Za-z0-9_-]{87}$/.test(publicKey) || !/^[A-Za-z0-9_-]{43}$/.test(privateKey)) {
+    throw new Error(
+      'VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be a pair from `web-push generate-vapid-keys`.',
+    );
+  }
+  if (!/^(mailto:|https:\/\/)\S+$/.test(subject)) {
+    throw new Error('VAPID_SUBJECT must be a mailto: or https:// URL.');
+  }
+  return { publicKey, privateKey, subject };
 }
 
 function toBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -187,5 +234,6 @@ export function configuration(): AppConfig {
       apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
       model: process.env.ASSISTANT_MODEL?.trim() || DEFAULT_ASSISTANT_MODEL,
     },
+    push: { vapid: toVapidDetails() },
   };
 }

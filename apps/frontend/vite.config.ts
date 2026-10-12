@@ -88,6 +88,9 @@ export default defineConfig(({ mode }) => {
         workbox: {
           // The built app, so it opens offline. Source maps stay out of it.
           globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+          // Showing push notifications, and opening the app from one: the app's
+          // part of the worker, from `public/`, resolved against the worker's URL.
+          importScripts: ['push-handler.js'],
           navigateFallback: 'index.html',
           navigateFallbackDenylist: [new RegExp(API_PATH_PREFIX)],
           cleanupOutdatedCaches: true,

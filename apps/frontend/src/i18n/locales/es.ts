@@ -702,6 +702,48 @@ export const es = {
     loadFailed: 'No se han podido cargar los asistentes conectados.',
   },
 
+  notifications: {
+    title: 'Notificaciones',
+    intro:
+      'Entérate de lo que pasa en tu despensa en este dispositivo, aunque la app esté cerrada. Cada dispositivo tiene sus propios interruptores.',
+    loadFailed: 'No se ha podido cargar la configuración de las notificaciones.',
+    unsupported: 'Este navegador no puede mostrar notificaciones de Pantry Pal.',
+    needsInstall:
+      'En un iPhone o iPad, primero añade Pantry Pal a la pantalla de inicio (Compartir y luego «Añadir a pantalla de inicio») y activa las notificaciones desde ahí.',
+    blocked:
+      'Las notificaciones están bloqueadas para este sitio. Permítelas en la configuración del sitio del navegador y vuelve aquí.',
+    turnOn: 'Activar notificaciones',
+    turningOn: 'Activando…',
+    notAllowed: 'No se han permitido las notificaciones, así que no ha cambiado nada.',
+    turnOnFailed: 'No se han podido activar las notificaciones. Inténtalo de nuevo.',
+    saveFailed: 'No se ha podido guardar el cambio. Inténtalo de nuevo.',
+    topicsLegend: 'Avisarme de',
+    topics: {
+      expiry: {
+        label: 'Último día para usar algo',
+        hint: (time: string) => `A las ${time}, lo que caduca hoy.`,
+      },
+      'list-added': {
+        label: 'Novedades en una lista de la compra',
+        hint: 'Lo que añade otro miembro o lo que se le acaba.',
+      },
+      'list-bought': {
+        label: 'Compras hechas',
+        hint: 'Cuando otro miembro marca como comprado algo de una lista.',
+      },
+      members: {
+        label: 'Miembros del hogar',
+        hint: 'Alguien se une a tu hogar o te añade al suyo.',
+      },
+    },
+    sendTest: 'Enviar una prueba',
+    sendingTest: 'Enviando…',
+    testSent: 'Enviada. Debería aparecer en un momento.',
+    testFailed: 'No se ha podido enviar la prueba. Inténtalo más tarde.',
+    turnOff: 'Desactivar en este dispositivo',
+    turningOff: 'Desactivando…',
+  },
+
   planner: {
     title: 'Planificador',
     description: 'La planificación de comidas llegará pronto.',

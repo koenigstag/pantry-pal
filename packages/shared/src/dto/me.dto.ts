@@ -1,7 +1,16 @@
-import { IsIn, IsOptional, IsString, Length, ValidateBy } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  IsTimeZone,
+  Length,
+  MaxLength,
+  ValidateBy,
+} from 'class-validator';
 
 import {
   MAX_DISPLAY_NAME_LENGTH,
+  MAX_TIME_ZONE_LENGTH,
   MIN_BIRTH_DATE,
   SUPPORTED_LOCALES,
   UNIT_SYSTEM_PREFERENCES,
@@ -55,4 +64,15 @@ export class UpdateMeDto {
   @IsOmittable()
   @IsIn([...SUPPORTED_LOCALES])
   locale?: SupportedLocale;
+
+  /**
+   * Where the user is, as an IANA zone such as `Europe/Kyiv`: what "today" means
+   * for them — the morning expiry notification, the assistant's dates. The app
+   * sets it from the browser.
+   */
+  @IsOmittable()
+  @IsString()
+  @MaxLength(MAX_TIME_ZONE_LENGTH)
+  @IsTimeZone()
+  timezone?: string;
 }

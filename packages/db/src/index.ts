@@ -13,6 +13,8 @@ export type {
   OAuthClientRow,
   OAuthGrantRow,
   ProductRow,
+  PushDeviceRow,
+  PushOutboxRow,
   RefreshTokenRow,
   ShoppingListEntryRow,
   ShoppingListRow,

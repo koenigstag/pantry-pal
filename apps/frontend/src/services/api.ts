@@ -15,6 +15,9 @@ import {
   type ImportSummary,
   type PantryItem,
   type PantryLocation,
+  type PushDevice,
+  type PushStatus,
+  type PushTestResult,
   type ShoppingList,
   type ShoppingListEntriesChange,
   type ShoppingListEntry,
@@ -36,6 +39,7 @@ import type {
   CreateShoppingListDto,
   DevSignInDto,
   PutAwayShoppingListEntriesDto,
+  RegisterPushDeviceDto,
   SignInDto,
   SignUpDto,
   UpdateHouseholdDto,
@@ -266,6 +270,23 @@ export const pantryApi = {
   /** Ends a connection: every token it was given stops working. */
   disconnect: (id: string): Promise<void> =>
     request<void>(`/me/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Whether the server sends push notifications, and the key a browser subscribes with. */
+  pushStatus: (): Promise<PushStatus> => request<PushStatus>('/push'),
+
+  /** The browsers the account registered for notifications. */
+  pushDevices: (): Promise<PushDevice[]> => request<PushDevice[]>('/push/devices'),
+
+  /** This browser registered, or its topics replaced. */
+  registerPushDevice: (dto: RegisterPushDeviceDto): Promise<PushDevice> =>
+    request<PushDevice>('/push/devices', { method: 'PUT', body: JSON.stringify(dto) }),
+
+  removePushDevice: (id: string): Promise<void> =>
+    request<void>(`/push/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** A test notification to this session's browsers. */
+  testPush: (): Promise<PushTestResult> =>
+    request<PushTestResult>('/push/test', { method: 'POST' }),
 
   /** Whether the server has the text assistant. */
   assistantStatus: (): Promise<AssistantStatus> => request<AssistantStatus>('/assistant'),

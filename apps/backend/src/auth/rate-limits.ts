@@ -40,3 +40,18 @@ export const ASSISTANT_REQUESTS = {
     },
   },
 };
+
+/**
+ * `@Throttle` options for a test notification, per account: each one is a request
+ * to a push service on the server's name. Enough for trying it out a few times.
+ */
+export const PUSH_TEST_REQUESTS = {
+  default: {
+    limit: 5,
+    ttl: MINUTE,
+    getTracker: (request: object): string => {
+      const { user, ip } = request as PantryRequest;
+      return user === undefined ? `address:${ip ?? 'unknown'}` : `push-test:${user.id}`;
+    },
+  },
+};

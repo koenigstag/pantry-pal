@@ -194,6 +194,8 @@ export const MIN_FILL_PERCENT = 1;
 export const MAX_HOUSEHOLD_NAME_LENGTH = 80;
 export const MAX_EMAIL_LENGTH = 254;
 export const MAX_DISPLAY_NAME_LENGTH = 80;
+/** IANA zone names run to about 30 characters (`America/Argentina/ComodRivadavia`). */
+export const MAX_TIME_ZONE_LENGTH = 64;
 /** The earliest date of birth accepted, `YYYY-MM-DD`: anything older is a typo. */
 export const MIN_BIRTH_DATE = '1900-01-01';
 /** The maximum only turns away absurd input: long passphrases are welcome. */
@@ -379,3 +381,56 @@ export const MCP_SCOPE = 'pantry';
 export const OAUTH_CONSENT_ROUTE = '/connect';
 /** The query parameter that names the pending request on that route. */
 export const OAUTH_REQUEST_PARAM = 'request';
+
+/**
+ * The pages a notification opens, spelled as the frontend's router has them.
+ * The backend names them in a push, and the service worker resolves them
+ * against its scope, so they hold under a project path on GitHub Pages.
+ */
+export const STORAGE_ROUTE = '/storage';
+export const SHOPPING_ROUTE = '/shopping';
+
+/**
+ * What a device can be notified about. Each is a switch of its own on each
+ * device (`PushDevice.topics`), stored as spelled here.
+ */
+export const PUSH_TOPIC = {
+  /** Units whose last day is today, once a day at `EXPIRY_NOTIFICATION_HOUR`. */
+  Expiry: 'expiry',
+  /** Another member put things on a shopping list, items that ran out included. */
+  ListAdded: 'list-added',
+  /** Another member put the shopping away. */
+  ListBought: 'list-bought',
+  /** Someone joined one of the user's households, or added the user to one. */
+  Members: 'members',
+} as const;
+export type PushTopic = (typeof PUSH_TOPIC)[keyof typeof PUSH_TOPIC];
+export const PUSH_TOPICS = Object.values(PUSH_TOPIC);
+/** The topics a member's write sets off, as opposed to the clock's `expiry`. */
+export const PUSH_ACTIVITY_TOPICS = [
+  PUSH_TOPIC.ListAdded,
+  PUSH_TOPIC.ListBought,
+  PUSH_TOPIC.Members,
+] as const;
+export type PushActivityTopic = (typeof PUSH_ACTIVITY_TOPICS)[number];
+
+/** The hour of the day, in the user's time zone, the expiry notification goes out. */
+export const EXPIRY_NOTIFICATION_HOUR = 9;
+
+/**
+ * The push services a device's endpoint may point at: the server posts to that
+ * URL, so any other host would let a client aim it at an address of its
+ * choosing. A leading dot admits every subdomain.
+ */
+export const PUSH_SERVICE_HOSTS = [
+  // Chrome, and the browsers built on it, Edge on Android included.
+  'fcm.googleapis.com',
+  // Firefox.
+  'updates.push.services.mozilla.com',
+  // Safari, on macOS and on an iPhone's home screen.
+  'web.push.apple.com',
+  // Edge on Windows, through the Windows Push Notification Services.
+  '.notify.windows.com',
+] as const;
+/** The longest endpoint taken: the services' own are a few hundred characters. */
+export const MAX_PUSH_ENDPOINT_LENGTH = 1024;

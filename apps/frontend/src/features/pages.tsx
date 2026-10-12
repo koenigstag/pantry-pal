@@ -13,6 +13,7 @@ import { ChangePasswordForm } from './auth/ChangePasswordForm';
 import { ConnectionsSection } from './connect/ConnectionsSection';
 import { canRenameHousehold } from './profile/details';
 import { DetailsForm } from './profile/DetailsForm';
+import { NotificationsSection } from './profile/NotificationsSection';
 import { ComingSoonPage } from './shell/ComingSoonPage';
 import { PageStatus } from './shell/PageStatus';
 
@@ -49,6 +50,7 @@ export const ProfilePage = observer(function ProfilePage(): ReactElement {
           </dl>
           <DetailsForm user={user} household={household} />
           <LanguageField />
+          <NotificationsSection />
           {user.hasPassword && <ChangePasswordForm />}
           <ConnectionsSection />
         </>

@@ -783,6 +783,49 @@ const en = {
     loadFailed: 'Couldn’t load the connected assistants.',
   },
 
+  /** Profile's push notifications, for this device. */
+  notifications: {
+    title: 'Notifications',
+    intro:
+      'Hear about the pantry on this device, even with the app closed. Each device has its own switches.',
+    loadFailed: 'Couldn’t load the notification settings.',
+    unsupported: 'This browser can’t show notifications from Pantry Pal.',
+    needsInstall:
+      'On an iPhone or iPad, add Pantry Pal to the Home Screen first (Share, then Add to Home Screen), then turn notifications on from there.',
+    blocked:
+      'Notifications are blocked for this site. Allow them in the browser’s site settings, then come back here.',
+    turnOn: 'Turn on notifications',
+    turningOn: 'Turning on…',
+    notAllowed: 'Notifications weren’t allowed, so nothing changed.',
+    turnOnFailed: 'Couldn’t turn notifications on. Try again.',
+    saveFailed: 'Couldn’t save the change. Try again.',
+    topicsLegend: 'Tell me about',
+    topics: {
+      expiry: {
+        label: 'Last day to use something',
+        hint: (time: string) => `At ${time}, what expires today.`,
+      },
+      'list-added': {
+        label: 'Things put on a shopping list',
+        hint: 'By another member, or when something they used runs out.',
+      },
+      'list-bought': {
+        label: 'Shopping bought',
+        hint: 'When another member marks things on a list as bought.',
+      },
+      members: {
+        label: 'Household members',
+        hint: 'Someone joins your household, or adds you to theirs.',
+      },
+    },
+    sendTest: 'Send a test',
+    sendingTest: 'Sending…',
+    testSent: 'Sent. It should appear in a moment.',
+    testFailed: 'The test couldn’t be sent. Try again later.',
+    turnOff: 'Turn off on this device',
+    turningOff: 'Turning off…',
+  },
+
   planner: {
     title: 'Planner',
     description: 'Meal planning is coming soon.',

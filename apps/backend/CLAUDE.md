@@ -61,6 +61,8 @@ src/
   default-locations/  the storage spaces a new household starts with, and their translations
   admin/        /admin/units, /admin/categories, /admin/default-locations, /admin/users (passwords)
   realtime/     ChangeFeed, PantryGateway, Socket.IO adapter, WS exception filter
+  push/         Web Push: devices, the activity outbox, the jobs that send, message catalog
+  jobs/         JobsService: recurring jobs on pg-boss
 ```
 
 ### Routes
@@ -69,7 +71,7 @@ src/
 POST                   /auth/sign-up  /auth/sign-in                   public; 10/min per client address
 POST                   /auth/refresh  /auth/sign-out                  public; 30/min; body: refreshToken
 POST                   /auth/dev-sign-in                              DEV_AUTH=true only, else 404
-GET    PATCH           /me                                            PATCH: name, units, date of birth, locale
+GET    PATCH           /me                                            PATCH: name, units, date of birth, locale, time zone
 POST                   /me/password                                   current + new; 5/min per account
 GET    /units
 GET    /categories
@@ -99,6 +101,10 @@ POST                   /households/:householdId/assistant/apply       the action
 GET                    /oauth/requests/:id                            a pending MCP authorization, for the consent page
 POST                   /oauth/requests/:id/approve  .../deny          the user's answer: { redirectTo }
 GET    DELETE          /me/connections  /me/connections/:id           the MCP address and connected apps; disconnect
+GET                    /push                                          { publicKey }: null while push is off
+GET    PUT             /push/devices                                  PUT: this browser's subscription and topics
+DELETE                 /push/devices/:id                              one of the caller's devices
+POST                   /push/test                                     to this session's devices; 5/min per account
 ```
 
 Outside `/api/v1`, at the origin (`mountMcp`):
@@ -156,8 +162,13 @@ expires; household membership is still checked per request, so a removed member
 loses access at once.
 
 Nothing deletes a session's row yet, so every sign-in leaves one behind for good.
-Purging expired and revoked rows is the first planned background job (see
-Background jobs).
+Purging expired and revoked rows is a planned background job (see Background
+jobs).
+
+**Ending a session removes the push devices it registered** (`push_devices`,
+which reference the session): signing out, a refresh token spent twice, and the
+other sessions a password change or an admin reset ends. A device whose session
+merely expires stays, but nothing is sent to it.
 
 **Revoking a session closes its sockets.** A socket authenticates only at its
 handshake and joins `session:<sid>`; `SessionsService` publishes
@@ -178,7 +189,10 @@ English the moment the account exists. Dev sign-in applies it only when it
 creates the account: an existing account keeps its own.
 
 **`PATCH /me` changes the caller's own settings**: `displayName`, `unitSystem`,
-`birthDate` and `locale`, each left alone when absent.
+`birthDate`, `locale` and `timezone`, each left alone when absent. The time zone
+is an IANA name the frontend sends from the browser whenever it differs; it is
+where "today" is for the user — the morning expiry notification, the assistant's
+and MCP's dates. Until a client sends one it is `UTC`.
 
 - **The date of birth is private.** `GET /me` returns it, but member lists never
   select it. `null` removes it, and the DTO takes dates from `MIN_BIRTH_DATE`
@@ -612,23 +626,95 @@ table** — seeding every time would resurrect rows an admin deleted. Migration
 `0002_categories` inserts the categories itself; the boot seed covers `db:push`.
 That first query doubles as the connectivity check.
 
-## Background jobs: planned
+## Background jobs
 
-Nothing runs in the background yet. When something needs to, use **pg-boss**: a
-job queue that lives in PostgreSQL, so it adds no Redis or other service.
+Background work runs on **pg-boss** (`src/jobs/`): a job queue that lives in
+PostgreSQL, in its own `pgboss` schema, so it adds no Redis or other service.
+The first jobs are push notifications' (see Push notifications).
 
 - **It belongs in this package**, never in `@pantry-pal/db`, which may depend on
   `drizzle-orm` and `pg` only.
 - **pg-boss 12 is ESM-only.** It reaches this CommonJS build through
   `require(esm)`, like NestJS 12, and needs Node 22.12 and PostgreSQL 13 or newer.
-  Check the minimum release age in `pnpm-workspace.yaml` when adding it.
-- **Enqueue inside the transaction that calls for the job.** pg-boss can create
-  jobs in an existing transaction and has a Drizzle adapter; given the active
-  transaction, a rolled-back write leaves no job behind. That is the promise
-  `ChangeFeed` keeps with `runOnCommit`.
-- **First job: purge `refresh_tokens`.** Every sign-in adds a row and nothing
+  Check the minimum release age in `pnpm-workspace.yaml` when upgrading it.
+- **`JobsService.every(name, cron, run)`** creates a queue (`stately`: one run
+  queued and one active at most, so a slow run is never doubled), schedules it in
+  UTC and works it. A tick missed while the server was down is skipped, a run
+  that throws is logged and left to the next tick, and completed runs are kept a
+  day. Ticks run once across every instance.
+- **pg-boss starts with the first job registered**, not with the app, over its
+  own pool of two connections to `database.url`. A server with nothing to run —
+  push off — never installs its schema.
+- **Work that a write calls for is written in the write's transaction**, so a
+  rolled-back write leaves nothing behind: the promise `ChangeFeed` keeps with
+  `runOnCommit`. Push does it with an outbox table that a job drains. pg-boss
+  can also create jobs in an existing transaction (`fromDrizzle`), should a job
+  ever need to be enqueued per write.
+- **Planned: purge `refresh_tokens`.** Every sign-in adds a row and nothing
   deletes expired or revoked ones. A daily cron schedule is enough.
-- **Later:** expiry reminders, deferred in `packages/db/CLAUDE.md`.
+
+## Push notifications
+
+The app tells members' devices what they would want to hear while it is
+closed, over Web Push: no Firebase project or app store, just the push service
+each browser trusts. Designed on 2026-10-12; `src/push/`. Each switch is a
+topic (`PUSH_TOPIC`), set per device:
+
+| Topic         | Sent when                                                                    | To                                    |
+| ------------- | ---------------------------------------------------------------------------- | ------------------------------------- |
+| `expiry`      | Once a day from 09:00 in the user's time zone: units whose last day is today | the user's devices, one per household |
+| `list-added`  | Another member put things on a list, items that ran out included             | the household's other members         |
+| `list-bought` | Another member put the shopping away                                         | the household's other members         |
+| `members`     | Someone was added to the household                                           | the other members, and the one added  |
+
+- **Devices** (`push_devices`) are browsers, one row per push endpoint, under
+  the session that registered them (`PUT /push/devices`, which also replaces a
+  device's topics). Ending the session removes them (Authentication); a session
+  past its expiry is sent nothing. A browser registering under another account
+  takes its row over. `POST /push/test` sends to the caller's session's devices
+  whatever their topics, and answers how many the push service took.
+- **Endpoints must be a known push service's** (`PUSH_SERVICE_HOSTS`: Google's,
+  Mozilla's, Apple's and Microsoft's, on https's own port), since the server
+  posts to that URL: any other would let a client aim it at an address of its
+  choosing. Endpoints are never logged: whoever holds one can send to that
+  device.
+- **Activity goes through an outbox.** `ShoppingListsService` (adding, the
+  offline mirror's entries, putting away), `ItemsService` (running out onto the
+  default list) and `MembersService` (adding a member) call `PushActivity`,
+  which writes `push_outbox` rows in their own transaction, so a rolled-back write
+  announces nothing. With push off it writes nothing.
+- **A member's activity goes out once they pause.** `PushNotifier`'s
+  `push-activity` job runs every minute and claims each group — one member, one
+  topic, one list — whose last row is 90 seconds old, or whose first is five
+  minutes old, deleting its rows in the same statement. So ten things put on a
+  list in a row, or an offline device's backlog, are one notification. Items
+  taken off the list again meanwhile are left out, and so is everyone who joined
+  the household after the group began: they were not there for it.
+- **Expiry is claimed per device per day.** The `push-expiry` job runs every five
+  minutes and claims, in one `UPDATE`, the devices that want it whose owner's
+  clock reads between 09:00 and 12:00 and that have not had today's
+  (`expiry_notified_on`), then sends each one per household with units whose
+  `effective_expires_at` is today. A day the server misses the window is
+  skipped rather than announced in the evening. A time zone Postgres does not
+  know counts as UTC.
+- **Words are the recipient's** (`push-messages.ts`, `users.locale`, looked up as
+  `pickTranslation` does): the service worker shows the payload as it comes. The
+  member's name goes in the title — `Anna · My shopping list` — and the line
+  starts with a label (`Added: bread, eggs and 3 more`), since Russian, Ukrainian
+  and French put the member's gender into a verb. At most four names, then
+  "and N more", in `Intl.ListFormat`'s style for the language.
+- **At most once, never twice.** Rows are claimed before anything is sent, so a
+  crash loses a notification rather than repeating one. Sending never fails a
+  write: a push service's 404 or 410 deletes the device, anything else is logged
+  with the service's host and dropped. Pushes live 12 hours (`TTL`).
+- **Configuration:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`
+  (`mailto:` or `https:`), all three or none; `configuration.ts` refuses a
+  partial or malformed set at boot. Without them `GET /push` answers a null key,
+  which the frontend reads as "hide the card", registering and testing answer
+  404, and no job is scheduled. The boot log says which. **Keep the pair**: every
+  device subscribes against the public key, so a new pair silently stops
+  reaching all of them. A failure to schedule the jobs is logged, not thrown: the
+  pantry works without push.
 
 ## Text assistant
 

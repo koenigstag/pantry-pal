@@ -8,7 +8,7 @@ import { ChangeFeed } from '../realtime/change-feed';
 import { toAuthenticatedUser } from './identity.service';
 
 /**
- * The caller's own settings: name, units, date of birth and language.
+ * The caller's own settings: name, units, date of birth, language and time zone.
  *
  * Only a new name is broadcast, as `member.updated` to each of the caller's
  * households, since members see each other by name. The rest is the caller's
@@ -29,6 +29,7 @@ export class MeService {
       unitSystem: dto.unitSystem,
       birthDate: dto.birthDate,
       locale: dto.locale,
+      timezone: dto.timezone,
     });
     if (row === undefined) throw new NotFoundException('User not found');
 

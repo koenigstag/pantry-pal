@@ -10,6 +10,7 @@ import { HOUSEHOLD_ROLE, type HouseholdMember, type HouseholdRole } from '@pantr
 import type { AddHouseholdMemberDto, UpdateHouseholdMemberDto } from '@pantry-pal/shared/dto';
 
 import type { Membership } from '../common/request-context';
+import { PushActivity } from '../push/push-activity';
 import { ChangeFeed } from '../realtime/change-feed';
 import { toHouseholdMember } from './household.mapper';
 import { assertRole } from './membership.service';
@@ -28,6 +29,7 @@ export class MembersService {
     private readonly members: HouseholdMembersRepository,
     private readonly users: UsersRepository,
     private readonly changes: ChangeFeed,
+    private readonly push: PushActivity,
   ) {}
 
   async list(membership: Membership): Promise<HouseholdMember[]> {
@@ -62,6 +64,7 @@ export class MembersService {
 
     const member = toHouseholdMember(await this.findMember(membership.householdId, user.id));
     this.changes.publish({ type: 'member.added', member });
+    await this.push.memberAdded(membership, user.id);
     return member;
   }
 

@@ -691,6 +691,48 @@ export const de = {
     loadFailed: 'Die verbundenen Assistenten konnten nicht geladen werden.',
   },
 
+  notifications: {
+    title: 'Benachrichtigungen',
+    intro:
+      'Neues aus dem Vorrat auf diesem Gerät, auch wenn die App geschlossen ist. Jedes Gerät hat eigene Schalter.',
+    loadFailed: 'Die Benachrichtigungseinstellungen konnten nicht geladen werden.',
+    unsupported: 'Dieser Browser kann keine Benachrichtigungen von Pantry Pal anzeigen.',
+    needsInstall:
+      'Auf einem iPhone oder iPad Pantry Pal zuerst zum Home-Bildschirm hinzufügen (Teilen, dann „Zum Home-Bildschirm“) und die Benachrichtigungen dort einschalten.',
+    blocked:
+      'Benachrichtigungen sind für diese Website blockiert. In den Website-Einstellungen des Browsers erlauben und dann hierher zurückkehren.',
+    turnOn: 'Benachrichtigungen einschalten',
+    turningOn: 'Wird eingeschaltet …',
+    notAllowed: 'Benachrichtigungen wurden nicht erlaubt, daher hat sich nichts geändert.',
+    turnOnFailed: 'Benachrichtigungen konnten nicht eingeschaltet werden. Bitte erneut versuchen.',
+    saveFailed: 'Die Änderung konnte nicht gespeichert werden. Bitte erneut versuchen.',
+    topicsLegend: 'Benachrichtigen bei',
+    topics: {
+      expiry: {
+        label: 'Letzter Tag zum Verbrauchen',
+        hint: (time: string) => `Um ${time}: alles, was heute abläuft.`,
+      },
+      'list-added': {
+        label: 'Neues auf der Einkaufsliste',
+        hint: 'Was ein anderes Mitglied hinzufügt oder bei ihm aufgebraucht ist.',
+      },
+      'list-bought': {
+        label: 'Eingekauft',
+        hint: 'Wenn ein anderes Mitglied Dinge von einer Liste als gekauft markiert.',
+      },
+      members: {
+        label: 'Haushaltsmitglieder',
+        hint: 'Jemand tritt dem Haushalt bei, oder Sie werden einem hinzugefügt.',
+      },
+    },
+    sendTest: 'Test senden',
+    sendingTest: 'Wird gesendet …',
+    testSent: 'Gesendet. Sie sollte gleich erscheinen.',
+    testFailed: 'Der Test konnte nicht gesendet werden. Bitte später erneut versuchen.',
+    turnOff: 'Auf diesem Gerät ausschalten',
+    turningOff: 'Wird ausgeschaltet …',
+  },
+
   planner: {
     title: 'Planer',
     description: 'Die Essensplanung kommt bald.',

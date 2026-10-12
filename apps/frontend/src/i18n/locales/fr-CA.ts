@@ -144,6 +144,18 @@ export const frCA = {
     exportFailed: 'Impossible d’exporter votre garde-manger.',
   },
 
+  notifications: {
+    ...fr.notifications,
+    topics: {
+      ...fr.notifications.topics,
+      'list-added': {
+        ...fr.notifications.topics['list-added'],
+        label: 'Ajouts à une liste d’épicerie',
+      },
+      'list-bought': { ...fr.notifications.topics['list-bought'], label: 'Épicerie faite' },
+    },
+  },
+
   planner: {
     ...fr.planner,
     title: 'Planification',
