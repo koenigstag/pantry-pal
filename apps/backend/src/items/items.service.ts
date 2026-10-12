@@ -43,6 +43,7 @@ import {
 } from '@pantry-pal/shared/dto';
 
 import type { Membership } from '../common/request-context';
+import { PushActivity } from '../push/push-activity';
 import { ChangeFeed } from '../realtime/change-feed';
 import { toShoppingListEntry } from '../shopping-lists/shopping-list.mapper';
 import { toPantryItem } from './item.mapper';
@@ -112,6 +113,7 @@ export class ItemsService {
     private readonly shoppingLists: ShoppingListsRepository,
     private readonly shoppingEntries: ShoppingListEntriesRepository,
     private readonly changes: ChangeFeed,
+    private readonly push: PushActivity,
   ) {}
 
   /** Active items unless `status` says otherwise; most urgent first. */
@@ -263,7 +265,7 @@ export class ItemsService {
     this.changes.publish({ type: 'item.updated', item });
 
     if (listWhenRunOut && inStock(before) && !inStock(after)) {
-      await this.putOnDefaultList(after, item);
+      await this.putOnDefaultList(membership, after, item);
     }
     return item;
   }
@@ -413,7 +415,7 @@ export class ItemsService {
     this.changes.publish({ type: 'item.updated', item });
 
     if (listWhenRunOut && inStock(before) && !inStock(after)) {
-      await this.putOnDefaultList(after, item);
+      await this.putOnDefaultList(membership, after, item);
     }
     return item;
   }
@@ -481,9 +483,14 @@ export class ItemsService {
 
   /**
    * Puts an item that just ran out on its default shopping list, if it has one.
-   * Already on that list, it stays as it is: quantity, tick and all.
+   * Already on that list, it stays as it is: quantity, tick and all. The other
+   * members hear of it as of anything put on a list, from whoever ran it out.
    */
-  private async putOnDefaultList(after: ItemRow, item: PantryItem): Promise<void> {
+  private async putOnDefaultList(
+    membership: Membership,
+    after: ItemRow,
+    item: PantryItem,
+  ): Promise<void> {
     const { householdId, defaultShoppingListId: listId } = after;
     if (listId === null) return;
 
@@ -507,6 +514,7 @@ export class ItemsService {
       entries: entries.map(toShoppingListEntry),
       items: [item],
     });
+    await this.push.listAdded(membership, listId, [after.id]);
   }
 
   /**

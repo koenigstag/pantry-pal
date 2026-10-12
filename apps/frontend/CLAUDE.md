@@ -29,7 +29,7 @@ transport, whose upgrade Socket.IO does not check against its `cors` origins.
 ```
 src/main.tsx, router.tsx   entry; React Router data router
 src/features/auth/         sign-in, sign-up and onboarding pages, route gates, language picker, password form
-src/features/profile/      the account's details: fields shared by onboarding and Profile
+src/features/profile/      the account's details: fields shared by onboarding and Profile; notifications
 src/features/shell/        AppShell (sidebar from md up, bottom tab bar below), PageStatus
 src/features/storage/      the Storage page: location tabs, search, sort, selection, cards, sheets
 src/features/shopping/     the Shopping page, the list picker, the lists editor, sharing as text
@@ -39,7 +39,7 @@ src/features/connect/      MCP: the consent page an assistant elsewhere sends th
 src/features/pages.tsx     Planner placeholder, Profile
 src/stores/                AuthStore, PantryStore (the household, from the mirror), QuantityUpdates (overlay), NoticeStore
 src/offline/               the offline mirror: RxDB database, replication, merge rules, forgetting on sign-out
-src/services/              http (fetch), session (tokens), api (REST and sync), socket
+src/services/              http (fetch), session (tokens), api (REST and sync), socket, push (the browser's side)
 src/ui/                    primitives: Dialog, Menu, IconButton, SheetButton, SwipePager, cn
 src/i18n/                  message catalog and Intl formatters
 ```
@@ -304,10 +304,10 @@ out as `Authorization: Bearer` and in the socket handshake; the refresh token
   one `PATCH /me` plus a `PATCH` of the household for an owner's new name
   (`PantryStore.saveDetails`). The date of birth may not be after today in the
   user's own calendar, a rule the DTO cannot state. Below come the language,
-  the password form when the account has a password (`CurrentUser.hasPassword`),
-  and Sign out. Changing the password signs out the account's other devices; a
-  wrong current password is a 403, which the form shows, never a 401, which
-  would look like an expired token.
+  notifications (see Push notifications), the password form when the account has
+  a password (`CurrentUser.hasPassword`), and Sign out. Changing the password
+  signs out the account's other devices; a wrong current password is a 403, which
+  the form shows, never a 401, which would look like an expired token.
 
 ### The locations editor
 
@@ -672,6 +672,8 @@ worker on, Chrome among the ones that allow it.
   session waits for the next start rather than reloading under someone.
 - **`workbox-window` is a direct dependency**: the registration module imports
   it, and pnpm's strict layout does not lend out the plugin's own copy.
+- **Push notifications** reach the worker through `public/push-handler.js`, which
+  it imports (see Push notifications).
 - **The icons** come from `public/icon.svg` (the storage box, corners rounded)
   and `icons/icon-full-bleed.svg` (edge to edge, for the platforms that mask the
   corners themselves). After changing either, regenerate them:
@@ -685,6 +687,46 @@ worker on, Chrome among the ones that allow it.
   The generator's own maskable and Apple icons are overwritten on purpose: it
   pads them with transparency and white, which those platforms then show as a
   frame around the icon.
+
+## Push notifications
+
+The backend's `CLAUDE.md` (Push notifications) has what is sent and when. The
+web app holds the device's side:
+
+- **The worker shows them.** `public/push-handler.js`, plain JavaScript, is
+  pulled into the generated Workbox worker by `workbox.importScripts`; the setup
+  stays `generateSW`. It shows each payload as the server worded it — a worker
+  has no catalog — and a tap focuses an open window of the app on the page the
+  push names, or opens one. Routes resolve against the worker's scope, so they
+  hold under `/pantry-pal/`. An imported script is fetched through the HTTP
+  cache, so a change to it can lag the build by GitHub Pages' ten minutes.
+- **Profile's card** (`features/profile/NotificationsSection.tsx`) turns them on
+  for this browser — permission, `pushManager.subscribe` with the server's key,
+  then `PUT /push/devices` with every topic on — shows a switch per topic, sends
+  a test, and turns them off again, which also unsubscribes the browser. Each
+  switch saves at once. The card is hidden while the server has push off
+  (`GET /push` answers a null key), and says why it cannot help where it cannot:
+  no worker (development), no push in the browser, an iPhone or iPad where Safari
+  offers push only to the app added to the Home Screen, or permission denied,
+  which only the browser's site settings undo. All of it is online REST, like the
+  account's other settings.
+- **What the switches show is the server's copy**, matched to this browser by its
+  subscription's endpoint, since the server's copy is what gets sent to. A browser
+  subscribed but unknown to the server — signed out since, or another account's —
+  reads as off until it is turned on again. `pushsubscriptionchange` is not
+  handled: re-registering needs a session, which a worker does not hold.
+- **`services/push.ts`** is the browser glue: support, permission, the
+  subscription. A subscription made with another server key is dropped and made
+  again, since it could never be reached.
+- **The account's time zone follows the device.** After the bootstrap,
+  `PantryStore.syncTimeZone` sends the browser's IANA zone in a `PATCH /me` when
+  it differs from the account's, so the morning expiry notification comes at
+  nine where the user is. Quietly best-effort: offline, the next load tries again.
+- **Notification permission is per origin**, not per path: any other app
+  served from the same GitHub Pages origin shares it, granted or blocked.
+- To see it work: a production build (`pnpm build` and `pnpm preview`) in a
+  browser that registers workers on `http://localhost`, against a backend with
+  VAPID keys set. The desktop app's built-in browser refuses the worker there.
 
 ## Importing from shared
 

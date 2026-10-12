@@ -28,7 +28,7 @@ export class MeController {
     return user;
   }
 
-  /** The caller's own settings: name, units, date of birth and UI language. */
+  /** The caller's own settings: name, units, date of birth, UI language and time zone. */
   @Patch()
   update(
     @CurrentUser() user: AuthenticatedUser,

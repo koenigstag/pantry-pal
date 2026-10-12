@@ -51,6 +51,13 @@ export function formatInstant(isoInstant: string): string {
   return Number.isNaN(date.getTime()) ? isoInstant : instantFormat.format(date);
 }
 
+/** A time of day on the hour, as the user's language writes it: `09:00`, `9:00 AM`. */
+export function formatHour(hour: number): string {
+  return new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit' }).format(
+    new Date(2000, 0, 1, hour),
+  );
+}
+
 export type PluralForms = { other: string } & Partial<Record<Intl.LDMLPluralRule, string>>;
 
 /**

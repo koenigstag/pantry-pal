@@ -5,6 +5,7 @@ import type {
   ImportSource,
   ITEM_EVENT_TYPE,
   ITEM_STATUS,
+  PushTopic,
   SUPPORTED_LOCALES,
   UNIT_KINDS,
   UNIT_SYSTEM_PREFERENCES,
@@ -691,4 +692,42 @@ export interface OAuthConnection {
   clientName: string;
   createdAt: string;
   lastUsedAt: string | null;
+}
+
+/*
+ * Push notifications: a browser registers itself as one of the caller's
+ * devices, with the topics it wants, and the server sends to it while the app
+ * is closed.
+ */
+
+/** `GET /push`: the key a browser subscribes with, or `null` while this server has push turned off. */
+export interface PushStatus {
+  publicKey: string | null;
+}
+
+/** A browser the caller registered for notifications. */
+export interface PushDevice {
+  id: string;
+  /** The push service's URL for this browser: how a client recognises its own row. */
+  endpoint: string;
+  topics: PushTopic[];
+  createdAt: string;
+}
+
+/**
+ * What a notification carries to the service worker, already in its
+ * recipient's language: a worker has no catalog to word it with.
+ */
+export interface PushPayload {
+  title: string;
+  body: string;
+  /** A route of the app, such as `SHOPPING_ROUTE`, opened when the notification is tapped. */
+  path: string;
+  /** Notifications with the same tag replace one another rather than stacking up. */
+  tag?: string;
+}
+
+/** What `POST /push/test` answers: how many of this session's devices the push service took it for. */
+export interface PushTestResult {
+  sent: number;
 }

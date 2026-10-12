@@ -39,6 +39,7 @@ import type {
 import type { Membership } from '../common/request-context';
 import { toPantryItem } from '../items/item.mapper';
 import { ItemsService } from '../items/items.service';
+import { PushActivity } from '../push/push-activity';
 import { ChangeFeed } from '../realtime/change-feed';
 import { toShoppingList, toShoppingListEntry } from './shopping-list.mapper';
 
@@ -63,6 +64,7 @@ export class ShoppingListsService {
     private readonly events: ItemEventsRepository,
     private readonly itemsService: ItemsService,
     private readonly changes: ChangeFeed,
+    private readonly push: PushActivity,
   ) {}
 
   /**
@@ -263,6 +265,11 @@ export class ShoppingListsService {
 
     if (rows.length > 0) {
       this.changes.publish({ type: 'shopping-list-entries.upserted', householdId, ...change });
+      await this.push.listAdded(
+        membership,
+        listId,
+        rows.map((row) => row.itemId),
+      );
     }
     return change;
   }
@@ -296,6 +303,7 @@ export class ShoppingListsService {
       entries: [added],
       items: [toPantryItem(item)],
     });
+    await this.push.listAdded(membership, listId, [row.itemId]);
     return added;
   }
 
@@ -388,6 +396,11 @@ export class ShoppingListsService {
     const ids = entries.map((entry) => entry.id);
     await this.entries.deleteMany(householdId, listId, ids);
     this.changes.publish({ type: 'shopping-list-entries.deleted', householdId, ids });
+    await this.push.listBought(
+      membership,
+      listId,
+      entries.map((entry) => entry.itemId),
+    );
     return items;
   }
 

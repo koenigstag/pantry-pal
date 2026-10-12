@@ -6,6 +6,7 @@ export * from './item-events.repository';
 export * from './items.repository';
 export * from './locations.repository';
 export * from './oauth.repository';
+export * from './push.repository';
 export * from './refresh-tokens.repository';
 export * from './shopping-list-entries.repository';
 export * from './shopping-lists.repository';

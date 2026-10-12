@@ -8,7 +8,7 @@ export type CreateUserInput = Pick<NewUserRow, 'email' | 'displayName'> &
 
 /** The settings a user changes for themselves. An omitted field keeps its value. */
 export type UpdateUserInput = Partial<
-  Pick<NewUserRow, 'displayName' | 'unitSystem' | 'birthDate' | 'locale'>
+  Pick<NewUserRow, 'displayName' | 'unitSystem' | 'birthDate' | 'locale' | 'timezone'>
 >;
 
 export class UsersRepository {

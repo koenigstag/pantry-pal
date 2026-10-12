@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import {
   PROPAGATION,
+  PushDevicesRepository,
   RefreshTokensRepository,
   Transactional,
   UsersRepository,
@@ -51,6 +52,7 @@ export class SessionsService {
     private readonly tokens: TokenSigner,
     private readonly refreshTokens: RefreshTokensRepository,
     private readonly users: UsersRepository,
+    private readonly pushDevices: PushDevicesRepository,
     private readonly changes: ChangeFeed,
   ) {}
 
@@ -110,10 +112,14 @@ export class SessionsService {
     }
   }
 
-  /** Ends every session of the user but `exceptSessionId`, and closes the sockets they opened. */
+  /**
+   * Ends every session of the user but `exceptSessionId`, closes the sockets they
+   * opened, and stops notifying the devices they registered.
+   */
   @Transactional({ propagation: PROPAGATION.Mandatory })
   async endAll(userId: string, exceptSessionId?: string): Promise<void> {
     const ended = await this.refreshTokens.revokeAll(userId, exceptSessionId);
+    await this.pushDevices.deleteForSessions(ended.map((session) => session.id));
     for (const session of ended) this.announceRevoked(session);
   }
 
@@ -159,8 +165,10 @@ export class SessionsService {
       : { outcome: 'rotated', session: rotated, tokenId: next };
   }
 
+  /** Ends the session, and with it the push notifications of the devices it registered. */
   private async revoke(session: RefreshTokenRow): Promise<void> {
     const revoked = await this.refreshTokens.revoke(session.id);
+    await this.pushDevices.deleteForSessions([session.id]);
     if (revoked !== undefined) this.announceRevoked(revoked);
   }
 

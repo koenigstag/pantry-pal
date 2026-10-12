@@ -7,10 +7,11 @@ workspace-wide guidance.
 
 ## Status: implemented
 
-Eighteen tables, the transaction layer, seed data, and repositories for users,
+Twenty tables, the transaction layer, seed data, and repositories for users,
 refresh tokens, households, members, locations, items (with their units), item events, units,
-categories, the default storage spaces, shopping lists and their entries, and the
-OAuth authorization server behind the backend's MCP endpoint.
+categories, the default storage spaces, shopping lists and their entries, the
+OAuth authorization server behind the backend's MCP endpoint, and push
+notifications' devices and outbox.
 
 The initial migration has been applied to a real PostgreSQL 18 instance and the
 behaviour verified there: the `LEAST(...)` generated column, every CHECK
@@ -206,6 +207,19 @@ These are deliberate. Changing any of them affects the whole workspace.
   reconnecting WebSocket client can fetch a delta rather than a full snapshot.
 - **Realtime via `pg_notify`**, ids only (8 KB payload cap). NOTIFY is
   transactional, so a rolled-back write cannot leak a phantom event.
+- **`push_devices`** is a browser registered for notifications: its endpoint
+  (unique), its keys, its topics (`text[]`, checked against `PUSH_TOPICS`) and
+  the day it last had the expiry notification. It references `users` and the
+  `refresh_tokens` session that registered it, both cascading, and nothing of a
+  household: who hears about a household is decided by `household_members` when
+  a notification goes out, so only members there at the time are told
+  (`targetsInHousehold`'s `joinedBy`). `claimExpiryDue` claims a day's devices
+  in one `UPDATE … RETURNING` with `SKIP LOCKED`.
+- **`push_outbox`** holds what members did that others may hear of, written in
+  the write's own transaction and taken a whole group at a time by
+  `claimReady`'s `DELETE … RETURNING`, so two runs take disjoint rows. Its item,
+  list and member ids are bare, without foreign keys: by the time a row goes out
+  what it names may be gone, and the notification leaves it out.
 
 ### Why `text` + CHECK rather than `pgEnum`
 
@@ -385,6 +399,13 @@ They reference `users` and nothing of a household: an OAuth grant is the user's,
 and the backend checks membership on every MCP call. Codes and tokens are
 stored as their SHA-256 only. Applied on PostgreSQL 16 over a database migrated
 to `0008` and seeded, and exercised through the backend's whole OAuth flow.
+
+`0010_push` adds `push_devices` and `push_outbox` (`schema/push.ts`,
+`PushDevicesRepository`, `PushOutboxRepository`), exactly as drizzle-kit
+generated them. Applied on PostgreSQL 18 to a database migrated from empty and
+seeded, and exercised through the backend's push flow end to end: registering,
+the outbox and its grouping, the expiry claim, and devices going with their
+session.
 
 ## Resolved: categories are a table
 
@@ -604,4 +625,4 @@ locations (the spare in the pantry) is a question for that step.
 ## Deferred
 
 Medicine metadata (dosage and lot go in `notes` for now), row-level security,
-reminders, unit conversions, and an `attributes jsonb` column.
+unit conversions, and an `attributes jsonb` column.
